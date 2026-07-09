@@ -1,0 +1,10 @@
+export { mockEvents } from "./events";
+export { mockRegistrations } from "./registrations";
+export { mockUniversities } from "./universities";
+export { mockPartners } from "./partners";
+export { mockBlogs } from "./blogs";
+export { mockGalleryImages } from "./gallery";
+export { mockNotifications } from "./notifications";
+export { mockUsers, mockRoles } from "./users";
+export { mockActivityLogs } from "./activity-logs";
+export { mockDashboardData, mockReports, mockSettings } from "./dashboard";
