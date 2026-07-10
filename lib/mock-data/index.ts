@@ -8,3 +8,8 @@ export { mockNotifications } from "./notifications";
 export { mockUsers, mockRoles } from "./users";
 export { mockActivityLogs } from "./activity-logs";
 export { mockDashboardData, mockReports, mockSettings } from "./dashboard";
+export {
+  mockCitySlices,
+  OPERATING_CITIES,
+  buildAllCitiesRegistrationsByCity,
+} from "./dashboard-city-slices";

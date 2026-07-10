@@ -358,6 +358,183 @@ export interface UpcomingEventSummary {
   maxCapacity: number;
 }
 
+export interface DashboardTarget {
+  id: string;
+  label: string;
+  current: number;
+  target: number;
+  format: "number" | "currency" | "percentage";
+  periodLabel?: string;
+}
+
+export interface DashboardInsight {
+  id: string;
+  severity: "info" | "success" | "warning" | "critical";
+  title: string;
+  description: string;
+}
+
+export interface InstitutionRanking {
+  name: string;
+  value: number;
+  city?: string;
+}
+
+export interface LiveRegistrationItem {
+  id: string;
+  studentName: string;
+  classLabel: string;
+  stream?: string;
+  board?: string;
+  school: string;
+  city: string;
+  seminar?: string;
+  timestamp: string;
+}
+
+export interface StudentRegistrationAnalytics {
+  total: number;
+  todayCount: number;
+  byClass: ChartDataPoint[];
+  byStream: ChartDataPoint[];
+  byBoard: ChartDataPoint[];
+  byCity: ChartDataPoint[];
+  bySeminar: ChartDataPoint[];
+  topSchools: InstitutionRanking[];
+  liveFeed: LiveRegistrationItem[];
+  /** Optional legacy mock fields */
+  target?: number;
+  weeklyGrowth?: number;
+  dailyTrend?: ChartDataPoint[];
+  bySession?: ChartDataPoint[];
+  bySource?: ChartDataPoint[];
+  topColleges?: InstitutionRanking[];
+}
+
+export type SponsorshipTier =
+  | "Stall Partner"
+  | "Education Partner"
+  | "Knowledge Partner (Silver)"
+  | "Knowledge Partner (Gold)"
+  | "University Partner"
+  | "Co-Presenting Partner"
+  | "Presenting Partner";
+
+export type PartnerJourneyStage =
+  | "New"
+  | "Contacted"
+  | "Meeting Scheduled"
+  | "Proposal Sent"
+  | "Discussion"
+  | "Confirmed"
+  | "Not Proceeding"
+  | "Negotiation"
+  | "Won"
+  | "Lost";
+
+/** @deprecated Use PartnerJourneyStage */
+export type PartnerPipelineStage = PartnerJourneyStage;
+
+export type PartnerSalesStatus =
+  | "Confirmed"
+  | "In Discussion"
+  | "Not Proceeding"
+  | "In Process"
+  | "Lost";
+
+export interface PartnerSalesDeal {
+  id: string;
+  universityName: string;
+  tier: SponsorshipTier;
+  stage: PartnerJourneyStage;
+  status: PartnerSalesStatus;
+  value: number;
+  city: string;
+  owner: string;
+  lastActivity: string;
+  notes?: string;
+}
+
+export interface PartnerTierProgress {
+  name: SponsorshipTier;
+  current: number;
+  target: number;
+  value: number;
+}
+
+export interface PartnerSalesActivity {
+  id: string;
+  title: string;
+  description: string;
+  timestamp: string;
+  universityName: string;
+  tier: SponsorshipTier;
+  stage: PartnerJourneyStage;
+  value: number;
+}
+
+export interface PartnerJourneyStageMetric {
+  name: PartnerJourneyStage;
+  count: number;
+  amount: number;
+}
+
+/** @deprecated Use PartnerJourneyStageMetric */
+export type PartnerPipelineStageMetric = PartnerJourneyStageMetric;
+
+export interface PartnerSalesAnalytics {
+  totalPartners: number;
+  confirmed: number;
+  byTier: ChartDataPoint[];
+  byStage: PartnerJourneyStageMetric[];
+  byStatus: ChartDataPoint[];
+  byCity: ChartDataPoint[];
+  tierProgress: PartnerTierProgress[];
+  recentActivity: PartnerSalesActivity[];
+  deals: PartnerSalesDeal[];
+  inDiscussion?: number;
+  notProceeding?: number;
+  /** Kept for older mock slices; UI should prefer inDiscussion / notProceeding */
+  inProcess?: number;
+  lost?: number;
+  pipelineValue?: number;
+  wonValue?: number;
+  conversionRate?: number;
+  leaderboard?: Array<{
+    name: string;
+    deals: number;
+    won: number;
+    value: number;
+  }>;
+}
+
+export type OperatingCity = "Bangalore" | "Mysore" | "Hubli";
+export type DashboardCityFilter = "all" | OperatingCity;
+
+export interface CityComparisonMetric {
+  id: string;
+  label: string;
+  cityValue: number;
+  averageValue: number;
+  format: "number" | "currency" | "percentage";
+  deltaPercent: number;
+}
+
+export interface CityDashboardSlice {
+  kpis: DashboardKPI[];
+  targets: DashboardTarget[];
+  insights: DashboardInsight[];
+  registrationTrend: ChartDataPoint[];
+  eventPerformance: ChartDataPoint[];
+  registrationsByStatus: ChartDataPoint[];
+  recentActivities: RecentActivity[];
+  upcomingTasks: DashboardTask[];
+  upcomingEvents: UpcomingEventSummary[];
+  studentRegistration: StudentRegistrationAnalytics;
+  partnerSales: PartnerSalesAnalytics;
+  vsAverage: CityComparisonMetric[];
+}
+
 export interface DashboardData {
   kpis: DashboardKPI[];
   registrationTrend: ChartDataPoint[];
@@ -367,4 +544,9 @@ export interface DashboardData {
   recentActivities: RecentActivity[];
   upcomingTasks: DashboardTask[];
   upcomingEvents: UpcomingEventSummary[];
+  targets: DashboardTarget[];
+  insights: DashboardInsight[];
+  studentRegistration: StudentRegistrationAnalytics;
+  partnerSales: PartnerSalesAnalytics;
+  citySlices: Record<OperatingCity, CityDashboardSlice>;
 }

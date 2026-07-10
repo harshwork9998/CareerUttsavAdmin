@@ -1,4 +1,142 @@
-import type { DashboardData, Report, Settings } from "@/types";
+import type {
+  DashboardData,
+  PartnerSalesAnalytics,
+  Report,
+  Settings,
+  StudentRegistrationAnalytics,
+} from "@/types";
+import {
+  buildAllCitiesRegistrationsByCity,
+  mockCitySlices,
+  OPERATING_CITIES,
+} from "@/lib/mock-data/dashboard-city-slices";
+import { CAREER_UTSAV_SEMINARS, SEMINAR_POPULARITY } from "@/features/dashboard/seminars";
+
+function sumChart(
+  pick: (city: (typeof mockCitySlices)[keyof typeof mockCitySlices]) => Array<{ name: string; value: number }>
+) {
+  const map = new Map<string, number>();
+  for (const city of OPERATING_CITIES) {
+    for (const row of pick(mockCitySlices[city])) {
+      map.set(String(row.name), (map.get(String(row.name)) ?? 0) + Number(row.value));
+    }
+  }
+  return Array.from(map.entries())
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value);
+}
+
+function buildAllCitiesStudentRegistration(): StudentRegistrationAnalytics {
+  const slices = OPERATING_CITIES.map((c) => mockCitySlices[c].studentRegistration);
+  const total = slices.reduce((s, x) => s + x.total, 0);
+  const todayCount = slices.reduce((s, x) => s + x.todayCount, 0);
+  const weightSum = Object.values(SEMINAR_POPULARITY).reduce((s, w) => s + w, 0) || 1;
+  const bySeminar = CAREER_UTSAV_SEMINARS.map((name) => ({
+    name,
+    value: Math.max(1, Math.round(((SEMINAR_POPULARITY[name] ?? 20) / weightSum) * total * 0.85)),
+  })).sort((a, b) => b.value - a.value);
+
+  return {
+    total,
+    todayCount,
+    byClass: (() => {
+      const map = new Map<string, { value: number; segment?: string | number }>();
+      for (const city of OPERATING_CITIES) {
+        for (const row of mockCitySlices[city].studentRegistration.byClass) {
+          const prev = map.get(String(row.name));
+          map.set(String(row.name), {
+            value: (prev?.value ?? 0) + Number(row.value),
+            segment: row.segment ?? prev?.segment,
+          });
+        }
+      }
+      return Array.from(map.entries()).map(([name, v]) => ({
+        name,
+        value: v.value,
+        ...(v.segment !== undefined ? { segment: v.segment } : {}),
+      }));
+    })(),
+    byStream: sumChart((s) => s.studentRegistration.byStream),
+    byBoard: sumChart((s) => s.studentRegistration.byBoard),
+    byCity: buildAllCitiesRegistrationsByCity(),
+    bySeminar,
+    topSchools: OPERATING_CITIES.flatMap((c) =>
+      mockCitySlices[c].studentRegistration.topSchools.map((school) => ({
+        ...school,
+        city: school.city ?? c,
+      }))
+    )
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 8),
+    liveFeed: OPERATING_CITIES.flatMap(
+      (c) => mockCitySlices[c].studentRegistration.liveFeed
+    )
+      .sort(
+        (a, b) =>
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      )
+      .slice(0, 12),
+  };
+}
+
+function buildAllCitiesPartnerSales(): PartnerSalesAnalytics {
+  const slices = OPERATING_CITIES.map((c) => mockCitySlices[c].partnerSales);
+  const confirmed = slices.reduce((s, x) => s + x.confirmed, 0);
+  const inProcess = slices.reduce(
+    (s, x) => s + (x.inDiscussion ?? x.inProcess ?? 0),
+    0
+  );
+  const lost = slices.reduce(
+    (s, x) => s + (x.notProceeding ?? x.lost ?? 0),
+    0
+  );
+  const stageMap = new Map<string, { count: number; amount: number }>();
+  for (const slice of slices) {
+    for (const stage of slice.byStage) {
+      const prev = stageMap.get(String(stage.name)) ?? { count: 0, amount: 0 };
+      stageMap.set(String(stage.name), {
+        count: prev.count + stage.count,
+        amount: prev.amount + stage.amount,
+      });
+    }
+  }
+
+  return {
+    totalPartners: slices.reduce((s, x) => s + x.totalPartners, 0),
+    confirmed,
+    inDiscussion: inProcess,
+    notProceeding: lost,
+    inProcess,
+    lost,
+    pipelineValue: slices.reduce((s, x) => s + (x.pipelineValue ?? 0), 0),
+    wonValue: slices.reduce((s, x) => s + (x.wonValue ?? 0), 0),
+    byTier: sumChart((s) => s.partnerSales.byTier),
+    byStage: Array.from(stageMap.entries()).map(([name, v]) => ({
+      name: name as PartnerSalesAnalytics["byStage"][number]["name"],
+      count: v.count,
+      amount: v.amount,
+    })),
+    byStatus: [
+      { name: "Confirmed", value: confirmed },
+      { name: "In Discussion", value: inProcess },
+      { name: "Not Proceeding", value: lost },
+    ],
+    byCity: OPERATING_CITIES.map((c) => ({
+      name: c,
+      value: mockCitySlices[c].partnerSales.totalPartners,
+    })),
+    tierProgress: mockCitySlices.Bangalore.partnerSales.tierProgress,
+    recentActivity: OPERATING_CITIES.flatMap(
+      (c) => mockCitySlices[c].partnerSales.recentActivity
+    )
+      .sort(
+        (a, b) =>
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      )
+      .slice(0, 10),
+    deals: OPERATING_CITIES.flatMap((c) => mockCitySlices[c].partnerSales.deals),
+  };
+}
 
 export const mockDashboardData: DashboardData = {
   kpis: [
@@ -235,6 +373,35 @@ export const mockDashboardData: DashboardData = {
       maxCapacity: 10000,
     },
   ],
+  targets: [
+    {
+      id: "tgt-students",
+      label: "Student registrations",
+      current: 43620,
+      target: 50000,
+      format: "number",
+      periodLabel: "This season",
+    },
+    {
+      id: "tgt-partners",
+      label: "Confirmed universities",
+      current: 34,
+      target: 50,
+      format: "number",
+      periodLabel: "This season",
+    },
+  ],
+  insights: [
+    {
+      id: "ins-001",
+      severity: "info",
+      title: "Bangalore leads registrations",
+      description: "Over half of students joining are from Bangalore.",
+    },
+  ],
+  studentRegistration: buildAllCitiesStudentRegistration(),
+  partnerSales: buildAllCitiesPartnerSales(),
+  citySlices: mockCitySlices,
 };
 
 export const mockReports: Report[] = [

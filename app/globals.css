@@ -57,4 +57,18 @@
   .scrollbar-thin {
     scrollbar-width: thin;
   }
+
+  /** Hero-only Apple-style type (SF Pro on Apple, system UI elsewhere). */
+  .hero-type {
+    font-family:
+      -apple-system,
+      BlinkMacSystemFont,
+      "SF Pro Display",
+      "SF Pro Text",
+      "Segoe UI",
+      system-ui,
+      sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 }
