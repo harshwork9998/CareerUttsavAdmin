@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { formatDistanceToNowStrict } from "date-fns";
+import { motion } from "framer-motion";
 
 import { cn, formatNumber } from "@/lib/utils";
 import type {
@@ -21,20 +21,39 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import {
+  CITY_GREEN,
   DASH_COLORS,
+  EMERALD,
   displayClass,
+  surface,
 } from "@/features/dashboard/dashboard-ui";
 import {
-  ActivityFeed,
+  CitySharePanel,
   PartnerJourneyFlow,
-  TierHierarchy,
 } from "@/features/dashboard/visualizations";
 
-const CITY_COLORS: Record<string, string> = {
-  Bangalore: DASH_COLORS.primary,
-  Mysore: DASH_COLORS.secondary,
-  Hubli: DASH_COLORS.accent,
-};
+const CITY_COLORS = CITY_GREEN;
+
+const LOGO_WASHES = [
+  { bg: "rgba(5, 150, 105, 0.14)", fg: EMERALD[700] },
+  { bg: "rgba(16, 185, 129, 0.16)", fg: EMERALD[600] },
+  { bg: "rgba(52, 211, 153, 0.22)", fg: EMERALD[800] },
+] as const;
+
+const TIER_ORDER: SponsorshipTier[] = [
+  "Presenting Partner",
+  "Co-Presenting Partner",
+  "University Partner",
+  "Knowledge Partner (Gold)",
+  "Knowledge Partner (Silver)",
+  "Education Partner",
+  "Stall Partner",
+];
+
+function tierRank(tier: string): number {
+  const index = TIER_ORDER.indexOf(tier as SponsorshipTier);
+  return index === -1 ? TIER_ORDER.length : index;
+}
 
 type DrillFilter =
   | { type: "all" }
@@ -107,6 +126,29 @@ function statusBadge(
   return "destructive";
 }
 
+function partnerInitials(name: string): string {
+  const parts = name.replace(/\(.*?\)/g, "").trim().split(/\s+/);
+  const first = parts[0]?.[0] ?? "";
+  const second =
+    parts.find((p, i) => i > 0 && !/^(of|and|the|university|college|institute)$/i.test(p))?.[0] ??
+    parts[1]?.[0] ??
+    "";
+  return (first + second).toUpperCase() || "U";
+}
+
+function PartnerLogo({ name, index = 0 }: { name: string; index?: number }) {
+  const wash = LOGO_WASHES[index % LOGO_WASHES.length];
+  return (
+    <span
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[11px] font-bold tracking-tight"
+      style={{ backgroundColor: wash.bg, color: wash.fg }}
+      aria-hidden
+    >
+      {partnerInitials(name)}
+    </span>
+  );
+}
+
 function PartnerList({ deals }: { deals: PartnerSalesDeal[] }) {
   if (deals.length === 0) {
     return (
@@ -175,6 +217,9 @@ export function PartnerSalesSection({
   isAllCities?: boolean;
 }) {
   const [filter, setFilter] = useState<DrillFilter | null>(null);
+  const [selectedTier, setSelectedTier] = useState<SponsorshipTier | null>(
+    null
+  );
   const open = filter !== null;
 
   const confirmed = data.confirmed;
@@ -191,15 +236,6 @@ export function PartnerSalesSection({
     [data.byStage]
   );
 
-  const tierData = useMemo(
-    () =>
-      data.byTier.map((t) => ({
-        name: String(t.name),
-        value: Number(t.value),
-      })),
-    [data.byTier]
-  );
-
   const cityData = useMemo(
     () =>
       data.byCity.map((item) => ({
@@ -208,24 +244,46 @@ export function PartnerSalesSection({
       })),
     [data.byCity]
   );
-  const cityTotal = cityData.reduce((s, c) => s + c.value, 0) || 1;
+
+  const confirmedPartners = useMemo(
+    () =>
+      data.deals
+        .filter((deal) => normalizeStatus(deal.status) === "Confirmed")
+        .sort((a, b) => {
+          const tierDiff = tierRank(a.tier) - tierRank(b.tier);
+          if (tierDiff !== 0) return tierDiff;
+          return a.universityName.localeCompare(b.universityName);
+        }),
+    [data.deals]
+  );
+
+  const confirmedTiers = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const deal of confirmedPartners) {
+      counts.set(deal.tier, (counts.get(deal.tier) ?? 0) + 1);
+    }
+    return TIER_ORDER.map((tier) => ({
+      tier,
+      count: counts.get(tier) ?? 0,
+    }));
+  }, [confirmedPartners]);
+
+  const activeTier =
+    selectedTier ??
+    confirmedTiers.find((row) => row.count > 0)?.tier ??
+    null;
+
+  const tierPartners = useMemo(
+    () =>
+      activeTier
+        ? confirmedPartners.filter((deal) => deal.tier === activeTier)
+        : [],
+    [confirmedPartners, activeTier]
+  );
 
   const filteredDeals = useMemo(
     () => filterDeals(data.deals, filter),
     [data.deals, filter]
-  );
-
-  const feedItems = useMemo(
-    () =>
-      data.recentActivity.slice(0, 4).map((item) => ({
-        id: item.id,
-        primary: item.title,
-        secondary: `${item.tier} · ${normalizeStage(item.stage)}`,
-        time: formatDistanceToNowStrict(new Date(item.timestamp), {
-          addSuffix: false,
-        }),
-      })),
-    [data.recentActivity]
   );
 
   const openFilter = (next: DrillFilter) => setFilter(next);
@@ -267,14 +325,15 @@ export function PartnerSalesSection({
           <h2
             className={cn(
               displayClass,
-              "text-[22px] font-medium leading-none sm:text-[26px]"
+              "text-[28px] font-bold leading-none text-foreground sm:text-[34px]"
             )}
           >
-            University partners
+            University details
           </h2>
           <p className="mt-1.5 text-[12px] text-muted-foreground">
-            {formatNumber(confirmed)} joining · {formatNumber(data.totalPartners)}{" "}
-            total
+            {isAllCities
+              ? "Bangalore · Mysore · Hubli"
+              : "Universities connected to Career Utsav"}
           </p>
         </div>
         <button
@@ -286,10 +345,128 @@ export function PartnerSalesSection({
         </button>
       </div>
 
-      <div>
-        <p className="mb-5 text-[11px] text-muted-foreground">
-          From first hello to the fair
-        </p>
+      {/* Hero — emerald featured + city greens */}
+      <section className={surface.opening}>
+        <div className="grid lg:grid-cols-10 lg:items-stretch">
+          <div
+            className="flex flex-col justify-between gap-8 p-7 text-white sm:p-8 lg:col-span-4 lg:p-9"
+            style={{ background: DASH_COLORS.gradient }}
+          >
+            <div>
+              <p className="text-[15px] font-medium tracking-[-0.01em] text-white/75 sm:text-[16px]">
+                Confirmed Partners
+              </p>
+              <p className="mt-2 text-[72px] font-semibold leading-[0.92] tracking-[-0.04em] tabular-nums text-white sm:text-[88px]">
+                {formatNumber(confirmed)}
+              </p>
+              <p className="mt-4 text-[15px] leading-relaxed tracking-[-0.01em] text-white/75">
+                <span className="font-semibold tabular-nums text-white">
+                  {formatNumber(data.totalPartners)}
+                </span>{" "}
+                total university partners
+              </p>
+            </div>
+
+            <dl className="space-y-3.5">
+              <button
+                type="button"
+                onClick={() =>
+                  openFilter({ type: "status", value: "In Discussion" })
+                }
+                className="flex w-full items-baseline justify-between gap-4 border-b border-white/15 pb-3 text-left transition-opacity hover:opacity-80"
+              >
+                <dt className="shrink-0 text-[14px] tracking-[-0.01em] text-white/70">
+                  In Discussion
+                </dt>
+                <dd className="min-w-0 text-right text-[15px] font-semibold tabular-nums tracking-[-0.02em] text-white sm:text-[16px]">
+                  {formatNumber(inDiscussion)}
+                </dd>
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  openFilter({ type: "status", value: "Not Proceeding" })
+                }
+                className="flex w-full items-baseline justify-between gap-4 text-left transition-opacity hover:opacity-80"
+              >
+                <dt className="shrink-0 text-[14px] tracking-[-0.01em] text-white/70">
+                  Not Proceeding
+                </dt>
+                <dd className="min-w-0 text-right text-[15px] font-semibold tabular-nums tracking-[-0.02em] text-white sm:text-[16px]">
+                  {formatNumber(notProceeding)}
+                </dd>
+              </button>
+            </dl>
+          </div>
+
+          <div
+            className={cn(
+              "lg:col-span-6",
+              isAllCities
+                ? "min-h-[280px] overflow-hidden p-0 lg:min-h-full"
+                : "min-h-[280px] bg-emerald-50/60 p-7 sm:p-8 lg:p-9"
+            )}
+          >
+            {isAllCities ? (
+              <CitySharePanel
+                cities={cityData}
+                colors={CITY_COLORS}
+                unitLabel="partners"
+              />
+            ) : (
+              <div className="flex h-full min-h-[240px] flex-col justify-center">
+                <h3 className="text-[17px] font-bold tracking-[-0.02em] text-foreground">
+                  Partner status
+                </h3>
+                <p className="mt-1.5 text-[14px] tracking-[-0.01em] text-muted-foreground">
+                  Where conversations stand
+                </p>
+                <div className="mt-8 space-y-4">
+                  {statusMix.map((item) => {
+                    const pct = Math.round((item.value / statusTotal) * 100);
+                    return (
+                      <button
+                        key={item.label}
+                        type="button"
+                        onClick={() => openFilter(item.filter)}
+                        className="w-full text-left transition-opacity hover:opacity-70"
+                      >
+                        <div className="mb-1.5 flex items-baseline justify-between gap-3">
+                          <span className="text-[13px] text-muted-foreground">
+                            {item.label}
+                          </span>
+                          <span className="text-[15px] font-semibold tabular-nums">
+                            {formatNumber(item.value)}
+                            <span className="ml-2 text-[11px] font-normal text-muted-foreground">
+                              {pct}%
+                            </span>
+                          </span>
+                        </div>
+                        <div className="h-1.5 overflow-hidden rounded-full bg-border/40">
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${pct}%`,
+                              backgroundColor: item.color,
+                            }}
+                          />
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <motion.div
+        className={cn(surface.mint, "p-6 sm:p-8")}
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.12, ease: [0.22, 1, 0.36, 1] }}
+      >
         <PartnerJourneyFlow
           stages={stages}
           onSelect={(name) =>
@@ -299,136 +476,136 @@ export function PartnerSalesSection({
             })
           }
         />
-      </div>
+      </motion.div>
 
-      {/* Status as one proportional bar — not three equal cards */}
-      <div className="space-y-3">
-        <div className="flex h-2 w-full overflow-hidden rounded-full bg-border/40">
-          {statusMix.map((item) => {
-            const pct = (item.value / statusTotal) * 100;
-            if (pct <= 0) return null;
-            return (
-              <button
-                key={item.label}
-                type="button"
-                title={`${item.label}: ${item.value}`}
-                onClick={() => openFilter(item.filter)}
-                className="h-full transition-opacity hover:opacity-80"
-                style={{
-                  width: `${pct}%`,
-                  backgroundColor: item.color,
-                }}
-              />
-            );
-          })}
-        </div>
-        <div className="flex flex-wrap gap-x-6 gap-y-1">
-          {statusMix.map((item) => {
-            const pct = Math.round((item.value / statusTotal) * 100);
-            return (
-              <button
-                key={item.label}
-                type="button"
-                onClick={() => openFilter(item.filter)}
-                className="flex items-baseline gap-2 text-left transition-opacity hover:opacity-70"
-              >
-                <span
-                  className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
-                  style={{ backgroundColor: item.color }}
-                />
-                <span className="text-[12px] text-muted-foreground">
-                  {item.label}
-                </span>
-                <span className="text-[13px] font-semibold tabular-nums">
-                  {formatNumber(item.value)}
-                </span>
-                <span className="text-[10px] tabular-nums text-muted-foreground">
-                  {pct}%
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      <div className="grid gap-3 lg:grid-cols-2 lg:items-start">
+        <motion.div
+          className={cn(surface.opening, "flex flex-col bg-emerald-50/50 p-3.5 sm:p-4")}
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.18, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <h3 className="mb-2.5 text-[16px] font-bold tracking-tight text-foreground">
+            Sponsorship tiers
+          </h3>
 
-      <div
-        className={cn(
-          "grid gap-10 border-t border-border/35 pt-8",
-          isAllCities ? "lg:grid-cols-12 lg:gap-12" : ""
-        )}
-      >
-        <div className={isAllCities ? "lg:col-span-7" : ""}>
-          <p className="mb-4 text-[11px] text-muted-foreground">
-            How they are partnering
-          </p>
-          <TierHierarchy
-            tiers={tierData}
-            onSelect={(name) =>
-              openFilter({
-                type: "tier",
-                value: name as SponsorshipTier,
-              })
-            }
-          />
-        </div>
-
-        {isAllCities && (
-          <div className="lg:col-span-5">
-            <p className="mb-4 text-[11px] text-muted-foreground">
-              Partners by city
-            </p>
-            <div className="flex h-[148px] gap-1">
-              {cityData.map((city, i) => {
-                const share = city.value / cityTotal;
-                return (
-                  <div
-                    key={city.name}
-                    className="relative flex flex-col justify-between overflow-hidden p-3.5 transition-opacity duration-150 hover:opacity-90"
-                    style={{
-                      flexGrow: Math.max(share * 100, 14),
-                      backgroundColor:
-                        CITY_COLORS[city.name] ?? DASH_COLORS.primary,
-                      borderRadius:
-                        i === 0
-                          ? "10px 3px 3px 10px"
-                          : i === cityData.length - 1
-                            ? "3px 10px 10px 3px"
-                            : "3px",
-                    }}
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/35 to-transparent" />
-                    <p className="relative text-[11px] font-medium text-white/90">
-                      {city.name}
-                    </p>
-                    <div className="relative">
-                      <p
-                        className={cn(
-                          displayClass,
-                          "text-[22px] font-medium tabular-nums text-white"
-                        )}
-                      >
-                        {formatNumber(city.value)}
-                      </p>
-                      <p className="text-[10px] text-white/65">
-                        {Math.round(share * 100)}%
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+          <div className="overflow-hidden rounded-lg border border-emerald-900/8 bg-white">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-emerald-900/8 bg-emerald-50/80">
+                  <th className="px-3 py-1.5 text-left text-[12px] font-semibold text-emerald-900/55">
+                    Tier
+                  </th>
+                  <th className="px-3 py-1.5 text-right text-[12px] font-semibold text-emerald-900/55">
+                    Partners
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {confirmedTiers.map((row) => {
+                  const isActive = activeTier === row.tier;
+                  return (
+                    <tr
+                      key={row.tier}
+                      className={cn(
+                        "border-b border-emerald-900/6 last:border-b-0 transition-colors",
+                        isActive ? "bg-emerald-50" : "hover:bg-emerald-50/50"
+                      )}
+                    >
+                      <td className="px-3 py-1.5">
+                        <button
+                          type="button"
+                          disabled={row.count === 0}
+                          onClick={() => setSelectedTier(row.tier)}
+                          className={cn(
+                            "text-left text-[15px] tracking-tight disabled:cursor-default",
+                            isActive
+                              ? "font-semibold text-emerald-900"
+                              : "font-medium text-foreground/90",
+                            row.count === 0 && "text-muted-foreground/60"
+                          )}
+                        >
+                          {row.tier}
+                        </button>
+                      </td>
+                      <td className="px-3 py-1.5 text-right">
+                        <button
+                          type="button"
+                          disabled={row.count === 0}
+                          onClick={() => setSelectedTier(row.tier)}
+                          className={cn(
+                            "inline-flex min-w-[1.75rem] items-center justify-center rounded-md px-1.5 py-0.5 text-[15px] font-semibold tabular-nums transition-colors",
+                            row.count === 0
+                              ? "cursor-default text-muted-foreground/50"
+                              : isActive
+                                ? "bg-emerald-600 text-white"
+                                : "bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
+                          )}
+                          aria-label={`Show ${row.count} ${row.tier} partners`}
+                        >
+                          {formatNumber(row.count)}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        )}
-      </div>
+        </motion.div>
 
-      {feedItems.length > 0 && (
-        <div className="border-t border-border/35 pt-6">
-          <p className="mb-3 text-[11px] text-muted-foreground">
-            Recent partner news
-          </p>
-          <ActivityFeed items={feedItems} />
-        </div>
-      )}
+        <motion.div
+          className={cn(surface.opening, "flex flex-col p-3.5 sm:p-4")}
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.24, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <div className="mb-2.5 flex items-baseline justify-between gap-2">
+            <h3 className="text-[16px] font-bold tracking-tight text-foreground">
+              {activeTier ?? "Partners"}
+            </h3>
+            {activeTier && (
+              <p className="text-[12px] tabular-nums text-emerald-700/70">
+                {formatNumber(tierPartners.length)}
+              </p>
+            )}
+          </div>
+
+          {tierPartners.length === 0 ? (
+            <div className="flex items-center justify-center rounded-lg border border-dashed border-emerald-900/15 bg-emerald-50/50 py-6 text-[14px] text-muted-foreground">
+              No confirmed partners in this tier
+            </div>
+          ) : (
+            <ul className="grid content-start gap-1">
+              {tierPartners.map((deal, index) => (
+                <motion.li
+                  key={deal.id}
+                  initial={{ opacity: 0, x: 8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{
+                    duration: 0.25,
+                    delay: index * 0.03,
+                    ease: [0.22, 1, 0.36, 1],
+                  }}
+                  className="flex items-center gap-2.5 rounded-lg px-1.5 py-1.5 hover:bg-emerald-50"
+                >
+                  <PartnerLogo name={deal.universityName} index={index} />
+                  <div className="min-w-0">
+                    <p className="truncate text-[15px] font-semibold tracking-tight text-foreground">
+                      {deal.universityName}
+                    </p>
+                    {isAllCities && (
+                      <p className="text-[12px] text-muted-foreground">
+                        {deal.city}
+                      </p>
+                    )}
+                  </div>
+                </motion.li>
+              ))}
+            </ul>
+          )}
+        </motion.div>
+      </div>
 
       <Sheet open={open} onOpenChange={(next) => !next && setFilter(null)}>
         <SheetContent side="right" className="flex w-full flex-col sm:max-w-lg">

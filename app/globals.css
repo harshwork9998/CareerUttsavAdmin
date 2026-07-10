@@ -58,8 +58,8 @@
     scrollbar-width: thin;
   }
 
-  /** Hero-only Apple-style type (SF Pro on Apple, system UI elsewhere). */
-  .hero-type {
+  /** Dashboard Apple-style type (SF Pro on Apple, system UI elsewhere). */
+  .dash-apple {
     font-family:
       -apple-system,
       BlinkMacSystemFont,
@@ -70,5 +70,32 @@
       sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+
+  .dash-root {
+    background:
+      radial-gradient(1200px 600px at 10% -10%, rgba(6, 95, 70, 0.07), transparent 55%),
+      radial-gradient(900px 500px at 100% 0%, rgba(4, 120, 87, 0.05), transparent 50%),
+      linear-gradient(180deg, #ecfdf5 0%, #f1f5f9 45%, #eef2f7 100%);
+    margin: -0.5rem -1rem;
+    padding: 0.5rem 1rem 2rem;
+    min-height: calc(100vh - 4rem);
+  }
+
+  .dash-apple .font-display {
+    font-family:
+      -apple-system,
+      BlinkMacSystemFont,
+      "SF Pro Display",
+      "SF Pro Text",
+      "Segoe UI",
+      system-ui,
+      sans-serif;
+  }
+
+  .dash-apple h1,
+  .dash-apple h2,
+  .dash-apple h3 {
+    font-weight: 700;
   }
 }

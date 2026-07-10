@@ -1,28 +1,20 @@
 "use client";
 
 import { useMemo } from "react";
+import { motion } from "framer-motion";
 import {
   Cell,
   Pie,
   PieChart,
   ResponsiveContainer,
+  Sector,
   Tooltip,
 } from "recharts";
 
 import { cn, formatNumber } from "@/lib/utils";
-import { surface } from "@/features/dashboard/dashboard-ui";
+import { DONUT_COLORS, surface } from "@/features/dashboard/dashboard-ui";
 
-const DONUT_PALETTE = [
-  "#1F3864",
-  "#0E7C7B",
-  "#3D5478",
-  "#6B7C93",
-  "#254a7a",
-  "#94A3B8",
-  "#475569",
-  "#14948f",
-  "#64748B",
-];
+const DONUT_PALETTE = [...DONUT_COLORS];
 
 function DonutTooltip({
   active,
@@ -52,14 +44,49 @@ function DonutTooltip({
   );
 }
 
+function renderActiveShape(props: {
+  cx?: number;
+  cy?: number;
+  innerRadius?: number;
+  outerRadius?: number;
+  startAngle?: number;
+  endAngle?: number;
+  fill?: string;
+}) {
+  const {
+    cx = 0,
+    cy = 0,
+    innerRadius = 0,
+    outerRadius = 0,
+    startAngle = 0,
+    endAngle = 0,
+    fill = "#059669",
+  } = props;
+
+  return (
+    <Sector
+      cx={cx}
+      cy={cy}
+      innerRadius={innerRadius}
+      outerRadius={outerRadius + 6}
+      startAngle={startAngle}
+      endAngle={endAngle}
+      fill={fill}
+      stroke="none"
+    />
+  );
+}
+
 export function ShareDonutCard({
   title,
   items,
   className,
+  delay = 0,
 }: {
   title: string;
   items: Array<{ name: string; value: number }>;
   className?: string;
+  delay?: number;
 }) {
   const data = useMemo(
     () =>
@@ -75,17 +102,21 @@ export function ShareDonutCard({
 
   const total = data.reduce((s, i) => s + i.value, 0) || 1;
   const lead = data[0];
+  const chartKey = data.map((d) => `${d.name}:${d.value}`).join("|");
 
   return (
-    <div
-      className={cn(
-        surface.opening,
-        "flex flex-col p-5 sm:p-6",
-        className
-      )}
+    <motion.div
+      className={cn(surface.opening, "flex flex-col p-5 sm:p-6", className)}
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{
+        duration: 0.45,
+        delay,
+        ease: [0.22, 1, 0.36, 1],
+      }}
     >
       <div className="mb-2">
-        <h3 className="text-[15px] font-semibold tracking-tight text-foreground">
+        <h3 className="text-[15px] font-bold tracking-tight text-foreground">
           {title}
         </h3>
         {lead && (
@@ -100,6 +131,7 @@ export function ShareDonutCard({
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
+              key={chartKey}
               data={data}
               dataKey="value"
               nameKey="name"
@@ -109,12 +141,17 @@ export function ShareDonutCard({
               outerRadius="88%"
               paddingAngle={2}
               strokeWidth={0}
+              isAnimationActive
+              animationBegin={Math.round(delay * 1000)}
+              animationDuration={1100}
+              animationEasing="ease-out"
+              activeShape={renderActiveShape}
             >
               {data.map((entry, index) => (
                 <Cell
                   key={entry.name}
                   fill={DONUT_PALETTE[index % DONUT_PALETTE.length]}
-                  className="cursor-pointer outline-none transition-opacity hover:opacity-90"
+                  className="cursor-pointer outline-none"
                 />
               ))}
             </Pie>
@@ -124,13 +161,22 @@ export function ShareDonutCard({
             />
           </PieChart>
         </ResponsiveContainer>
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+        <motion.div
+          className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center"
+          initial={{ opacity: 0, scale: 0.92 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{
+            duration: 0.4,
+            delay: delay + 0.35,
+            ease: [0.22, 1, 0.36, 1],
+          }}
+        >
           <p className="text-[11px] text-muted-foreground">Total</p>
           <p className="text-[24px] font-semibold tabular-nums tracking-tight">
             {formatNumber(total)}
           </p>
-        </div>
+        </motion.div>
       </div>
-    </div>
+    </motion.div>
   );
 }

@@ -255,7 +255,7 @@ const bangalorePartnerSales: PartnerSalesAnalytics = {
     { name: "Lost", value: 5 },
   ],
   byCity: [
-    { name: "Bangalore", value: 44 },
+    { name: "Bangalore", value: 18 },
   ],
   tierProgress: [
     { name: "Stall Partner", current: 9, target: 12, value: 900000 },
@@ -447,6 +447,50 @@ const bangalorePartnerSales: PartnerSalesAnalytics = {
       city: "Bangalore",
       owner: "Ananya Shah",
       lastActivity: "2026-07-01T16:00:00+05:30",
+    },
+    {
+      id: "blr-deal-011",
+      universityName: "Dayananda Sagar University",
+      tier: "Co-Presenting Partner",
+      stage: "Won",
+      status: "Confirmed",
+      value: 700000,
+      city: "Bangalore",
+      owner: "Priya Nair",
+      lastActivity: "2026-07-04T12:20:00+05:30",
+    },
+    {
+      id: "blr-deal-012",
+      universityName: "Kristu Jayanti College",
+      tier: "Knowledge Partner (Gold)",
+      stage: "Won",
+      status: "Confirmed",
+      value: 500000,
+      city: "Bangalore",
+      owner: "Arjun Mehta",
+      lastActivity: "2026-07-07T10:40:00+05:30",
+    },
+    {
+      id: "blr-deal-013",
+      universityName: "Garden City University",
+      tier: "University Partner",
+      stage: "Won",
+      status: "Confirmed",
+      value: 320000,
+      city: "Bangalore",
+      owner: "Sneha Iyer",
+      lastActivity: "2026-07-08T15:10:00+05:30",
+    },
+    {
+      id: "blr-deal-014",
+      universityName: "Atria University",
+      tier: "Knowledge Partner (Silver)",
+      stage: "Won",
+      status: "Confirmed",
+      value: 280000,
+      city: "Bangalore",
+      owner: "Rohan Kapoor",
+      lastActivity: "2026-07-09T09:15:00+05:30",
     },
   ],
 };
@@ -863,7 +907,7 @@ const mysorePartnerSales: PartnerSalesAnalytics = {
     { name: "Lost", value: 3 },
   ],
   byCity: [
-    { name: "Mysore", value: 25 },
+    { name: "Mysore", value: 10 },
   ],
   tierProgress: [
     { name: "Stall Partner", current: 5, target: 8, value: 500000 },
@@ -1441,7 +1485,7 @@ const hubliPartnerSales: PartnerSalesAnalytics = {
     { name: "Lost", value: 3 },
   ],
   byCity: [
-    { name: "Hubli", value: 17 },
+    { name: "Hubli", value: 6 },
   ],
   tierProgress: [
     { name: "Stall Partner", current: 4, target: 5, value: 400000 },

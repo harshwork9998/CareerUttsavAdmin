@@ -123,7 +123,7 @@ function buildAllCitiesPartnerSales(): PartnerSalesAnalytics {
     ],
     byCity: OPERATING_CITIES.map((c) => ({
       name: c,
-      value: mockCitySlices[c].partnerSales.totalPartners,
+      value: mockCitySlices[c].partnerSales.confirmed,
     })),
     tierProgress: mockCitySlices.Bangalore.partnerSales.tierProgress,
     recentActivity: OPERATING_CITIES.flatMap(

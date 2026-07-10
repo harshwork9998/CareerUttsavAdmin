@@ -1,19 +1,13 @@
 "use client";
 
 import { useMemo } from "react";
-import { formatDistanceToNowStrict } from "date-fns";
 
 import type { StudentRegistrationAnalytics } from "@/types";
 import { SeminarProgram } from "@/features/dashboard/seminar-program";
 import { ShareDonutCard } from "@/features/dashboard/share-donut-card";
-import {
-  ActivityFeed,
-  SchoolLeaderboard,
-} from "@/features/dashboard/visualizations";
 
 export function StudentRegistrationSection({
   data,
-  isAllCities,
 }: {
   data: StudentRegistrationAnalytics;
   cityLabel?: string;
@@ -57,47 +51,27 @@ export function StudentRegistrationSection({
     [data.bySeminar]
   );
 
-  const feedItems = useMemo(
-    () =>
-      data.liveFeed.slice(0, 5).map((item) => ({
-        id: item.id,
-        primary: item.studentName,
-        secondary: [
-          item.school,
-          item.classLabel,
-          item.seminar,
-          isAllCities ? item.city : null,
-        ]
-          .filter(Boolean)
-          .join(" · "),
-        time: formatDistanceToNowStrict(new Date(item.timestamp), {
-          addSuffix: false,
-        }),
-      })),
-    [data.liveFeed, isAllCities]
-  );
-
   return (
     <section className="space-y-6">
-      <SeminarProgram items={seminarData} />
-
       <div className="grid gap-5 md:grid-cols-3">
-        <ShareDonutCard title="Streams they chose" items={streamData} />
-        <ShareDonutCard title="Boards they study under" items={boardData} />
-        <ShareDonutCard title="Students by class" items={classData} />
+        <ShareDonutCard
+          title="Streams they chose"
+          items={streamData}
+          delay={0}
+        />
+        <ShareDonutCard
+          title="Boards they study under"
+          items={boardData}
+          delay={0.08}
+        />
+        <ShareDonutCard
+          title="Students by class"
+          items={classData}
+          delay={0.16}
+        />
       </div>
 
-      <div>
-        <p className="mb-3 text-[11px] text-muted-foreground">
-          Schools bringing the most students
-        </p>
-        <SchoolLeaderboard schools={data.topSchools} />
-      </div>
-
-      <div>
-        <p className="mb-3 text-[11px] text-muted-foreground">Just joined</p>
-        <ActivityFeed items={feedItems} />
-      </div>
+      <SeminarProgram items={seminarData} />
     </section>
   );
 }

@@ -27,21 +27,21 @@ import {
 const CITY_PILL_ORDER: OperatingCity[] = ["Bangalore", "Mysore", "Hubli"];
 
 const CITY_PILL_COLOR: Record<OperatingCity, string> = {
-  Bangalore: "#1F3864",
-  Mysore: "#3D5478",
-  Hubli: "#6B7C93",
+  Bangalore: "#064E3B",
+  Mysore: "#047857",
+  Hubli: "#059669",
 };
 
 const CLASS_DONUT_COLORS = [
-  "#1F3864",
-  "#254a7a",
-  "#2f5a8a",
-  "#3D5478",
-  "#4a6a8c",
-  "#0E7C7B",
-  "#14948f",
-  "#6B7C93",
-  "#94A3B8",
+  "#059669",
+  "#2563EB",
+  "#E11D48",
+  "#EAB308",
+  "#8B5CF6",
+  "#F97316",
+  "#06B6D4",
+  "#EC4899",
+  "#64748B",
 ];
 
 function DonutTooltip({
@@ -87,7 +87,6 @@ export function SeminarProgram({
   }, [byName]);
 
   const total = seminars.reduce((s, i) => s + i.value, 0) || 1;
-  const max = Math.max(...seminars.map((s) => s.value), 1);
 
   const [selectedName, setSelectedName] = useState<string | null>(null);
   const [city, setCity] = useState<OperatingCity>("Bangalore");
@@ -112,25 +111,22 @@ export function SeminarProgram({
   return (
     <>
       <div className={cn(surface.opening, "overflow-hidden")}>
-        <div className="flex items-baseline justify-between gap-3 border-b border-border/40 px-5 py-3.5 sm:px-6">
+        <div className="flex items-baseline justify-between gap-3 border-b border-emerald-800/20 bg-emerald-700 px-5 py-4 sm:px-6">
           <div>
-            <h3 className="text-[15px] font-semibold tracking-tight text-foreground">
-              Most chosen seminars
+            <h3 className="text-[15px] font-bold tracking-tight text-white">
+              Seminar wise Registration
             </h3>
-            <p className="mt-0.5 text-[12px] text-muted-foreground">
+            <p className="mt-0.5 text-[12px] text-white/70">
               All 20 seminars · tap for city and class breakdown
             </p>
           </div>
-          <p className="shrink-0 text-[12px] tabular-nums text-muted-foreground">
+          <p className="shrink-0 text-[12px] tabular-nums text-white/75">
             {formatNumber(total)} registered
           </p>
         </div>
 
-        {/* Equal grid — fills the card, no empty cells */}
-        <div className="grid grid-cols-2 gap-px bg-border/60 sm:grid-cols-4 lg:grid-cols-5">
+        <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 sm:gap-3.5 sm:p-5 lg:grid-cols-4 xl:grid-cols-5">
           {seminars.map((seminar, index) => {
-            const pct = Math.round((seminar.value / total) * 100);
-            const heat = seminar.value / max;
             return (
               <button
                 key={seminar.name}
@@ -139,33 +135,17 @@ export function SeminarProgram({
                   setSelectedName(seminar.name);
                   setCity("Bangalore");
                 }}
-                className="group flex min-h-[108px] flex-col justify-between bg-card p-3.5 text-left transition-colors duration-150 hover:bg-muted/40 focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary sm:min-h-[120px] sm:p-4"
+                className="group flex min-h-[108px] flex-col justify-between rounded-2xl border border-emerald-900/12 bg-white p-4 text-left shadow-[0_6px_20px_rgba(5,150,105,0.08)] transition-colors duration-150 hover:bg-emerald-50/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600"
               >
-                <div className="flex items-start justify-between gap-2">
-                  <span className="text-[10px] font-medium tabular-nums text-muted-foreground">
-                    {String(index + 1).padStart(2, "0")}
-                  </span>
-                  <span
-                    className="mt-0.5 h-1 w-8 shrink-0 rounded-full bg-primary/15"
-                    aria-hidden
-                  >
-                    <span
-                      className="block h-full rounded-full bg-primary transition-[width] duration-300"
-                      style={{ width: `${Math.max(heat * 100, 8)}%` }}
-                    />
-                  </span>
-                </div>
+                <span className="text-[10px] font-medium tabular-nums text-muted-foreground">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
                 <div>
-                  <p className="line-clamp-3 text-[12px] font-semibold leading-snug tracking-tight text-foreground sm:text-[13px]">
+                  <p className="line-clamp-3 text-[13px] font-semibold leading-snug tracking-tight text-foreground">
                     {seminar.name}
                   </p>
-                  <p className="mt-2 flex items-baseline gap-1.5">
-                    <span className="text-[18px] font-semibold tabular-nums tracking-tight text-foreground sm:text-[20px]">
-                      {formatNumber(seminar.value)}
-                    </span>
-                    <span className="text-[10px] tabular-nums text-muted-foreground">
-                      {pct}%
-                    </span>
+                  <p className="mt-2.5 text-[20px] font-semibold tabular-nums tracking-tight text-emerald-950">
+                    {formatNumber(seminar.value)}
                   </p>
                 </div>
               </button>
@@ -250,6 +230,7 @@ export function SeminarProgram({
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
+                      key={`${city}-${donutData.map((d) => `${d.name}:${d.value}`).join("|")}`}
                       data={donutData}
                       dataKey="value"
                       nameKey="name"
@@ -259,6 +240,10 @@ export function SeminarProgram({
                       outerRadius="82%"
                       paddingAngle={2}
                       strokeWidth={0}
+                      isAnimationActive
+                      animationBegin={0}
+                      animationDuration={900}
+                      animationEasing="ease-out"
                     >
                       {donutData.map((entry, index) => (
                         <Cell

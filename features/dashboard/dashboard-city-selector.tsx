@@ -37,19 +37,13 @@ export function DashboardCitySelector({
             aria-selected={active}
             onClick={() => onChange(option.value)}
             className={cn(
-              "relative px-2.5 py-1.5 text-[13px] transition-colors duration-150",
+              "relative rounded-lg px-2.5 py-1.5 text-[13px] transition-colors duration-150",
               active
-                ? "font-semibold text-foreground"
-                : "font-medium text-muted-foreground hover:text-foreground"
+                ? "bg-emerald-600 font-semibold text-white shadow-sm"
+                : "font-medium text-emerald-900/55 hover:bg-emerald-50 hover:text-emerald-900"
             )}
           >
             {option.label}
-            {active && (
-              <span
-                className="absolute inset-x-2.5 -bottom-px h-[2px] rounded-sm bg-primary"
-                aria-hidden
-              />
-            )}
           </button>
         );
       })}
