@@ -1,13 +1,12 @@
 "use client";
 
-import { useMemo } from "react";
-import { motion } from "framer-motion";
+import { useMemo, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   Cell,
   Pie,
   PieChart,
   ResponsiveContainer,
-  Sector,
   Tooltip,
 } from "recharts";
 
@@ -44,39 +43,6 @@ function DonutTooltip({
   );
 }
 
-function renderActiveShape(props: {
-  cx?: number;
-  cy?: number;
-  innerRadius?: number;
-  outerRadius?: number;
-  startAngle?: number;
-  endAngle?: number;
-  fill?: string;
-}) {
-  const {
-    cx = 0,
-    cy = 0,
-    innerRadius = 0,
-    outerRadius = 0,
-    startAngle = 0,
-    endAngle = 0,
-    fill = "#059669",
-  } = props;
-
-  return (
-    <Sector
-      cx={cx}
-      cy={cy}
-      innerRadius={innerRadius}
-      outerRadius={outerRadius + 6}
-      startAngle={startAngle}
-      endAngle={endAngle}
-      fill={fill}
-      stroke="none"
-    />
-  );
-}
-
 export function ShareDonutCard({
   title,
   items,
@@ -88,6 +54,7 @@ export function ShareDonutCard({
   className?: string;
   delay?: number;
 }) {
+  const [activeIndex, setActiveIndex] = useState<number | undefined>();
   const data = useMemo(
     () =>
       items
@@ -102,6 +69,7 @@ export function ShareDonutCard({
 
   const total = data.reduce((s, i) => s + i.value, 0) || 1;
   const lead = data[0];
+  const active = activeIndex != null ? data[activeIndex] : null;
   const chartKey = data.map((d) => `${d.name}:${d.value}`).join("|");
 
   return (
@@ -114,6 +82,7 @@ export function ShareDonutCard({
         delay,
         ease: [0.22, 1, 0.36, 1],
       }}
+      whileHover={{ y: -3, transition: { duration: 0.2 } }}
     >
       <div className="mb-2">
         <h3 className="text-[15px] font-bold tracking-tight text-foreground">
@@ -127,7 +96,7 @@ export function ShareDonutCard({
         )}
       </div>
 
-      <div className="relative mx-auto aspect-square w-full max-w-[280px] flex-1 min-h-[240px]">
+      <div className="relative mx-auto aspect-square min-h-[240px] w-full max-w-[280px] flex-1">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
@@ -145,13 +114,17 @@ export function ShareDonutCard({
               animationBegin={Math.round(delay * 1000)}
               animationDuration={1100}
               animationEasing="ease-out"
-              activeShape={renderActiveShape}
+              onMouseEnter={(_, index) => setActiveIndex(index)}
+              onMouseLeave={() => setActiveIndex(undefined)}
             >
               {data.map((entry, index) => (
                 <Cell
                   key={entry.name}
                   fill={DONUT_PALETTE[index % DONUT_PALETTE.length]}
                   className="cursor-pointer outline-none"
+                  opacity={
+                    activeIndex == null || activeIndex === index ? 1 : 0.38
+                  }
                 />
               ))}
             </Pie>
@@ -161,21 +134,30 @@ export function ShareDonutCard({
             />
           </PieChart>
         </ResponsiveContainer>
-        <motion.div
-          className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center"
-          initial={{ opacity: 0, scale: 0.92 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{
-            duration: 0.4,
-            delay: delay + 0.35,
-            ease: [0.22, 1, 0.36, 1],
-          }}
-        >
-          <p className="text-[11px] text-muted-foreground">Total</p>
-          <p className="text-[24px] font-semibold tabular-nums tracking-tight">
-            {formatNumber(total)}
-          </p>
-        </motion.div>
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={active?.name ?? "total"}
+              initial={{ opacity: 0, y: 6, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -4, scale: 0.98 }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              className="flex flex-col items-center"
+            >
+              <p className="text-[11px] text-muted-foreground">
+                {active?.name ?? "Total"}
+              </p>
+              <p className="text-[24px] font-semibold tabular-nums tracking-tight">
+                {formatNumber(active?.value ?? total)}
+              </p>
+              {active ? (
+                <p className="mt-0.5 text-[11px] tabular-nums text-muted-foreground">
+                  {Math.round((active.value / total) * 100)}%
+                </p>
+              ) : null}
+            </motion.div>
+          </AnimatePresence>
+        </div>
       </div>
     </motion.div>
   );

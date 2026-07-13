@@ -183,7 +183,7 @@ function PermissionCell({ permissions }: { permissions: (boolean | "all")[] }) {
     <div className="flex justify-center gap-0.5">
       {permissions.map((p, i) =>
         p ? (
-          <Check key={ACTIONS[i]} className="h-3.5 w-3.5 text-emerald-600" />
+          <Check key={ACTIONS[i]} className="h-3.5 w-3.5 text-brand-700" />
         ) : (
           <X key={ACTIONS[i]} className="h-3.5 w-3.5 text-muted-foreground/40" />
         )

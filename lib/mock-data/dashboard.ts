@@ -58,8 +58,28 @@ function buildAllCitiesStudentRegistration(): StudentRegistrationAnalytics {
     })(),
     byStream: sumChart((s) => s.studentRegistration.byStream),
     byBoard: sumChart((s) => s.studentRegistration.byBoard),
+    byGender: sumChart((s) => s.studentRegistration.byGender),
     byCity: buildAllCitiesRegistrationsByCity(),
+    byRegistrantCity: sumChart((s) => s.studentRegistration.byRegistrantCity),
     bySeminar,
+    weeklyTrend: (() => {
+      const map = new Map<string, number>();
+      for (const city of OPERATING_CITIES) {
+        for (const row of mockCitySlices[city].studentRegistration.weeklyTrend ??
+          []) {
+          map.set(
+            String(row.name),
+            (map.get(String(row.name)) ?? 0) + Number(row.value)
+          );
+        }
+      }
+      // Preserve chronological order from first city slice
+      const order =
+        mockCitySlices.Bangalore.studentRegistration.weeklyTrend?.map((r) =>
+          String(r.name)
+        ) ?? Array.from(map.keys());
+      return order.map((name) => ({ name, value: map.get(name) ?? 0 }));
+    })(),
     topSchools: OPERATING_CITIES.flatMap((c) =>
       mockCitySlices[c].studentRegistration.topSchools.map((school) => ({
         ...school,

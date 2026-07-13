@@ -13,10 +13,43 @@ const CLASS_LABELS = [
   "Class 12",
 ] as const;
 
+const STREAM_LABELS = ["Science", "Commerce", "Arts", "Undeclared"] as const;
+const BOARD_LABELS = ["CBSE", "ICSE", "State", "IB", "Other"] as const;
+const GENDER_LABELS = ["Female", "Male"] as const;
+
 const CITY_SHARE: Record<OperatingCity, number> = {
   Bangalore: 0.52,
   Mysore: 0.28,
   Hubli: 0.2,
+};
+
+const REGISTRANT_LOCATIONS: Record<OperatingCity, string[]> = {
+  Bangalore: [
+    "Whitefield",
+    "Koramangala",
+    "Indiranagar",
+    "Jayanagar",
+    "HSR Layout",
+    "Electronic City",
+    "Yelahanka",
+    "Tumkur",
+  ],
+  Mysore: [
+    "Vijayanagar",
+    "Gokulam",
+    "Kuvempunagar",
+    "Yadavagiri",
+    "Mandya",
+    "Nanjangud",
+  ],
+  Hubli: [
+    "Vidyanagar",
+    "Deshpande Nagar",
+    "Gokul Road",
+    "Dharwad",
+    "Unkal",
+    "Navanagar",
+  ],
 };
 
 /** Stable 0–1 hash from a string (for deterministic mock variation). */
@@ -28,10 +61,7 @@ function hash01(input: string): number {
   return (h % 1000) / 1000;
 }
 
-function splitByWeights(
-  total: number,
-  weights: number[]
-): number[] {
+function splitByWeights(total: number, weights: number[]): number[] {
   const sum = weights.reduce((a, b) => a + b, 0) || 1;
   const raw = weights.map((w) => (w / sum) * total);
   const floored = raw.map((v) => Math.floor(v));
@@ -45,6 +75,24 @@ function splitByWeights(
   return floored;
 }
 
+function weightedSeries(
+  seed: string,
+  labels: readonly string[],
+  total: number,
+  weightFn: (label: string, index: number) => number
+): ChartDataPoint[] {
+  const weights = labels.map((label, index) =>
+    Math.max(
+      0.05,
+      weightFn(label, index) * (0.75 + hash01(`${seed}:${label}`) * 0.5)
+    )
+  );
+  const counts = splitByWeights(total, weights);
+  return labels
+    .map((name, i) => ({ name, value: counts[i] }))
+    .filter((row) => row.value > 0);
+}
+
 export interface SeminarCityBreakdown {
   city: OperatingCity;
   total: number;
@@ -55,6 +103,18 @@ export interface SeminarBreakdown {
   name: string;
   total: number;
   byCity: SeminarCityBreakdown[];
+}
+
+/** City-scoped seminar profile for individual-city dashboard popups. */
+export interface SeminarCityProfile {
+  name: string;
+  city: OperatingCity;
+  total: number;
+  byGender: ChartDataPoint[];
+  byRegistrantCity: ChartDataPoint[];
+  byClass: ChartDataPoint[];
+  byBoard: ChartDataPoint[];
+  byStream: ChartDataPoint[];
 }
 
 /**
@@ -72,7 +132,6 @@ export function buildSeminarBreakdown(
 
   const byCity: SeminarCityBreakdown[] = OPERATING_CITIES.map((city, i) => {
     const cityTotal = cityTotals[i];
-    // Core classes (9–12) get more weight; slight per-seminar variation
     const classWeights = CLASS_LABELS.map((label, idx) => {
       const isCore = idx >= 5;
       const base = isCore ? 1.6 + (idx - 5) * 0.25 : 0.55 + idx * 0.08;
@@ -91,4 +150,48 @@ export function buildSeminarBreakdown(
   });
 
   return { name, total, byCity };
+}
+
+/**
+ * Build gender / hometown / class / board / stream mix for one seminar in one city.
+ */
+export function buildSeminarCityProfile(
+  name: string,
+  total: number,
+  city: OperatingCity
+): SeminarCityProfile {
+  const seed = `${name}:${city}`;
+  const locations = REGISTRANT_LOCATIONS[city];
+
+  return {
+    name,
+    city,
+    total,
+    byGender: weightedSeries(seed, GENDER_LABELS, total, (label) =>
+      label === "Female" ? 1.08 : 1
+    ),
+    byRegistrantCity: weightedSeries(
+      seed,
+      locations,
+      total,
+      (_label, index) => Math.max(0.35, 1.4 - index * 0.12)
+    ).sort((a, b) => Number(b.value) - Number(a.value)),
+    byClass: weightedSeries(seed, CLASS_LABELS, total, (_label, idx) => {
+      const isCore = idx >= 5;
+      return isCore ? 1.6 + (idx - 5) * 0.25 : 0.55 + idx * 0.08;
+    }),
+    byBoard: weightedSeries(seed, BOARD_LABELS, total, (label) => {
+      if (label === "CBSE") return 1.4;
+      if (label === "State") return 1.15;
+      if (label === "ICSE") return 0.95;
+      if (label === "IB") return 0.35;
+      return 0.45;
+    }),
+    byStream: weightedSeries(seed, STREAM_LABELS, total, (label) => {
+      if (label === "Science") return 1.45;
+      if (label === "Commerce") return 1.1;
+      if (label === "Arts") return 0.75;
+      return 0.4;
+    }),
+  };
 }

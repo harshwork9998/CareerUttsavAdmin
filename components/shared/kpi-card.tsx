@@ -67,8 +67,8 @@ export function KpiCard({
                     <span
                       className={cn(
                         "inline-flex items-center gap-1 font-medium",
-                        trendDirection === "up" && "text-emerald-600 dark:text-emerald-400",
-                        trendDirection === "down" && "text-red-600 dark:text-red-400",
+                        trendDirection === "up" && "text-[#2F6B4F] dark:text-[#7CB89A]",
+                        trendDirection === "down" && "text-[#A33B3B] dark:text-[#D48989]",
                         trendDirection === "neutral" && "text-muted-foreground"
                       )}
                     >

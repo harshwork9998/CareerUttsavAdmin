@@ -4,44 +4,45 @@
 
 @layer base {
   :root {
-    --background: 210 20% 98%;
-    --foreground: 220 25% 12%;
+    /* Warm stone paper + navy ink */
+    --background: 40 14% 96%;
+    --foreground: 216 25% 15%;
     --card: 0 0% 100%;
-    --card-foreground: 220 25% 12%;
+    --card-foreground: 216 25% 15%;
     --popover: 0 0% 100%;
-    --popover-foreground: 220 25% 12%;
-    --muted: 210 20% 96%;
-    --muted-foreground: 220 10% 46%;
-    --border: 214 20% 90%;
-    --input: 214 20% 90%;
-    --ring: 217 91% 60%;
-    --destructive: 0 84% 60%;
+    --popover-foreground: 216 25% 15%;
+    --muted: 40 12% 94%;
+    --muted-foreground: 215 10% 48%;
+    --border: 40 12% 82%;
+    --input: 40 12% 82%;
+    --ring: 217 52% 26%;
+    --destructive: 0 47% 44%;
     --destructive-foreground: 0 0% 100%;
     --radius: 0.625rem;
-    --sidebar: 220 35% 18%;
-    --sidebar-foreground: 210 20% 95%;
-    --sidebar-accent: 220 30% 24%;
-    --sidebar-border: 220 25% 26%;
+    --sidebar: 217 55% 16%;
+    --sidebar-foreground: 210 25% 95%;
+    --sidebar-accent: 217 48% 22%;
+    --sidebar-border: 217 40% 24%;
   }
 
   .dark {
-    --background: 222 30% 8%;
-    --foreground: 210 20% 96%;
-    --card: 222 28% 11%;
-    --card-foreground: 210 20% 96%;
-    --popover: 222 28% 11%;
-    --popover-foreground: 210 20% 96%;
-    --muted: 222 20% 16%;
-    --muted-foreground: 215 15% 60%;
-    --border: 222 20% 18%;
-    --input: 222 20% 18%;
-    --ring: 217 91% 60%;
-    --destructive: 0 62% 50%;
+    --background: 218 36% 9%;
+    --foreground: 214 33% 94%;
+    --card: 218 30% 13%;
+    --card-foreground: 214 33% 94%;
+    --popover: 218 28% 16%;
+    --popover-foreground: 214 33% 94%;
+    --muted: 218 24% 16%;
+    --muted-foreground: 214 14% 65%;
+    --border: 218 26% 22%;
+    --input: 218 26% 22%;
+    --ring: 217 40% 48%;
+    --destructive: 0 42% 42%;
     --destructive-foreground: 0 0% 100%;
-    --sidebar: 222 35% 6%;
-    --sidebar-foreground: 210 20% 90%;
-    --sidebar-accent: 222 30% 12%;
-    --sidebar-border: 222 25% 14%;
+    --sidebar: 220 40% 7%;
+    --sidebar-foreground: 210 25% 90%;
+    --sidebar-accent: 218 30% 12%;
+    --sidebar-border: 218 26% 14%;
   }
 
   * {
@@ -58,7 +59,7 @@
     scrollbar-width: thin;
   }
 
-  /** Dashboard Apple-style type (SF Pro on Apple, system UI elsewhere). */
+  /** Dashboard type (SF Pro on Apple, system UI elsewhere). */
   .dash-apple {
     font-family:
       -apple-system,
@@ -74,12 +75,19 @@
 
   .dash-root {
     background:
-      radial-gradient(1200px 600px at 10% -10%, rgba(6, 95, 70, 0.07), transparent 55%),
-      radial-gradient(900px 500px at 100% 0%, rgba(4, 120, 87, 0.05), transparent 50%),
-      linear-gradient(180deg, #ecfdf5 0%, #f1f5f9 45%, #eef2f7 100%);
+      radial-gradient(1200px 600px at 10% -10%, rgba(31, 56, 100, 0.06), transparent 55%),
+      radial-gradient(900px 500px at 100% 0%, rgba(196, 163, 90, 0.05), transparent 50%),
+      linear-gradient(180deg, #f7f6f3 0%, #f3f6fa 48%, #f1f0ec 100%);
     margin: -0.5rem -1rem;
     padding: 0.5rem 1rem 2rem;
     min-height: calc(100vh - 4rem);
+  }
+
+  .dark .dash-root {
+    background:
+      radial-gradient(1200px 600px at 10% -10%, rgba(58, 95, 150, 0.12), transparent 55%),
+      radial-gradient(900px 500px at 100% 0%, rgba(196, 163, 90, 0.06), transparent 50%),
+      linear-gradient(180deg, #0e1420 0%, #121a28 50%, #0e1420 100%);
   }
 
   .dash-apple .font-display {

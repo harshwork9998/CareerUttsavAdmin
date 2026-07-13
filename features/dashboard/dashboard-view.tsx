@@ -6,27 +6,222 @@ import { AnimatePresence, motion } from "framer-motion";
 
 import { dashboardService } from "@/services/api";
 import { cn, formatNumber } from "@/lib/utils";
-import type { DashboardCityFilter } from "@/types";
+import type {
+  DashboardCityFilter,
+  PartnerSalesAnalytics,
+  StudentRegistrationAnalytics,
+} from "@/types";
 import { ErrorState } from "@/components/shared";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StudentRegistrationSection } from "@/features/dashboard/student-registration-section";
 import { PartnerSalesSection } from "@/features/dashboard/partner-sales-section";
-import { DashboardCitySelector } from "@/features/dashboard/dashboard-city-selector";
-import { CityComparisonInline } from "@/features/dashboard/city-comparison-strip";
 import { resolveDashboardView } from "@/features/dashboard/resolve-dashboard-view";
 import {
-  CITY_GREEN,
   displayClass,
   sectionMotion,
   surface,
   DASH_COLORS,
 } from "@/features/dashboard/dashboard-ui";
-import {
-  CitySharePanel,
-  ClassRidge,
-} from "@/features/dashboard/visualizations";
 
-const CITY_COLORS = CITY_GREEN;
+const HERO_TABS: Array<{
+  value: DashboardCityFilter;
+  label: string;
+}> = [
+  { value: "all", label: "Consolidated" },
+  { value: "Bangalore", label: "Bangalore" },
+  { value: "Mysore", label: "Mysore" },
+  { value: "Hubli", label: "Hubli" },
+];
+
+function buildSupportFacts(
+  students: StudentRegistrationAnalytics
+): Array<{ label: string; value: string }> {
+  const facts: Array<{ label: string; value: string }> = [];
+  const topSeminar = students.bySeminar[0];
+  const topStream = students.byStream[0];
+  const topBoard = students.byBoard[0];
+  const topClass = [...students.byClass].sort(
+    (a, b) => Number(b.value) - Number(a.value)
+  )[0];
+
+  if (topSeminar) {
+    facts.push({
+      label: "Most chosen seminar",
+      value: String(topSeminar.name),
+    });
+  }
+  if (topStream) {
+    facts.push({
+      label: "Popular stream",
+      value: String(topStream.name),
+    });
+  }
+  if (topClass) {
+    facts.push({
+      label: "Top class",
+      value: `${String(topClass.name)} · ${formatNumber(Number(topClass.value))}`,
+    });
+  }
+  if (topBoard) {
+    facts.push({
+      label: "Top board",
+      value: String(topBoard.name),
+    });
+  }
+  return facts;
+}
+
+function buildPartnerSupportFacts(
+  partners: PartnerSalesAnalytics
+): Array<{ label: string; value: string }> {
+  const inDiscussion = partners.inDiscussion ?? partners.inProcess ?? 0;
+  const notProceeding = partners.notProceeding ?? partners.lost ?? 0;
+  const topTier = [...(partners.byTier ?? [])].sort(
+    (a, b) => Number(b.value) - Number(a.value)
+  )[0];
+  const topStage = [...(partners.byStage ?? [])]
+    .filter((s) => !["Confirmed", "Not Proceeding", "Lost", "Won"].includes(s.name))
+    .sort((a, b) => b.count - a.count)[0];
+
+  const facts: Array<{ label: string; value: string }> = [
+    {
+      label: "In discussion",
+      value: formatNumber(inDiscussion),
+    },
+    {
+      label: "Not proceeding",
+      value: formatNumber(notProceeding),
+    },
+  ];
+
+  if (topTier) {
+    facts.push({
+      label: "Top sponsorship tier",
+      value: String(topTier.name),
+    });
+  } else if (topStage) {
+    facts.push({
+      label: "Busiest stage",
+      value: String(topStage.name),
+    });
+  }
+
+  facts.push({
+    label: "Total partners",
+    value: formatNumber(partners.totalPartners),
+  });
+
+  return facts.slice(0, 4);
+}
+
+function CityHeroCards({
+  cards,
+  activeValue,
+  onSelect,
+}: {
+  cards: Array<{
+    value: DashboardCityFilter;
+    label: string;
+    metricLabel: string;
+    total: number;
+    facts: Array<{ label: string; value: string }>;
+  }>;
+  activeValue: DashboardCityFilter;
+  onSelect: (value: DashboardCityFilter) => void;
+}) {
+  return (
+    <div className="mb-12 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {cards.map((card, index) => {
+        const active = activeValue === card.value;
+        return (
+          <motion.button
+            key={card.value}
+            type="button"
+            onClick={() => onSelect(card.value)}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{
+              duration: 0.35,
+              delay: index * 0.05,
+              ease: [0.22, 1, 0.36, 1],
+            }}
+            whileHover={{
+              y: -6,
+              scale: 1.02,
+              transition: { duration: 0.2, ease: [0.22, 1, 0.36, 1] },
+            }}
+            whileTap={{ scale: 0.985, y: -2 }}
+            className={cn(
+              surface.opening,
+              "flex flex-col justify-between gap-6 p-5 text-left will-change-transform sm:p-6",
+              active
+                ? "border-brand-700/30 text-white shadow-[0_12px_36px_rgba(18,35,63,0.28)] ring-2 ring-brand-700/40"
+                : "bg-white hover:border-brand-700/25 hover:shadow-[0_16px_40px_rgba(18,35,63,0.14)]"
+            )}
+            style={active ? { background: DASH_COLORS.gradient } : undefined}
+            aria-pressed={active}
+          >
+            <div>
+              <p
+                className={cn(
+                  "text-[13px] font-semibold tracking-tight sm:text-[14px]",
+                  active ? "text-white/80" : "text-brand-800/70"
+                )}
+              >
+                {card.label}
+              </p>
+              <p
+                className={cn(
+                  "mt-3 text-[12px] font-medium",
+                  active ? "text-white/70" : "text-muted-foreground"
+                )}
+              >
+                {card.metricLabel}
+              </p>
+              <p
+                className={cn(
+                  "mt-1 text-[44px] font-semibold leading-none tracking-[-0.04em] tabular-nums sm:text-[52px]",
+                  active ? "text-white" : "text-brand-950"
+                )}
+              >
+                {formatNumber(card.total)}
+              </p>
+            </div>
+
+            <dl className="space-y-2.5">
+              {card.facts.map((fact) => (
+                <div
+                  key={fact.label}
+                  className={cn(
+                    "flex items-baseline justify-between gap-3 border-b pb-2 last:border-b-0 last:pb-0",
+                    active ? "border-white/15" : "border-brand-900/10"
+                  )}
+                >
+                  <dt
+                    className={cn(
+                      "shrink-0 text-[12px]",
+                      active ? "text-white/65" : "text-muted-foreground"
+                    )}
+                  >
+                    {fact.label}
+                  </dt>
+                  <dd
+                    className={cn(
+                      "min-w-0 truncate text-right text-[13px] font-semibold tracking-tight",
+                      active ? "text-white" : "text-foreground"
+                    )}
+                  >
+                    {fact.value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </motion.button>
+        );
+      })}
+    </div>
+  );
+}
 
 function DashboardSkeleton() {
   return (
@@ -39,7 +234,11 @@ function DashboardSkeleton() {
 }
 
 export function DashboardView() {
-  const [cityFilter, setCityFilter] = useState<DashboardCityFilter>("all");
+  const [studentCityFilter, setStudentCityFilter] =
+    useState<DashboardCityFilter>("all");
+  const [partnerCityFilter, setPartnerCityFilter] =
+    useState<DashboardCityFilter>("all");
+  const [partnerSeeAllTick, setPartnerSeeAllTick] = useState(0);
 
   const dashboardQuery = useQuery({
     queryKey: ["dashboard"],
@@ -47,14 +246,48 @@ export function DashboardView() {
   });
 
   const dashboard = dashboardQuery.data;
-  const view = useMemo(
-    () => (dashboard ? resolveDashboardView(dashboard, cityFilter) : null),
-    [dashboard, cityFilter]
+  const studentView = useMemo(
+    () =>
+      dashboard ? resolveDashboardView(dashboard, studentCityFilter) : null,
+    [dashboard, studentCityFilter]
   );
+  const partnerView = useMemo(
+    () =>
+      dashboard ? resolveDashboardView(dashboard, partnerCityFilter) : null,
+    [dashboard, partnerCityFilter]
+  );
+
+  const studentHeroCards = useMemo(() => {
+    if (!dashboard) return [];
+    return HERO_TABS.map((tab) => {
+      const slice = resolveDashboardView(dashboard, tab.value);
+      return {
+        ...tab,
+        metricLabel:
+          tab.value === "all" ? "Students registered" : "Students joining",
+        total: slice.studentRegistration.total,
+        facts: buildSupportFacts(slice.studentRegistration),
+      };
+    });
+  }, [dashboard]);
+
+  const partnerHeroCards = useMemo(() => {
+    if (!dashboard) return [];
+    return HERO_TABS.map((tab) => {
+      const slice = resolveDashboardView(dashboard, tab.value);
+      return {
+        ...tab,
+        metricLabel:
+          tab.value === "all" ? "Confirmed partners" : "Partners confirmed",
+        total: slice.partnerSales.confirmed,
+        facts: buildPartnerSupportFacts(slice.partnerSales),
+      };
+    });
+  }, [dashboard]);
 
   if (dashboardQuery.isLoading) return <DashboardSkeleton />;
 
-  if (dashboardQuery.isError || !dashboard || !view) {
+  if (dashboardQuery.isError || !dashboard || !studentView || !partnerView) {
     return (
       <ErrorState
         title="Couldn't load Career Utsav"
@@ -64,189 +297,78 @@ export function DashboardView() {
     );
   }
 
-  const students = view.studentRegistration.total;
-  const today = view.studentRegistration.todayCount;
-
-  const coreClasses = view.studentRegistration.byClass
-    .filter((c) => c.segment === "core")
-    .reduce((sum, c) => sum + Number(c.value), 0);
-  const coreShare =
-    students > 0 ? Math.round((coreClasses / students) * 100) : 0;
-
-  const cityData = view.studentRegistration.byCity.map((c) => ({
-    name: String(c.name),
-    value: Number(c.value),
-  }));
-
-  const classInOrder = view.studentRegistration.byClass.map((c) => ({
-    name: String(c.name),
-    value: Number(c.value),
-    segment: c.segment,
-  }));
-
-  const topStream = view.studentRegistration.byStream[0];
-  const topSeminar = view.studentRegistration.bySeminar[0];
-  const topBoard = view.studentRegistration.byBoard[0];
-  const topClass = [...view.studentRegistration.byClass].sort(
-    (a, b) => Number(b.value) - Number(a.value)
-  )[0];
-  const topCity = [...cityData].sort((a, b) => b.value - a.value)[0];
-
-  const supportFacts: Array<{ label: string; value: string }> = [];
-  if (view.isAllCities && topCity) {
-    supportFacts.push({
-      label: "Most active city",
-      value: `${topCity.name} · ${formatNumber(topCity.value)}`,
-    });
-  }
-  if (topSeminar) {
-    supportFacts.push({
-      label: "Most chosen seminar",
-      value: String(topSeminar.name),
-    });
-  }
-  if (topStream) {
-    supportFacts.push({
-      label: "Popular stream",
-      value: String(topStream.name),
-    });
-  }
-  if (topClass) {
-    supportFacts.push({
-      label: "Top class",
-      value: `${String(topClass.name)} · ${formatNumber(Number(topClass.value))}`,
-    });
-  }
-  if (topBoard) {
-    supportFacts.push({
-      label: "Top board",
-      value: String(topBoard.name),
-    });
-  }
-
   return (
     <div className="pb-10">
-      {/* Masthead — brand first, not a page title stack */}
-      <header className="mb-7 flex flex-col gap-4 sm:mb-9 sm:flex-row sm:items-end sm:justify-between">
-        <div className="min-w-0">
-          <h1
+      <header className="mb-6 sm:mb-7">
+        <h1
+          className={cn(
+            displayClass,
+            "text-[28px] font-bold leading-none text-foreground sm:text-[34px]"
+          )}
+        >
+          Student details
+        </h1>
+        <p className="mt-2 text-[13px] text-muted-foreground">
+          {studentView.isAllCities
+            ? "Bangalore · Mysore · Hubli"
+            : studentView.cityLabel}
+        </p>
+      </header>
+
+      <CityHeroCards
+        cards={studentHeroCards}
+        activeValue={studentCityFilter}
+        onSelect={setStudentCityFilter}
+      />
+
+      <AnimatePresence mode="wait">
+        <motion.div key={`students-${studentCityFilter}`} {...sectionMotion}>
+          <StudentRegistrationSection
+            data={studentView.studentRegistration}
+            cityLabel={studentView.cityLabel}
+            isAllCities={studentView.isAllCities}
+          />
+        </motion.div>
+      </AnimatePresence>
+
+      <header className="mb-4 mt-14 flex flex-wrap items-end justify-between gap-3 sm:mb-5 sm:mt-16">
+        <div>
+          <h2
             className={cn(
               displayClass,
               "text-[28px] font-bold leading-none text-foreground sm:text-[34px]"
             )}
           >
-            Student details
-          </h1>
+            University details
+          </h2>
           <p className="mt-2 text-[13px] text-muted-foreground">
-            {view.isAllCities
+            {partnerView.isAllCities
               ? "Bangalore · Mysore · Hubli"
-              : view.cityLabel}
+              : partnerView.cityLabel}
           </p>
         </div>
-        <DashboardCitySelector value={cityFilter} onChange={setCityFilter} />
+        <button
+          type="button"
+          onClick={() => setPartnerSeeAllTick((t) => t + 1)}
+          className="inline-flex h-9 items-center rounded-lg border border-[rgba(212,209,200,0.85)] bg-white px-3.5 text-[13px] font-semibold text-brand-800 shadow-card transition-colors hover:border-brand-700/25 hover:bg-brand-50"
+        >
+          See all universities
+        </button>
       </header>
 
+      <CityHeroCards
+        cards={partnerHeroCards}
+        activeValue={partnerCityFilter}
+        onSelect={setPartnerCityFilter}
+      />
+
       <AnimatePresence mode="wait">
-        <motion.div key={cityFilter} {...sectionMotion} className="space-y-12">
-          {/* Hero — emerald featured left + city greens */}
-          <section className={surface.opening}>
-            <div className="grid lg:grid-cols-10 lg:items-stretch">
-              {/* LEFT — filled emerald like Donezo primary KPI */}
-              <div
-                className={cn(
-                  "flex flex-col justify-between gap-8 p-7 sm:p-8 lg:col-span-4 lg:p-9",
-                  "text-white"
-                )}
-                style={{ background: DASH_COLORS.gradient }}
-              >
-                <div>
-                  <p className="text-[15px] font-medium tracking-[-0.01em] text-white/75 sm:text-[16px]">
-                    {view.isAllCities
-                      ? "Students registered"
-                      : "Students joining"}
-                  </p>
-                  <p className="mt-2 text-[72px] font-semibold leading-[0.92] tracking-[-0.04em] tabular-nums text-white sm:text-[88px]">
-                    {formatNumber(students)}
-                  </p>
-                  {!view.isAllCities && (
-                    <p className="mt-4 text-[15px] leading-relaxed tracking-[-0.01em] text-white/75">
-                      <span className="font-semibold tabular-nums text-white">
-                        {formatNumber(today)}
-                      </span>{" "}
-                      joined today
-                      <span className="mx-1.5 text-white/35">·</span>
-                      <span className="font-semibold tabular-nums text-white">
-                        {coreShare}%
-                      </span>{" "}
-                      from classes 9–12
-                    </p>
-                  )}
-                </div>
-
-                <dl className="space-y-3.5">
-                  {supportFacts.map((fact) => (
-                    <div
-                      key={fact.label}
-                      className="flex items-baseline justify-between gap-4 border-b border-white/15 pb-3 last:border-b-0 last:pb-0"
-                    >
-                      <dt className="shrink-0 text-[14px] tracking-[-0.01em] text-white/70">
-                        {fact.label}
-                      </dt>
-                      <dd className="min-w-0 truncate text-right text-[15px] font-semibold tracking-[-0.02em] text-white sm:text-[16px]">
-                        {fact.value}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-
-                {!view.isAllCities && view.vsAverage.length > 0 && (
-                  <div className="rounded-xl bg-white/10 p-3 backdrop-blur-sm">
-                    <CityComparisonInline
-                      cityLabel={view.cityLabel}
-                      metrics={view.vsAverage}
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* RIGHT ~60% — full-bleed city columns (all cities) */}
-              <div
-                className={cn(
-                  "lg:col-span-6",
-                  view.isAllCities
-                    ? "min-h-[280px] overflow-hidden p-0 lg:min-h-full"
-                    : "min-h-[300px] bg-emerald-50/50 p-7 sm:p-8 lg:p-9"
-                )}
-              >
-                {view.isAllCities ? (
-                  <CitySharePanel cities={cityData} colors={CITY_COLORS} />
-                ) : (
-                  <div className="flex h-full min-h-[240px] flex-col">
-                    <h3 className="text-[17px] font-bold tracking-[-0.02em] text-foreground">
-                      Students by class
-                    </h3>
-                    <p className="mt-1.5 text-[14px] tracking-[-0.01em] text-muted-foreground">
-                      Class profile in {view.cityLabel}
-                    </p>
-                    <div className="mt-8 flex flex-1 flex-col justify-center">
-                      <ClassRidge classes={classInOrder} />
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </section>
-
-          <StudentRegistrationSection
-            data={view.studentRegistration}
-            cityLabel={view.cityLabel}
-            isAllCities={view.isAllCities}
-          />
-
+        <motion.div key={`partners-${partnerCityFilter}`} {...sectionMotion}>
           <PartnerSalesSection
-            data={view.partnerSales}
-            cityLabel={view.cityLabel}
-            isAllCities={view.isAllCities}
+            data={partnerView.partnerSales}
+            cityLabel={partnerView.cityLabel}
+            isAllCities={partnerView.isAllCities}
+            seeAllTick={partnerSeeAllTick}
           />
         </motion.div>
       </AnimatePresence>

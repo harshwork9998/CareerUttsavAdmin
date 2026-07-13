@@ -5,18 +5,18 @@ import { motion } from "framer-motion";
 
 import { cn, formatNumber } from "@/lib/utils";
 import {
-  CITY_GREEN,
+  CITY_COLORS,
   DASH_COLORS,
-  EMERALD,
+  BRAND,
   displayClass,
 } from "@/features/dashboard/dashboard-ui";
 
 /* ─── City columns ─── */
 
 const CITY_SCALE = [
-  EMERALD[900],
-  EMERALD[700],
-  EMERALD[600],
+  CITY_COLORS.Bangalore,
+  CITY_COLORS.Mysore,
+  CITY_COLORS.Hubli,
 ] as const;
 
 export function CityMosaic({
@@ -36,22 +36,25 @@ export function CitySharePanel({
   cities,
   colors,
   unitLabel = "students",
+  onSelectCity,
 }: {
   cities: Array<{ name: string; value: number }>;
   colors?: Record<string, string>;
   unitLabel?: string;
+  /** Click a city card to filter the dashboard to that city */
+  onSelectCity?: (city: string) => void;
 }) {
   const total = cities.reduce((s, c) => s + c.value, 0) || 1;
   const [hover, setHover] = useState<string | null>(null);
 
   const palette = (name: string, index: number) =>
     colors?.[name] ??
-    CITY_GREEN[name] ??
+    CITY_COLORS[name] ??
     CITY_SCALE[index % CITY_SCALE.length];
 
   return (
     <div
-      className="flex h-full min-h-[280px] w-full gap-3 bg-emerald-50/40 p-3 sm:gap-4 sm:p-4"
+      className="flex h-full min-h-[280px] w-full gap-3 bg-brand-50/50 p-3 sm:gap-4 sm:p-4"
       onMouseLeave={() => setHover(null)}
     >
       {cities.map((city, index) => {
@@ -65,12 +68,12 @@ export function CitySharePanel({
             key={city.name}
             type="button"
             onMouseEnter={() => setHover(city.name)}
+            onClick={() => onSelectCity?.(city.name)}
             className={cn(
-              "relative flex min-w-0 flex-1 flex-col justify-between overflow-hidden rounded-2xl border border-emerald-900/12 bg-white p-4 text-left transition-all duration-150 sm:p-5",
-              "shadow-[0_8px_28px_rgba(5,150,105,0.12)]",
-              active
-                ? "shadow-[0_10px_32px_rgba(5,150,105,0.16)]"
-                : "opacity-55"
+              "relative flex min-w-0 flex-1 flex-col justify-between overflow-hidden rounded-2xl border border-brand-900/10 bg-white p-4 text-left transition-all duration-150 sm:p-5",
+              "shadow-card",
+              active ? "shadow-soft" : "opacity-55",
+              onSelectCity && "cursor-pointer hover:border-brand-700/30"
             )}
             aria-label={`${city.name}: ${formatNumber(city.value)} ${unitLabel}, ${pct}%`}
           >
@@ -90,7 +93,7 @@ export function CitySharePanel({
                 {pct}%
               </p>
             </div>
-            <p className="relative text-[44px] font-semibold leading-none tracking-[-0.04em] tabular-nums text-emerald-950 sm:text-[56px]">
+            <p className="relative text-[44px] font-semibold leading-none tracking-[-0.04em] tabular-nums text-brand-950 sm:text-[56px]">
               {formatNumber(city.value)}
             </p>
           </button>
@@ -375,7 +378,7 @@ const DISCUSSION_LABELS: Record<(typeof DISCUSSION_STAGES)[number], string> = {
 function PipelineArrow({ delay }: { delay: number }) {
   return (
     <motion.div
-      className="relative mt-5 hidden h-14 w-8 shrink-0 sm:block md:mt-6 md:w-12 lg:w-16"
+      className="relative mt-3 hidden h-8 w-6 shrink-0 sm:block md:w-10 lg:w-14"
       initial={{ opacity: 0, scaleX: 0.4 }}
       animate={{ opacity: 1, scaleX: 1 }}
       transition={{
@@ -396,8 +399,8 @@ function PipelineArrow({ delay }: { delay: number }) {
           y1="12"
           x2="48"
           y2="12"
-          stroke={EMERALD[600]}
-          strokeWidth="5"
+          stroke={BRAND[700]}
+          strokeWidth="4"
           strokeLinecap="round"
           initial={{ pathLength: 0 }}
           animate={{ pathLength: 1 }}
@@ -405,14 +408,14 @@ function PipelineArrow({ delay }: { delay: number }) {
         />
         <motion.polygon
           points="44,3 62,12 44,21"
-          fill={EMERALD[600]}
+          fill={BRAND[700]}
           initial={{ opacity: 0, x: -6 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.3, delay: delay + 0.35 }}
         />
       </svg>
       <motion.span
-        className="absolute top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full bg-white/90 shadow-sm"
+        className="absolute top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-white/90 shadow-sm"
         animate={{ left: ["4%", "72%"], opacity: [0, 1, 1, 0] }}
         transition={{
           duration: 1.7,
@@ -442,13 +445,13 @@ export function PartnerJourneyFlow({
   const [hover, setHover] = useState<string | null>(null);
 
   return (
-    <div className="flex min-h-[280px] flex-col justify-between gap-8 sm:min-h-[300px]">
+    <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <h3 className="text-[15px] font-bold tracking-tight text-foreground">
             In discussion pipeline
           </h3>
-          <p className="mt-1 text-[12px] text-muted-foreground">
+          <p className="mt-0.5 text-[12px] text-muted-foreground">
             Path from first hello to a decision
           </p>
         </div>
@@ -461,7 +464,7 @@ export function PartnerJourneyFlow({
       </div>
 
       <div
-        className="flex flex-1 items-center overflow-x-auto"
+        className="flex items-center overflow-x-auto pb-0.5"
         onMouseLeave={() => setHover(null)}
       >
         {flow.map((stage, index) => {
@@ -478,47 +481,47 @@ export function PartnerJourneyFlow({
                 type="button"
                 onClick={() => onSelect(stage.name)}
                 onMouseEnter={() => setHover(stage.name)}
-                initial={{ opacity: 0, y: 18 }}
+                initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{
-                  duration: 0.45,
-                  delay: index * 0.08,
+                  duration: 0.35,
+                  delay: index * 0.06,
                   ease: [0.22, 1, 0.36, 1],
                 }}
                 className={cn(
-                  "group relative z-[1] flex w-full min-w-[96px] flex-col items-center gap-4 px-1 text-center outline-none transition-opacity duration-150 sm:min-w-0 sm:px-1.5",
+                  "group relative z-[1] flex w-full min-w-[80px] flex-col items-center gap-2 px-1 text-center outline-none transition-opacity duration-150 sm:min-w-0 sm:px-1.5",
                   !active && "opacity-35"
                 )}
               >
                 <motion.div
-                  className="relative flex h-[5.5rem] w-[5.5rem] items-center justify-center rounded-full text-white shadow-[0_0_0_6px_rgba(31,56,100,0.1)] sm:h-24 sm:w-24 sm:shadow-[0_0_0_8px_rgba(31,56,100,0.1)]"
-                  style={{ backgroundColor: EMERALD[600] }}
+                  className="relative flex h-14 w-14 items-center justify-center rounded-full text-white shadow-[0_0_0_4px_rgba(31,56,100,0.1)] sm:h-16 sm:w-16 sm:shadow-[0_0_0_5px_rgba(31,56,100,0.1)]"
+                  style={{ backgroundColor: BRAND[700] }}
                   initial={{ scale: 0.7, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   transition={{
                     type: "spring",
                     stiffness: 280,
                     damping: 20,
-                    delay: 0.12 + index * 0.08,
+                    delay: 0.08 + index * 0.06,
                   }}
                   whileHover={{ scale: 1.05 }}
                 >
-                  <span className="text-[32px] font-semibold leading-none tracking-[-0.04em] tabular-nums sm:text-[40px]">
+                  <span className="text-[22px] font-semibold leading-none tracking-[-0.04em] tabular-nums sm:text-[26px]">
                     {formatNumber(stage.count)}
                   </span>
                 </motion.div>
 
-                <div className="space-y-1">
-                  <p className="text-[13px] font-bold leading-snug tracking-tight text-foreground sm:text-[15px]">
+                <div className="space-y-0.5">
+                  <p className="text-[12px] font-bold leading-snug tracking-tight text-foreground sm:text-[13px]">
                     {DISCUSSION_LABELS[stage.name]}
                   </p>
-                  <p className="text-[11px] tabular-nums text-muted-foreground sm:text-[12px]">
+                  <p className="text-[10px] tabular-nums text-muted-foreground sm:text-[11px]">
                     {share}% of open
                   </p>
                 </div>
               </motion.button>
 
-              {!isLast && <PipelineArrow delay={0.22 + index * 0.08} />}
+              {!isLast && <PipelineArrow delay={0.16 + index * 0.06} />}
             </div>
           );
         })}

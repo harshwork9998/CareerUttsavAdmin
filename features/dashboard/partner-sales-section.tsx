@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 
 import { cn, formatNumber } from "@/lib/utils";
@@ -14,30 +14,26 @@ import type {
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Sheet,
   SheetContent,
   SheetDescription,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import {
-  CITY_GREEN,
-  DASH_COLORS,
-  EMERALD,
-  displayClass,
-  surface,
-} from "@/features/dashboard/dashboard-ui";
-import {
-  CitySharePanel,
-  PartnerJourneyFlow,
-} from "@/features/dashboard/visualizations";
-
-const CITY_COLORS = CITY_GREEN;
+import { BRAND, surface } from "@/features/dashboard/dashboard-ui";
+import { PartnerJourneyFlow } from "@/features/dashboard/visualizations";
 
 const LOGO_WASHES = [
-  { bg: "rgba(5, 150, 105, 0.14)", fg: EMERALD[700] },
-  { bg: "rgba(16, 185, 129, 0.16)", fg: EMERALD[600] },
-  { bg: "rgba(52, 211, 153, 0.22)", fg: EMERALD[800] },
+  { bg: "rgba(31, 56, 100, 0.12)", fg: BRAND[700] },
+  { bg: "rgba(14, 124, 123, 0.14)", fg: "#0B5F5E" },
+  { bg: "rgba(196, 163, 90, 0.18)", fg: "#8A6A2F" },
 ] as const;
 
 const TIER_ORDER: SponsorshipTier[] = [
@@ -208,24 +204,156 @@ function PartnerList({ deals }: { deals: PartnerSalesDeal[] }) {
   );
 }
 
+function AllUniversitiesDialog({
+  open,
+  onOpenChange,
+  deals,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  deals: PartnerSalesDeal[];
+}) {
+  const rows = useMemo(
+    () =>
+      [...deals].sort((a, b) => {
+        const tierDiff = tierRank(a.tier) - tierRank(b.tier);
+        if (tierDiff !== 0) return tierDiff;
+        const statusOrder = (s: PartnerSalesStatus) =>
+          s === "Confirmed" ? 0 : s === "In Discussion" ? 1 : 2;
+        const statusDiff =
+          statusOrder(normalizeStatus(a.status)) -
+          statusOrder(normalizeStatus(b.status));
+        if (statusDiff !== 0) return statusDiff;
+        return a.universityName.localeCompare(b.universityName);
+      }),
+    [deals]
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex max-h-[85vh] w-[calc(100%-1.5rem)] max-w-5xl flex-col gap-0 overflow-hidden p-0 sm:rounded-2xl">
+        <DialogHeader className="border-b border-[rgba(212,209,200,0.85)] px-5 py-4 pr-12 sm:px-6">
+          <DialogTitle className="text-[18px] font-bold tracking-tight text-foreground">
+            All universities
+          </DialogTitle>
+          <DialogDescription className="text-[13px]">
+            <span className="font-semibold tabular-nums text-foreground">
+              {formatNumber(rows.length)}
+            </span>{" "}
+            partners in this view · name, city, tier, stage, and status
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="min-h-0 flex-1 overflow-auto px-5 py-4 sm:px-6">
+          {rows.length === 0 ? (
+            <div className="flex h-40 items-center justify-center rounded-xl border border-dashed border-[rgba(212,209,200,0.85)] text-[13px] text-muted-foreground">
+              No universities in this view
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-xl border border-[rgba(212,209,200,0.85)]">
+              <table className="w-full min-w-[720px] text-left text-sm">
+                <thead className="sticky top-0 z-[1] bg-[#F1F0EC]">
+                  <tr className="border-b border-[rgba(212,209,200,0.85)]">
+                    <th className="px-3 py-2.5 text-[11px] font-semibold text-brand-900/55">
+                      University
+                    </th>
+                    <th className="px-3 py-2.5 text-[11px] font-semibold text-brand-900/55">
+                      City
+                    </th>
+                    <th className="px-3 py-2.5 text-[11px] font-semibold text-brand-900/55">
+                      Tier
+                    </th>
+                    <th className="px-3 py-2.5 text-[11px] font-semibold text-brand-900/55">
+                      Stage
+                    </th>
+                    <th className="px-3 py-2.5 text-[11px] font-semibold text-brand-900/55">
+                      Status
+                    </th>
+                    <th className="px-3 py-2.5 text-[11px] font-semibold text-brand-900/55">
+                      Owner
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((deal) => {
+                    const status = normalizeStatus(deal.status);
+                    const stage = normalizeStage(deal.stage);
+                    return (
+                      <tr
+                        key={deal.id}
+                        className="border-b border-[rgba(212,209,200,0.55)] last:border-b-0 hover:bg-brand-50/50"
+                      >
+                        <td className="px-3 py-2.5">
+                          <div className="flex items-start gap-2.5">
+                            <PartnerLogo name={deal.universityName} />
+                            <div className="min-w-0">
+                              <p className="text-[13px] font-semibold tracking-tight text-foreground">
+                                {deal.universityName}
+                              </p>
+                              {deal.notes ? (
+                                <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground">
+                                  {deal.notes}
+                                </p>
+                              ) : null}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2.5 text-[13px] text-muted-foreground">
+                          {deal.city}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <Badge variant="outline" className="text-[10px]">
+                            {deal.tier}
+                          </Badge>
+                        </td>
+                        <td className="px-3 py-2.5 text-[12px] text-muted-foreground">
+                          {stage}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <Badge
+                            variant={statusBadge(status)}
+                            className="text-[10px]"
+                          >
+                            {status}
+                          </Badge>
+                        </td>
+                        <td className="px-3 py-2.5 text-[12px] text-muted-foreground">
+                          {deal.owner || "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function PartnerSalesSection({
   data,
   isAllCities,
+  seeAllTick = 0,
 }: {
   data: PartnerSalesAnalytics;
   cityLabel?: string;
   isAllCities?: boolean;
+  /** Increment to open the all-universities popup from the parent. */
+  seeAllTick?: number;
 }) {
   const [filter, setFilter] = useState<DrillFilter | null>(null);
+  const [allOpen, setAllOpen] = useState(false);
   const [selectedTier, setSelectedTier] = useState<SponsorshipTier | null>(
     null
   );
-  const open = filter !== null;
+  const sheetOpen = filter !== null && filter.type !== "all";
 
-  const confirmed = data.confirmed;
-  const inDiscussion = data.inDiscussion ?? data.inProcess ?? 0;
-  const notProceeding = data.notProceeding ?? data.lost ?? 0;
-  const statusTotal = confirmed + inDiscussion + notProceeding || 1;
+  useEffect(() => {
+    if (seeAllTick > 0) setAllOpen(true);
+  }, [seeAllTick]);
 
   const stages = useMemo(
     () =>
@@ -234,15 +362,6 @@ export function PartnerSalesSection({
         count: stage.count,
       })),
     [data.byStage]
-  );
-
-  const cityData = useMemo(
-    () =>
-      data.byCity.map((item) => ({
-        name: String(item.name),
-        value: Number(item.value),
-      })),
-    [data.byCity]
   );
 
   const confirmedPartners = useMemo(
@@ -288,181 +407,10 @@ export function PartnerSalesSection({
 
   const openFilter = (next: DrillFilter) => setFilter(next);
 
-  const statusMix = [
-    {
-      label: "Joining us",
-      value: confirmed,
-      color: DASH_COLORS.secondary,
-      filter: {
-        type: "status" as const,
-        value: "Confirmed" as PartnerSalesStatus,
-      },
-    },
-    {
-      label: "In conversation",
-      value: inDiscussion,
-      color: DASH_COLORS.accent,
-      filter: {
-        type: "status" as const,
-        value: "In Discussion" as PartnerSalesStatus,
-      },
-    },
-    {
-      label: "Not continuing",
-      value: notProceeding,
-      color: DASH_COLORS.danger,
-      filter: {
-        type: "status" as const,
-        value: "Not Proceeding" as PartnerSalesStatus,
-      },
-    },
-  ];
-
   return (
     <section className="space-y-8">
-      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-border/40 pb-3">
-        <div>
-          <h2
-            className={cn(
-              displayClass,
-              "text-[28px] font-bold leading-none text-foreground sm:text-[34px]"
-            )}
-          >
-            University details
-          </h2>
-          <p className="mt-1.5 text-[12px] text-muted-foreground">
-            {isAllCities
-              ? "Bangalore · Mysore · Hubli"
-              : "Universities connected to Career Utsav"}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => openFilter({ type: "all" })}
-          className="text-[12px] font-medium text-muted-foreground transition-colors hover:text-foreground"
-        >
-          See all
-        </button>
-      </div>
-
-      {/* Hero — emerald featured + city greens */}
-      <section className={surface.opening}>
-        <div className="grid lg:grid-cols-10 lg:items-stretch">
-          <div
-            className="flex flex-col justify-between gap-8 p-7 text-white sm:p-8 lg:col-span-4 lg:p-9"
-            style={{ background: DASH_COLORS.gradient }}
-          >
-            <div>
-              <p className="text-[15px] font-medium tracking-[-0.01em] text-white/75 sm:text-[16px]">
-                Confirmed Partners
-              </p>
-              <p className="mt-2 text-[72px] font-semibold leading-[0.92] tracking-[-0.04em] tabular-nums text-white sm:text-[88px]">
-                {formatNumber(confirmed)}
-              </p>
-              <p className="mt-4 text-[15px] leading-relaxed tracking-[-0.01em] text-white/75">
-                <span className="font-semibold tabular-nums text-white">
-                  {formatNumber(data.totalPartners)}
-                </span>{" "}
-                total university partners
-              </p>
-            </div>
-
-            <dl className="space-y-3.5">
-              <button
-                type="button"
-                onClick={() =>
-                  openFilter({ type: "status", value: "In Discussion" })
-                }
-                className="flex w-full items-baseline justify-between gap-4 border-b border-white/15 pb-3 text-left transition-opacity hover:opacity-80"
-              >
-                <dt className="shrink-0 text-[14px] tracking-[-0.01em] text-white/70">
-                  In Discussion
-                </dt>
-                <dd className="min-w-0 text-right text-[15px] font-semibold tabular-nums tracking-[-0.02em] text-white sm:text-[16px]">
-                  {formatNumber(inDiscussion)}
-                </dd>
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  openFilter({ type: "status", value: "Not Proceeding" })
-                }
-                className="flex w-full items-baseline justify-between gap-4 text-left transition-opacity hover:opacity-80"
-              >
-                <dt className="shrink-0 text-[14px] tracking-[-0.01em] text-white/70">
-                  Not Proceeding
-                </dt>
-                <dd className="min-w-0 text-right text-[15px] font-semibold tabular-nums tracking-[-0.02em] text-white sm:text-[16px]">
-                  {formatNumber(notProceeding)}
-                </dd>
-              </button>
-            </dl>
-          </div>
-
-          <div
-            className={cn(
-              "lg:col-span-6",
-              isAllCities
-                ? "min-h-[280px] overflow-hidden p-0 lg:min-h-full"
-                : "min-h-[280px] bg-emerald-50/60 p-7 sm:p-8 lg:p-9"
-            )}
-          >
-            {isAllCities ? (
-              <CitySharePanel
-                cities={cityData}
-                colors={CITY_COLORS}
-                unitLabel="partners"
-              />
-            ) : (
-              <div className="flex h-full min-h-[240px] flex-col justify-center">
-                <h3 className="text-[17px] font-bold tracking-[-0.02em] text-foreground">
-                  Partner status
-                </h3>
-                <p className="mt-1.5 text-[14px] tracking-[-0.01em] text-muted-foreground">
-                  Where conversations stand
-                </p>
-                <div className="mt-8 space-y-4">
-                  {statusMix.map((item) => {
-                    const pct = Math.round((item.value / statusTotal) * 100);
-                    return (
-                      <button
-                        key={item.label}
-                        type="button"
-                        onClick={() => openFilter(item.filter)}
-                        className="w-full text-left transition-opacity hover:opacity-70"
-                      >
-                        <div className="mb-1.5 flex items-baseline justify-between gap-3">
-                          <span className="text-[13px] text-muted-foreground">
-                            {item.label}
-                          </span>
-                          <span className="text-[15px] font-semibold tabular-nums">
-                            {formatNumber(item.value)}
-                            <span className="ml-2 text-[11px] font-normal text-muted-foreground">
-                              {pct}%
-                            </span>
-                          </span>
-                        </div>
-                        <div className="h-1.5 overflow-hidden rounded-full bg-border/40">
-                          <div
-                            className="h-full rounded-full"
-                            style={{
-                              width: `${pct}%`,
-                              backgroundColor: item.color,
-                            }}
-                          />
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
-
       <motion.div
-        className={cn(surface.mint, "p-6 sm:p-8")}
+        className={cn(surface.mint, "p-4 sm:p-5")}
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, delay: 0.12, ease: [0.22, 1, 0.36, 1] }}
@@ -480,7 +428,7 @@ export function PartnerSalesSection({
 
       <div className="grid gap-3 lg:grid-cols-2 lg:items-start">
         <motion.div
-          className={cn(surface.opening, "flex flex-col bg-emerald-50/50 p-3.5 sm:p-4")}
+          className={cn(surface.opening, "flex flex-col bg-brand-50/50 p-3.5 sm:p-4")}
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.18, ease: [0.22, 1, 0.36, 1] }}
@@ -489,14 +437,14 @@ export function PartnerSalesSection({
             Sponsorship tiers
           </h3>
 
-          <div className="overflow-hidden rounded-lg border border-emerald-900/8 bg-white">
+          <div className="overflow-hidden rounded-lg border border-brand-900/8 bg-white">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-emerald-900/8 bg-emerald-50/80">
-                  <th className="px-3 py-1.5 text-left text-[12px] font-semibold text-emerald-900/55">
+                <tr className="border-b border-brand-900/8 bg-brand-50/80">
+                  <th className="px-3 py-1.5 text-left text-[12px] font-semibold text-brand-900/55">
                     Tier
                   </th>
-                  <th className="px-3 py-1.5 text-right text-[12px] font-semibold text-emerald-900/55">
+                  <th className="px-3 py-1.5 text-right text-[12px] font-semibold text-brand-900/55">
                     Partners
                   </th>
                 </tr>
@@ -508,8 +456,8 @@ export function PartnerSalesSection({
                     <tr
                       key={row.tier}
                       className={cn(
-                        "border-b border-emerald-900/6 last:border-b-0 transition-colors",
-                        isActive ? "bg-emerald-50" : "hover:bg-emerald-50/50"
+                        "border-b border-brand-900/6 last:border-b-0 transition-colors",
+                        isActive ? "bg-brand-50" : "hover:bg-brand-50/50"
                       )}
                     >
                       <td className="px-3 py-1.5">
@@ -520,7 +468,7 @@ export function PartnerSalesSection({
                           className={cn(
                             "text-left text-[15px] tracking-tight disabled:cursor-default",
                             isActive
-                              ? "font-semibold text-emerald-900"
+                              ? "font-semibold text-brand-900"
                               : "font-medium text-foreground/90",
                             row.count === 0 && "text-muted-foreground/60"
                           )}
@@ -538,8 +486,8 @@ export function PartnerSalesSection({
                             row.count === 0
                               ? "cursor-default text-muted-foreground/50"
                               : isActive
-                                ? "bg-emerald-600 text-white"
-                                : "bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
+                                ? "bg-brand-700 text-white"
+                                : "bg-brand-100 text-brand-800 hover:bg-brand-100"
                           )}
                           aria-label={`Show ${row.count} ${row.tier} partners`}
                         >
@@ -565,14 +513,14 @@ export function PartnerSalesSection({
               {activeTier ?? "Partners"}
             </h3>
             {activeTier && (
-              <p className="text-[12px] tabular-nums text-emerald-700/70">
+              <p className="text-[12px] tabular-nums text-brand-700/70">
                 {formatNumber(tierPartners.length)}
               </p>
             )}
           </div>
 
           {tierPartners.length === 0 ? (
-            <div className="flex items-center justify-center rounded-lg border border-dashed border-emerald-900/15 bg-emerald-50/50 py-6 text-[14px] text-muted-foreground">
+            <div className="flex items-center justify-center rounded-lg border border-dashed border-brand-900/15 bg-brand-50/50 py-6 text-[14px] text-muted-foreground">
               No confirmed partners in this tier
             </div>
           ) : (
@@ -587,7 +535,7 @@ export function PartnerSalesSection({
                     delay: index * 0.03,
                     ease: [0.22, 1, 0.36, 1],
                   }}
-                  className="flex items-center gap-2.5 rounded-lg px-1.5 py-1.5 hover:bg-emerald-50"
+                  className="flex items-center gap-2.5 rounded-lg px-1.5 py-1.5 hover:bg-brand-50"
                 >
                   <PartnerLogo name={deal.universityName} index={index} />
                   <div className="min-w-0">
@@ -607,7 +555,16 @@ export function PartnerSalesSection({
         </motion.div>
       </div>
 
-      <Sheet open={open} onOpenChange={(next) => !next && setFilter(null)}>
+      <AllUniversitiesDialog
+        open={allOpen}
+        onOpenChange={setAllOpen}
+        deals={data.deals}
+      />
+
+      <Sheet
+        open={sheetOpen}
+        onOpenChange={(next) => !next && setFilter(null)}
+      >
         <SheetContent side="right" className="flex w-full flex-col sm:max-w-lg">
           <SheetHeader className="pr-8">
             <SheetTitle>{filterTitle(filter)}</SheetTitle>

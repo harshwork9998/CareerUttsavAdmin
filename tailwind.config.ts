@@ -29,14 +29,28 @@ const config: Config = {
         primary: {
           DEFAULT: "#1F3864",
           foreground: "#FFFFFF",
+          50: "#F3F6FA",
+          100: "#E8EEF6",
+          500: "#3A5F96",
+          600: "#2A4A7A",
+          700: "#1F3864",
+          800: "#1A2F52",
+          900: "#12233F",
+          950: "#0B1628",
         },
         secondary: {
           DEFAULT: "#0E7C7B",
           foreground: "#FFFFFF",
+          100: "#E4F3F2",
+          500: "#0E7C7B",
+          700: "#0B5F5E",
         },
         accent: {
-          DEFAULT: "#3B82F6",
-          foreground: "#FFFFFF",
+          DEFAULT: "#C4A35A",
+          foreground: "#1C2430",
+          100: "#F5EEDC",
+          500: "#C4A35A",
+          700: "#8A6A2F",
         },
         muted: {
           DEFAULT: "hsl(var(--muted))",
@@ -60,15 +74,37 @@ const config: Config = {
           accent: "hsl(var(--sidebar-accent))",
           border: "hsl(var(--sidebar-border))",
         },
+        brand: {
+          50: "#F3F6FA",
+          100: "#E8EEF6",
+          500: "#3A5F96",
+          600: "#2A4A7A",
+          700: "#1F3864",
+          800: "#1A2F52",
+          900: "#12233F",
+          950: "#0B1628",
+        },
+        brass: {
+          100: "#F5EEDC",
+          500: "#C4A35A",
+          700: "#8A6A2F",
+        },
+        stonewarm: {
+          page: "#F7F6F3",
+          muted: "#F1F0EC",
+          line: "#D4D1C8",
+          subtle: "#E6E4DE",
+        },
+      },
+      boxShadow: {
+        soft: "0 4px 12px rgba(18, 35, 63, 0.08), 0 16px 40px rgba(18, 35, 63, 0.08)",
+        card: "0 1px 2px rgba(18, 35, 63, 0.04), 0 6px 20px rgba(18, 35, 63, 0.05)",
+        elevated: "0 12px 40px rgba(11, 22, 40, 0.18)",
       },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
-      },
-      boxShadow: {
-        soft: "0 2px 8px -2px rgba(31, 56, 100, 0.08), 0 4px 16px -4px rgba(31, 56, 100, 0.12)",
-        card: "0 1px 3px rgba(31, 56, 100, 0.06), 0 4px 12px rgba(31, 56, 100, 0.08)",
       },
       keyframes: {
         "fade-in": {

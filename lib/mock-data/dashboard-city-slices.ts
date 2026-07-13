@@ -29,6 +29,51 @@ function buildSeminarInterest(total: number): ChartDataPoint[] {
   })).sort((a, b) => b.value - a.value);
 }
 
+/** Week-start labels Mon Aug 3 → Mon Dec 28, 2026 */
+const WEEKLY_TREND_LABELS_2026 = [
+  "3 Aug",
+  "10 Aug",
+  "17 Aug",
+  "24 Aug",
+  "31 Aug",
+  "7 Sep",
+  "14 Sep",
+  "21 Sep",
+  "28 Sep",
+  "5 Oct",
+  "12 Oct",
+  "19 Oct",
+  "26 Oct",
+  "2 Nov",
+  "9 Nov",
+  "16 Nov",
+  "23 Nov",
+  "30 Nov",
+  "7 Dec",
+  "14 Dec",
+  "21 Dec",
+  "28 Dec",
+] as const;
+
+/**
+ * Ramp Aug → peak late Oct / early Nov → soft Dec taper.
+ * Values scale so the series sums roughly to `total`.
+ */
+function buildWeeklyTrend2026(total: number, accent = 1): ChartDataPoint[] {
+  const shape = [
+    0.35, 0.42, 0.48, 0.55, 0.62, 0.7, 0.78, 0.88, 0.95, 1.05, 1.15, 1.22, 1.28,
+    1.32, 1.3, 1.22, 1.12, 1.02, 0.92, 0.82, 0.72, 0.62,
+  ];
+  const weightSum = shape.reduce((s, w) => s + w * accent, 0) || 1;
+  return WEEKLY_TREND_LABELS_2026.map((name, i) => ({
+    name,
+    value: Math.max(
+      1,
+      Math.round(((shape[i] ?? 1) * accent * total) / weightSum)
+    ),
+  }));
+}
+
 /** All-cities totals used for reconciliation (see mockDashboardData). */
 const ALL_CITIES_REGISTRATIONS = 43620;
 const ALL_CITIES_REVENUE = 9845000;
@@ -130,8 +175,24 @@ const bangaloreStudentRegistration: StudentRegistrationAnalytics = {
     { name: "PUC", value: 2680 },
     { name: "IB / IGCSE", value: 1620 },
   ],
+  byGender: [
+    { name: "Female", value: 11190 },
+    { name: "Male", value: 11610 },
+  ],
   byCity: [{ name: "Bangalore", value: 22800 }],
+  byRegistrantCity: [
+    { name: "Bangalore", value: 14280 },
+    { name: "Whitefield", value: 1860 },
+    { name: "Electronic City", value: 1420 },
+    { name: "Yelahanka", value: 1180 },
+    { name: "Tumkur", value: 980 },
+    { name: "Kolar", value: 720 },
+    { name: "Chikkaballapur", value: 640 },
+    { name: "Ramanagara", value: 520 },
+    { name: "Other / Out of state", value: 1200 },
+  ],
   bySeminar: buildSeminarInterest(22800),
+  weeklyTrend: buildWeeklyTrend2026(22800, 1.08),
   bySession: [
     { name: "Morning", value: 9640 },
     { name: "Afternoon", value: 7980 },
@@ -782,8 +843,23 @@ const mysoreStudentRegistration: StudentRegistrationAnalytics = {
     { name: "PUC", value: 1120 },
     { name: "IB / IGCSE", value: 400 },
   ],
+  byGender: [
+    { name: "Female", value: 5930 },
+    { name: "Male", value: 6070 },
+  ],
   byCity: [{ name: "Mysore", value: 12000 }],
+  byRegistrantCity: [
+    { name: "Mysore", value: 6840 },
+    { name: "Mandya", value: 1320 },
+    { name: "Hassan", value: 980 },
+    { name: "Nanjangud", value: 720 },
+    { name: "Chamarajanagar", value: 640 },
+    { name: "Hunsur", value: 520 },
+    { name: "KR Nagar", value: 420 },
+    { name: "Other / Out of state", value: 560 },
+  ],
   bySeminar: buildSeminarInterest(12000),
+  weeklyTrend: buildWeeklyTrend2026(12000, 1),
   bySession: [
     { name: "Morning", value: 5060 },
     { name: "Afternoon", value: 4200 },
@@ -1360,8 +1436,23 @@ const hubliStudentRegistration: StudentRegistrationAnalytics = {
     { name: "PUC", value: 410 },
     { name: "IB / IGCSE", value: 690 },
   ],
+  byGender: [
+    { name: "Female", value: 4350 },
+    { name: "Male", value: 4470 },
+  ],
   byCity: [{ name: "Hubli", value: 8820 }],
+  byRegistrantCity: [
+    { name: "Hubli", value: 4120 },
+    { name: "Dharwad", value: 1860 },
+    { name: "Belagavi", value: 980 },
+    { name: "Gadag", value: 640 },
+    { name: "Haveri", value: 520 },
+    { name: "Bagalkot", value: 380 },
+    { name: "Koppal", value: 160 },
+    { name: "Other / Out of state", value: 160 },
+  ],
   bySeminar: buildSeminarInterest(8820),
+  weeklyTrend: buildWeeklyTrend2026(8820, 0.94),
   bySession: [
     { name: "Morning", value: 3720 },
     { name: "Afternoon", value: 3100 },

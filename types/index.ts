@@ -398,8 +398,14 @@ export interface StudentRegistrationAnalytics {
   byClass: ChartDataPoint[];
   byStream: ChartDataPoint[];
   byBoard: ChartDataPoint[];
+  byGender: ChartDataPoint[];
+  /** Event city split (Bangalore / Mysore / Hubli) */
   byCity: ChartDataPoint[];
+  /** Hometown / location students entered on the registration form */
+  byRegistrantCity: ChartDataPoint[];
   bySeminar: ChartDataPoint[];
+  /** Weekly registrations Aug–Dec 2026 */
+  weeklyTrend: ChartDataPoint[];
   topSchools: InstitutionRanking[];
   liveFeed: LiveRegistrationItem[];
   /** Optional legacy mock fields */

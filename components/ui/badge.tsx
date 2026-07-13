@@ -14,15 +14,15 @@ const badgeVariants = cva(
           "border-transparent bg-secondary text-secondary-foreground shadow-sm",
         outline: "text-foreground",
         success:
-          "border-transparent bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400",
+          "border-transparent bg-[rgba(47,107,79,0.12)] text-[#2F6B4F] dark:bg-[rgba(47,107,79,0.22)] dark:text-[#7CB89A]",
         warning:
-          "border-transparent bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
+          "border-transparent bg-[rgba(176,125,42,0.14)] text-[#B07D2A] dark:bg-[rgba(176,125,42,0.22)] dark:text-[#D4B06A]",
         destructive:
-          "border-transparent bg-destructive text-destructive-foreground shadow-sm",
+          "border-transparent bg-[rgba(163,59,59,0.12)] text-[#A33B3B] dark:bg-[rgba(163,59,59,0.22)] dark:text-[#D48989]",
         muted:
           "border-transparent bg-muted text-muted-foreground",
         pending:
-          "border-transparent bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
+          "border-transparent bg-[rgba(61,90,128,0.12)] text-[#3D5A80] dark:bg-[rgba(61,90,128,0.22)] dark:text-[#8FA6C4]",
       },
     },
     defaultVariants: {
