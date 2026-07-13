@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 
 import { cn, formatNumber } from "@/lib/utils";
@@ -350,9 +350,15 @@ export function PartnerSalesSection({
     null
   );
   const sheetOpen = filter !== null && filter.type !== "all";
+  const lastSeeAllTick = useRef(seeAllTick);
 
   useEffect(() => {
-    if (seeAllTick > 0) setAllOpen(true);
+    // Only open when the parent explicitly increments the tick —
+    // not when this section remounts after a city change.
+    if (seeAllTick > lastSeeAllTick.current) {
+      setAllOpen(true);
+    }
+    lastSeeAllTick.current = seeAllTick;
   }, [seeAllTick]);
 
   const stages = useMemo(

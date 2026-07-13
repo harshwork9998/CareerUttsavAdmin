@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Cell,
@@ -278,39 +278,43 @@ function DataTable({
   );
 }
 
-function ConsolidatedSeminarDialog({
+function SeminarDetailDialog({
   name,
   total,
   open,
   onOpenChange,
+  city: fixedCity,
+  showCityToggle = false,
 }: {
   name: string;
   total: number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  city: OperatingCity;
+  showCityToggle?: boolean;
 }) {
-  const [city, setCity] = useState<OperatingCity>("Bangalore");
-  const [activeIndex, setActiveIndex] = useState<number | undefined>();
+  const [city, setCity] = useState<OperatingCity>(fixedCity);
+
+  useEffect(() => {
+    setCity(fixedCity);
+  }, [fixedCity, name, open]);
+
   const breakdown = useMemo(
-    () => buildSeminarBreakdown(name, Math.max(total, 1)),
-    [name, total]
-  );
-  const citySlice = breakdown.byCity.find((c) => c.city === city);
-  const cityProfile = useMemo(
     () =>
-      buildSeminarCityProfile(
-        name,
-        Math.max(citySlice?.total ?? 1, 1),
-        city
-      ),
-    [name, city, citySlice?.total]
+      showCityToggle
+        ? buildSeminarBreakdown(name, Math.max(total, 1))
+        : null,
+    [showCityToggle, name, total]
   );
-  const donutData =
-    citySlice?.byClass
-      .filter((c) => Number(c.value) > 0)
-      .map((c) => ({ name: String(c.name), value: Number(c.value) })) ?? [];
-  const maxCity = Math.max(...breakdown.byCity.map((c) => c.total), 1);
-  const activeSlice = activeIndex != null ? donutData[activeIndex] : null;
+
+  const cityTotal = showCityToggle
+    ? (breakdown?.byCity.find((c) => c.city === city)?.total ?? total)
+    : total;
+
+  const profile = useMemo(
+    () => buildSeminarCityProfile(name, Math.max(cityTotal, 1), city),
+    [name, cityTotal, city]
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -320,295 +324,103 @@ function ConsolidatedSeminarDialog({
             {name}
           </DialogTitle>
           <DialogDescription className="text-[13px]">
-            {formatNumber(total)} students registered · city split plus gender,
-            board, stream, and class for the selected city
+            {showCityToggle
+              ? `${formatNumber(total)} students across cities · viewing ${city}`
+              : `${formatNumber(total)} students in ${city}`}
+            {" · "}
+            gender, board, stream, hometown, and class
           </DialogDescription>
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-auto p-5 sm:p-6">
-          <div className="grid gap-6 sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] sm:gap-8">
-            <div>
-              <p className="mb-3 text-[12px] font-medium text-muted-foreground">
-                City
-              </p>
-              <div className="flex flex-col gap-2">
-                {CITY_PILL_ORDER.map((c, index) => {
-                  const slice = breakdown.byCity.find((b) => b.city === c);
-                  const active = city === c;
-                  const cityShare = Math.round(
-                    ((slice?.total ?? 0) / maxCity) * 100
-                  );
-                  return (
-                    <motion.button
-                      key={c}
-                      type="button"
-                      onClick={() => {
-                        setCity(c);
-                        setActiveIndex(undefined);
-                      }}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{
-                        duration: 0.3,
-                        delay: 0.05 * index,
-                        ease: easeOut,
-                      }}
-                      whileHover={{ scale: 1.015, x: 2 }}
-                      whileTap={{ scale: 0.985 }}
-                      className={cn(
-                        "relative overflow-hidden rounded-xl px-3.5 py-3 text-left transition-colors",
-                        active
-                          ? "bg-primary text-primary-foreground shadow-soft"
-                          : "bg-muted/50 text-foreground hover:bg-muted"
-                      )}
-                    >
-                      {!active ? (
-                        <motion.span
-                          className="absolute inset-y-0 left-0 bg-brand-100/80"
-                          initial={false}
-                          animate={{ width: `${cityShare}%` }}
-                          transition={{ duration: 0.45, ease: easeOut }}
-                          aria-hidden
-                        />
-                      ) : null}
-                      <span className="relative flex items-center justify-between gap-3">
-                        <span className="flex items-center gap-2.5 text-[13px] font-semibold">
-                          <span
-                            className="h-2 w-2 rounded-[2px]"
-                            style={{
-                              backgroundColor: active
-                                ? "rgba(255,255,255,0.85)"
-                                : CITY_PILL_COLOR[c],
-                            }}
-                          />
-                          {c}
-                        </span>
-                        <span
-                          className={cn(
-                            "text-[13px] font-semibold tabular-nums",
-                            active
-                              ? "text-primary-foreground"
-                              : "text-foreground"
-                          )}
-                        >
-                          {formatNumber(slice?.total ?? 0)}
-                        </span>
-                      </span>
-                    </motion.button>
-                  );
-                })}
-              </div>
-              <p className="mt-4 text-[12px] leading-relaxed text-muted-foreground">
-                Details below update for{" "}
-                <span className="font-medium text-foreground">{city}</span>
-              </p>
-            </div>
-
-            <div className="flex min-h-[240px] flex-col">
-              <p className="mb-2 text-[12px] font-medium text-muted-foreground">
-                Registered by class
-              </p>
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={city}
-                  className="relative min-h-[200px] flex-1"
-                  initial={{ opacity: 0, scale: 0.96 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.98 }}
-                  transition={{ duration: 0.28, ease: easeOut }}
-                >
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={donutData}
-                        dataKey="value"
-                        nameKey="name"
-                        cx="50%"
-                        cy="50%"
-                        innerRadius="58%"
-                        outerRadius="82%"
-                        paddingAngle={2}
-                        strokeWidth={0}
-                        isAnimationActive
-                        animationBegin={0}
-                        animationDuration={750}
-                        animationEasing="ease-out"
-                        onMouseEnter={(_, index) => setActiveIndex(index)}
-                        onMouseLeave={() => setActiveIndex(undefined)}
-                      >
-                        {donutData.map((entry, index) => (
-                          <Cell
-                            key={entry.name}
-                            fill={DONUT_PALETTE[index % DONUT_PALETTE.length]}
-                            className="cursor-pointer outline-none"
-                            opacity={
-                              activeIndex == null || activeIndex === index
-                                ? 1
-                                : 0.35
-                            }
-                          />
-                        ))}
-                      </Pie>
-                      <Tooltip content={<DonutTooltip />} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                    <AnimatePresence mode="wait">
-                      <motion.div
-                        key={activeSlice?.name ?? city}
-                        initial={{ opacity: 0, y: 4 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -4 }}
-                        transition={{ duration: 0.18 }}
-                        className="flex flex-col items-center"
-                      >
-                        <p className="text-[11px] text-muted-foreground">
-                          {activeSlice?.name ?? city}
-                        </p>
-                        <p className="text-[22px] font-semibold tabular-nums tracking-tight">
-                          {formatNumber(
-                            activeSlice?.value ?? citySlice?.total ?? 0
-                          )}
-                        </p>
-                      </motion.div>
-                    </AnimatePresence>
-                  </div>
-                </motion.div>
-              </AnimatePresence>
-              <ul className="mt-2 grid grid-cols-3 gap-x-2 gap-y-1">
-                {donutData.slice(0, 9).map((row, index) => (
-                  <motion.li
-                    key={row.name}
-                    onMouseEnter={() => setActiveIndex(index)}
-                    onMouseLeave={() => setActiveIndex(undefined)}
-                    whileHover={{ scale: 1.03 }}
+          {showCityToggle ? (
+            <div
+              role="tablist"
+              aria-label="City"
+              className="mb-5 inline-flex flex-wrap gap-1 rounded-xl border border-[rgba(212,209,200,0.85)] bg-[#F1F0EC]/80 p-1"
+            >
+              {CITY_PILL_ORDER.map((c) => {
+                const slice = breakdown?.byCity.find((b) => b.city === c);
+                const active = city === c;
+                return (
+                  <motion.button
+                    key={c}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => setCity(c)}
+                    whileHover={{ y: -1 }}
+                    whileTap={{ scale: 0.98 }}
                     className={cn(
-                      "flex cursor-pointer items-center gap-1.5 rounded-md px-1 py-0.5 text-[10px] transition-colors",
-                      activeIndex === index
-                        ? "bg-brand-50 text-foreground"
-                        : "text-muted-foreground"
+                      "inline-flex items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-semibold transition-colors",
+                      active
+                        ? "bg-white text-brand-900 shadow-card"
+                        : "text-muted-foreground hover:text-foreground"
                     )}
                   >
                     <span
-                      className="h-1.5 w-1.5 shrink-0 rounded-[1px]"
-                      style={{
-                        backgroundColor:
-                          DONUT_PALETTE[index % DONUT_PALETTE.length],
-                      }}
+                      className="h-2 w-2 rounded-[2px]"
+                      style={{ backgroundColor: CITY_PILL_COLOR[c] }}
                     />
-                    <span className="truncate">
-                      {row.name.replace("Class ", "C")}
+                    {c}
+                    <span
+                      className={cn(
+                        "tabular-nums",
+                        active ? "text-brand-700" : "text-muted-foreground"
+                      )}
+                    >
+                      {formatNumber(slice?.total ?? 0)}
                     </span>
-                    <span className="ml-auto tabular-nums font-medium text-foreground">
-                      {formatNumber(row.value)}
-                    </span>
-                  </motion.li>
-                ))}
-              </ul>
+                  </motion.button>
+                );
+              })}
             </div>
-          </div>
+          ) : null}
 
           <AnimatePresence mode="wait">
             <motion.div
-              key={`mix-${city}`}
-              className="mt-5 grid gap-4 sm:grid-cols-3"
-              initial={{ opacity: 0, y: 12 }}
+              key={city}
+              initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.3, ease: easeOut }}
+              transition={{ duration: 0.28, ease: easeOut }}
             >
-              <MiniDonut
-                title="Gender"
-                items={cityProfile.byGender}
-                centerLabel="Students"
-                delay={0.04}
-              />
-              <MiniDonut
-                title="Board"
-                items={cityProfile.byBoard}
-                centerLabel="Boards"
-                delay={0.1}
-              />
-              <MiniDonut
-                title="Stream"
-                items={cityProfile.byStream}
-                centerLabel="Streams"
-                delay={0.16}
-              />
+              <div className="grid gap-4 sm:grid-cols-3">
+                <MiniDonut
+                  title="Gender"
+                  items={profile.byGender}
+                  centerLabel="Students"
+                  delay={0.05}
+                />
+                <MiniDonut
+                  title="Board"
+                  items={profile.byBoard}
+                  centerLabel="Boards"
+                  delay={0.12}
+                />
+                <MiniDonut
+                  title="Stream"
+                  items={profile.byStream}
+                  centerLabel="Streams"
+                  delay={0.18}
+                />
+              </div>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <DataTable
+                  title="City of registration"
+                  nameHeader="Location"
+                  rows={profile.byRegistrantCity}
+                  delay={0.22}
+                />
+                <DataTable
+                  title="Class-wise registration"
+                  nameHeader="Class"
+                  rows={profile.byClass}
+                  delay={0.28}
+                />
+              </div>
             </motion.div>
           </AnimatePresence>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function CitySeminarDialog({
-  name,
-  total,
-  city,
-  open,
-  onOpenChange,
-}: {
-  name: string;
-  total: number;
-  city: OperatingCity;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const profile = useMemo(
-    () => buildSeminarCityProfile(name, Math.max(total, 1), city),
-    [name, total, city]
-  );
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[88vh] w-[calc(100%-1.5rem)] max-w-4xl flex-col gap-0 overflow-hidden p-0 sm:rounded-2xl">
-        <DialogHeader className="border-b border-border/50 px-6 py-5 pr-12 text-left">
-          <DialogTitle className="text-[18px] leading-snug tracking-tight">
-            {name}
-          </DialogTitle>
-          <DialogDescription className="text-[13px]">
-            {formatNumber(total)} students in {city} · hover charts and rows to
-            explore the mix
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="min-h-0 flex-1 overflow-auto p-5 sm:p-6">
-          <div className="grid gap-4 sm:grid-cols-3">
-            <MiniDonut
-              title="Gender"
-              items={profile.byGender}
-              centerLabel="Students"
-              delay={0.05}
-            />
-            <MiniDonut
-              title="Board"
-              items={profile.byBoard}
-              centerLabel="Boards"
-              delay={0.12}
-            />
-            <MiniDonut
-              title="Stream"
-              items={profile.byStream}
-              centerLabel="Streams"
-              delay={0.18}
-            />
-          </div>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <DataTable
-              title="City of registration"
-              nameHeader="Location"
-              rows={profile.byRegistrantCity}
-              delay={0.22}
-            />
-            <DataTable
-              title="Class-wise registration"
-              nameHeader="Class"
-              rows={profile.byClass}
-              delay={0.28}
-            />
-          </div>
         </div>
       </DialogContent>
     </Dialog>
@@ -740,22 +552,12 @@ export function SeminarProgram({
         </div>
       </motion.div>
 
-      {selected && isAllCities ? (
-        <ConsolidatedSeminarDialog
-          name={selected.name}
-          total={selected.value}
-          open={open}
-          onOpenChange={(next) => {
-            if (!next) setSelectedName(null);
-          }}
-        />
-      ) : null}
-
-      {selected && !isAllCities ? (
-        <CitySeminarDialog
+      {selected ? (
+        <SeminarDetailDialog
           name={selected.name}
           total={selected.value}
           city={activeCity}
+          showCityToggle={isAllCities}
           open={open}
           onOpenChange={(next) => {
             if (!next) setSelectedName(null);
