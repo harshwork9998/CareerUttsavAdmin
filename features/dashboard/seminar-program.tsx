@@ -15,6 +15,8 @@ import type { ChartDataPoint, OperatingCity } from "@/types";
 import {
   CITY_COLORS,
   CHART_SERIES,
+  BRAND,
+  DASH_COLORS,
   surface,
 } from "@/features/dashboard/dashboard-ui";
 import { CAREER_UTSAV_SEMINARS } from "@/features/dashboard/seminars";
@@ -490,65 +492,115 @@ export function SeminarProgram({
           </motion.p>
         </div>
 
-        <div className="grid auto-rows-[minmax(68px,auto)] grid-cols-2 gap-2.5 p-3.5 sm:grid-cols-6 sm:gap-3 sm:p-4 lg:grid-cols-12 lg:gap-3 lg:p-4">
-          {seminars.map((seminar, index) => {
-            const size = seminarCardSize(index);
-            const isPressed = pressed === seminar.name;
-            return (
-              <motion.button
-                key={seminar.name}
-                type="button"
-                onClick={() => setSelectedName(seminar.name)}
-                onMouseDown={() => setPressed(seminar.name)}
-                onMouseUp={() => setPressed(null)}
-                onMouseLeave={() => setPressed(null)}
-                initial={{ opacity: 0, y: 14, scale: 0.97 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{
-                  duration: 0.35,
-                  delay: Math.min(index * 0.03, 0.45),
-                  ease: easeOut,
-                }}
-                whileHover={{
-                  y: -3,
-                  scale: 1.015,
-                  transition: { duration: 0.18 },
-                }}
-                whileTap={{ scale: 0.98 }}
-                className={cn(
-                  "group relative flex h-full min-h-0 flex-col justify-between overflow-hidden rounded-xl border border-brand-900/12 bg-white text-left shadow-[0_4px_14px_rgba(18,35,63,0.07)] transition-colors duration-150 hover:border-brand-700/25 hover:bg-brand-50/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700",
-                  size.span,
-                  size.pad,
-                  isPressed && "bg-brand-50"
-                )}
-              >
-                <motion.span
-                  className="pointer-events-none absolute inset-x-0 top-0 h-0.5 origin-left bg-brand-700"
-                  initial={{ scaleX: 0 }}
-                  whileHover={{ scaleX: 1 }}
-                  transition={{ duration: 0.28, ease: easeOut }}
-                />
-                <p
+        <div className="bg-gradient-to-b from-[#F3F6FA] via-[#F7F6F3] to-[#F1F0EC] p-3.5 sm:p-4 lg:p-5">
+          <div className="grid auto-rows-[minmax(72px,auto)] grid-cols-2 gap-2.5 sm:grid-cols-6 sm:gap-3 lg:grid-cols-12 lg:gap-3">
+            {seminars.map((seminar, index) => {
+              const size = seminarCardSize(index);
+              const accent = DONUT_PALETTE[index % DONUT_PALETTE.length];
+              const featured = index === 0;
+              const elevated = index > 0 && index <= 2;
+              const isPressed = pressed === seminar.name;
+
+              return (
+                <motion.button
+                  key={seminar.name}
+                  type="button"
+                  onClick={() => setSelectedName(seminar.name)}
+                  onMouseDown={() => setPressed(seminar.name)}
+                  onMouseUp={() => setPressed(null)}
+                  onMouseLeave={() => setPressed(null)}
+                  initial={{ opacity: 0, y: 14, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{
+                    duration: 0.35,
+                    delay: Math.min(index * 0.03, 0.45),
+                    ease: easeOut,
+                  }}
+                  whileHover={{
+                    y: -4,
+                    scale: 1.02,
+                    transition: { duration: 0.18 },
+                  }}
+                  whileTap={{ scale: 0.98 }}
                   className={cn(
-                    "font-semibold leading-snug tracking-tight text-foreground",
-                    size.title,
-                    size.lines
+                    "group relative flex h-full min-h-0 flex-col justify-between overflow-hidden rounded-2xl text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700",
+                    size.span,
+                    size.pad,
+                    featured
+                      ? "border border-brand-800/20 text-white shadow-[0_14px_36px_rgba(18,35,63,0.28)]"
+                      : elevated
+                        ? "border border-brand-700/15 bg-white shadow-[0_10px_28px_rgba(18,35,63,0.12)]"
+                        : "border border-[rgba(212,209,200,0.9)] bg-white shadow-card hover:border-brand-700/20 hover:shadow-soft",
+                    isPressed && !featured && "bg-brand-50"
                   )}
+                  style={
+                    featured
+                      ? { background: DASH_COLORS.gradient }
+                      : elevated
+                        ? {
+                            background: `linear-gradient(160deg, ${BRAND[50]} 0%, #ffffff 58%)`,
+                          }
+                        : undefined
+                  }
                 >
-                  {seminar.name}
-                </p>
-                <motion.p
-                  className={cn(
-                    "mt-1 font-semibold leading-none tabular-nums tracking-tight text-brand-950",
-                    size.value
+                  {!featured ? (
+                    <span
+                      className="absolute inset-y-0 left-0 w-[3px]"
+                      style={{ backgroundColor: accent }}
+                      aria-hidden
+                    />
+                  ) : null}
+
+                  {!featured ? (
+                    <span
+                      className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full opacity-[0.12] blur-2xl transition-opacity duration-300 group-hover:opacity-22"
+                      style={{ backgroundColor: accent }}
+                      aria-hidden
+                    />
+                  ) : (
+                    <span
+                      className="pointer-events-none absolute -right-10 -top-10 h-36 w-36 rounded-full bg-white/10 blur-2xl"
+                      aria-hidden
+                    />
                   )}
-                  layout
-                >
-                  {formatNumber(seminar.value)}
-                </motion.p>
-              </motion.button>
-            );
-          })}
+
+                  <p
+                    className={cn(
+                      "relative font-semibold leading-snug tracking-tight",
+                      size.title,
+                      size.lines,
+                      featured ? "text-white" : "text-foreground"
+                    )}
+                  >
+                    {seminar.name}
+                  </p>
+
+                  <div className="relative mt-auto pt-3">
+                    <motion.p
+                      className={cn(
+                        "font-semibold leading-none tabular-nums tracking-tight",
+                        size.value,
+                        featured ? "text-white" : "text-brand-950"
+                      )}
+                      layout
+                    >
+                      {formatNumber(seminar.value)}
+                    </motion.p>
+                    <p
+                      className={cn(
+                        "mt-2 text-[12px] font-medium tracking-tight opacity-0 transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100",
+                        featured
+                          ? "translate-y-1 text-white/80"
+                          : "translate-y-1 text-brand-700"
+                      )}
+                    >
+                      Click for more stats
+                    </p>
+                  </div>
+                </motion.button>
+              );
+            })}
+          </div>
         </div>
       </motion.div>
 
@@ -577,45 +629,45 @@ function seminarCardSize(index: number): {
 } {
   if (index === 0) {
     return {
-      span: "col-span-2 row-span-2 sm:col-span-6 lg:col-span-6 min-h-[110px] sm:min-h-[124px]",
-      pad: "p-3 sm:p-3.5",
+      span: "col-span-2 row-span-2 sm:col-span-6 lg:col-span-6 min-h-[128px] sm:min-h-[148px]",
+      pad: "p-3.5 sm:p-4",
       title: "text-[15px] sm:text-[17px]",
-      value: "text-[40px] sm:text-[48px]",
+      value: "text-[42px] sm:text-[52px]",
       lines: "line-clamp-2",
     };
   }
   if (index <= 2) {
     return {
-      span: "col-span-1 row-span-2 sm:col-span-3 lg:col-span-3 min-h-[110px] sm:min-h-[124px]",
-      pad: "p-2.5 sm:p-3",
-      title: "text-[13px] sm:text-[14px]",
-      value: "text-[32px] sm:text-[38px]",
+      span: "col-span-1 row-span-2 sm:col-span-3 lg:col-span-3 min-h-[128px] sm:min-h-[148px]",
+      pad: "p-3 sm:p-3.5",
+      title: "text-[13px] sm:text-[15px]",
+      value: "text-[34px] sm:text-[40px]",
       lines: "line-clamp-2",
     };
   }
   if (index <= 5) {
     return {
-      span: "col-span-1 sm:col-span-2 lg:col-span-4 min-h-[76px]",
-      pad: "p-2.5",
+      span: "col-span-1 sm:col-span-2 lg:col-span-4 min-h-[88px]",
+      pad: "p-3",
       title: "text-[13px]",
-      value: "text-[26px]",
+      value: "text-[28px]",
       lines: "line-clamp-2",
     };
   }
   if (index <= 13) {
     return {
-      span: "col-span-1 sm:col-span-2 lg:col-span-3 min-h-[72px]",
-      pad: "p-2 sm:p-2.5",
+      span: "col-span-1 sm:col-span-2 lg:col-span-3 min-h-[84px]",
+      pad: "p-2.5 sm:p-3",
       title: "text-[12px] sm:text-[13px]",
-      value: "text-[24px]",
+      value: "text-[26px]",
       lines: "line-clamp-2",
     };
   }
   return {
-    span: "col-span-1 sm:col-span-2 lg:col-span-2 min-h-[68px]",
-    pad: "p-2",
+    span: "col-span-1 sm:col-span-2 lg:col-span-2 min-h-[80px]",
+    pad: "p-2.5",
     title: "text-[12px]",
-    value: "text-[22px]",
+    value: "text-[24px]",
     lines: "line-clamp-2",
   };
 }
