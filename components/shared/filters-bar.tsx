@@ -54,7 +54,7 @@ export function FiltersBar({
         className
       )}
     >
-      <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground sm:mr-2">
+      <div className="flex h-9 shrink-0 items-center gap-2 text-sm font-medium text-muted-foreground sm:mr-1">
         <Filter className="h-4 w-4" aria-hidden />
         Filters
       </div>
@@ -70,7 +70,7 @@ export function FiltersBar({
           type="button"
           variant="ghost"
           size="sm"
-          className="gap-1.5 text-muted-foreground"
+          className="h-9 gap-1.5 text-muted-foreground"
           onClick={onClearAll}
         >
           <X className="h-3.5 w-3.5" />
@@ -91,8 +91,11 @@ export function FilterSelect({
   className,
 }: FilterConfig & { className?: string }) {
   return (
-    <div className={cn("min-w-[160px] space-y-1.5", className)}>
-      <Label htmlFor={id} className="text-xs text-muted-foreground">
+    <div className={cn("flex min-w-[148px] flex-col gap-1.5", className)}>
+      <Label
+        htmlFor={id}
+        className="h-4 text-xs leading-4 text-muted-foreground"
+      >
         {label}
       </Label>
       <Select value={value ?? "all"} onValueChange={onChange}>

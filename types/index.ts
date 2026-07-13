@@ -156,10 +156,15 @@ export interface Registration {
   eventTitle: string;
   studentName: string;
   email: string;
+  /** Student mobile number */
   phone: string;
+  parentPhone?: string;
+  /** School / college name */
   college: string;
-  course: string;
-  year: "1st Year" | "2nd Year" | "3rd Year" | "4th Year" | "Final Year" | "Graduate";
+  classLabel?: string;
+  interestedStream?: string;
+  board?: string;
+  gender?: "Male" | "Female" | "Other";
   city: string;
   state: string;
   status: RegistrationStatus;
@@ -168,6 +173,16 @@ export interface Registration {
   checkInTime?: string;
   registeredAt: string;
   updatedAt: string;
+  /** Legacy — prefer interestedStream */
+  course?: string;
+  /** Legacy — prefer classLabel */
+  year?:
+    | "1st Year"
+    | "2nd Year"
+    | "3rd Year"
+    | "4th Year"
+    | "Final Year"
+    | "Graduate";
 }
 
 export interface University {

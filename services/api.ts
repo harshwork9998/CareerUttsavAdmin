@@ -14,6 +14,7 @@ import {
   mockReports,
   mockSettings,
 } from "@/lib/mock-data";
+import { normalizeRegistration } from "@/features/registrations/normalize-registration";
 import type {
   Event,
   Registration,
@@ -80,11 +81,27 @@ export const eventsService = {
 };
 
 export const registrationsService = {
-  getAll: () => simulate([...mockRegistrations]),
-  getById: (id: string) => simulate(mockRegistrations.find((r) => r.id === id) ?? null),
-  getByEvent: (eventId: string) => simulate(mockRegistrations.filter((r) => r.eventId === eventId)),
+  getAll: () => simulate(mockRegistrations.map(normalizeRegistration)),
+  getById: (id: string) =>
+    simulate(
+      (() => {
+        const row = mockRegistrations.find((r) => r.id === id);
+        return row ? normalizeRegistration(row) : null;
+      })()
+    ),
+  getByEvent: (eventId: string) =>
+    simulate(
+      mockRegistrations
+        .filter((r) => r.eventId === eventId)
+        .map(normalizeRegistration)
+    ),
   update: (id: string, data: Partial<Registration>) =>
-    simulate({ ...mockRegistrations.find((r) => r.id === id)!, ...data }),
+    simulate(
+      normalizeRegistration({
+        ...mockRegistrations.find((r) => r.id === id)!,
+        ...data,
+      })
+    ),
 };
 
 export const universitiesService = {

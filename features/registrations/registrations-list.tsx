@@ -1,24 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  CheckCircle2,
-  Download,
-  Eye,
-  MoreHorizontal,
-  QrCode,
-  Users,
-  XCircle,
-} from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Download, Users } from "lucide-react";
 import { toast } from "sonner";
 
-import { registrationsService } from "@/services/api";
-import { REGISTRATION_STATUSES } from "@/constants";
-import { formatDate, formatNumber } from "@/lib/utils";
-import type { Registration, RegistrationStatus } from "@/types";
+import { eventsService, registrationsService } from "@/services/api";
+import { formatNumber } from "@/lib/utils";
+import type { Registration } from "@/types";
 import {
-  ConfirmDialog,
   DataTable,
   EmptyState,
   ErrorState,
@@ -26,59 +16,60 @@ import {
   PageHeader,
   Pagination,
   SearchBar,
-  StatusChip,
   TableSkeleton,
   type ColumnDef,
-  type RowSelectionState,
 } from "@/components/shared";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { StudentDrawer } from "./student-drawer";
 
 const PAGE_SIZE = 10;
+const EVENT_CITIES = ["Bangalore", "Mysore", "Hubli"] as const;
 
-function hasQrGenerated(registration: Registration) {
-  return (
-    registration.status === "Confirmed" || registration.status === "Checked In"
-  );
+function resolveEventCity(
+  registration: Registration,
+  eventCityById: Map<string, string>
+): string | null {
+  const fromEvent = eventCityById.get(registration.eventId);
+  if (
+    fromEvent &&
+    EVENT_CITIES.includes(fromEvent as (typeof EVENT_CITIES)[number])
+  ) {
+    return fromEvent;
+  }
+  const title = registration.eventTitle.toLowerCase();
+  if (title.includes("bangalore") || title.includes("bengaluru")) {
+    return "Bangalore";
+  }
+  if (title.includes("mysore") || title.includes("mysuru")) return "Mysore";
+  if (title.includes("hubli") || title.includes("hubballi")) return "Hubli";
+  return null;
 }
 
 function exportToCsv(registrations: Registration[], filename: string) {
   const headers = [
-    "Registration Number",
-    "Name",
-    "Email",
-    "Phone",
-    "College",
-    "Course",
+    "Student Name",
+    "School/College",
+    "Class",
+    "Stream",
+    "Board",
     "City",
-    "State",
-    "Status",
-    "Payment Status",
-    "Event",
-    "Registered At",
+    "Gender",
+    "Student Mobile Number",
+    "Parent Mobile Number",
+    "Email Address",
   ];
 
   const rows = registrations.map((r) => [
-    r.registrationNumber,
     r.studentName,
-    r.email,
-    r.phone,
     r.college,
-    r.course,
+    r.classLabel ?? "",
+    r.interestedStream ?? "",
+    r.board ?? "",
     r.city,
-    r.state,
-    r.status,
-    r.paymentStatus,
-    r.eventTitle,
-    r.registeredAt,
+    r.gender ?? "",
+    r.phone,
+    r.parentPhone ?? "",
+    r.email,
   ]);
 
   const csv = [headers, ...rows]
@@ -96,61 +87,102 @@ function exportToCsv(registrations: Registration[], filename: string) {
   URL.revokeObjectURL(url);
 }
 
+function uniqueSorted(
+  values: Array<string | undefined>
+): Array<{ label: string; value: string }> {
+  return [...new Set(values.filter(Boolean) as string[])]
+    .sort((a, b) => a.localeCompare(b))
+    .map((value) => ({ label: value, value }));
+}
+
 export function RegistrationsList() {
-  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [eventFilter, setEventFilter] = useState("all");
+  const [eventCityFilter, setEventCityFilter] = useState("all");
+  const [classFilter, setClassFilter] = useState("all");
+  const [streamFilter, setStreamFilter] = useState("all");
+  const [boardFilter, setBoardFilter] = useState("all");
   const [cityFilter, setCityFilter] = useState("all");
-  const [paymentFilter, setPaymentFilter] = useState("all");
+  const [genderFilter, setGenderFilter] = useState("all");
   const [page, setPage] = useState(1);
-  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [selectedRegistration, setSelectedRegistration] =
     useState<Registration | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [bulkAction, setBulkAction] = useState<"confirm" | "cancel" | null>(
-    null
-  );
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["registrations"],
     queryFn: () => registrationsService.getAll(),
   });
 
-  const updateMutation = useMutation({
-    mutationFn: ({
-      id,
-      data: updateData,
-    }: {
-      id: string;
-      data: Partial<Registration>;
-    }) => registrationsService.update(id, updateData),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["registrations"] });
-    },
+  const eventsQuery = useQuery({
+    queryKey: ["events"],
+    queryFn: () => eventsService.getAll(),
   });
 
   const registrations = data ?? [];
 
-  const eventOptions = useMemo(() => {
-    const events = [...new Set(registrations.map((r) => r.eventTitle))];
-    return events.map((event) => ({ label: event, value: event }));
-  }, [registrations]);
+  const eventCityById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const event of eventsQuery.data ?? []) {
+      map.set(event.id, event.city);
+    }
+    return map;
+  }, [eventsQuery.data]);
 
-  const cityOptions = useMemo(() => {
-    const cities = [...new Set(registrations.map((r) => r.city))].sort();
-    return cities.map((city) => ({ label: city, value: city }));
+  const eventCityOptions = EVENT_CITIES.map((city) => ({
+    label: city,
+    value: city,
+  }));
+
+  const classOptions = useMemo(() => {
+    const order = [
+      "Class 4",
+      "Class 5",
+      "Class 6",
+      "Class 7",
+      "Class 8",
+      "Class 9",
+      "Class 10",
+      "Class 11",
+      "Class 12",
+    ];
+    const present = new Set(
+      registrations.map((r) => r.classLabel).filter(Boolean)
+    );
+    return order
+      .filter((value) => present.has(value))
+      .map((value) => ({ label: value, value }));
   }, [registrations]);
+  const streamOptions = useMemo(
+    () => uniqueSorted(registrations.map((r) => r.interestedStream)),
+    [registrations]
+  );
+  const boardOptions = useMemo(
+    () => uniqueSorted(registrations.map((r) => r.board)),
+    [registrations]
+  );
+  const cityOptions = useMemo(
+    () => uniqueSorted(registrations.map((r) => r.city)),
+    [registrations]
+  );
+  const genderOptions = useMemo(
+    () => uniqueSorted(registrations.map((r) => r.gender)),
+    [registrations]
+  );
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
 
     return registrations.filter((r) => {
-      if (statusFilter !== "all" && r.status !== statusFilter) return false;
-      if (eventFilter !== "all" && r.eventTitle !== eventFilter) return false;
-      if (cityFilter !== "all" && r.city !== cityFilter) return false;
-      if (paymentFilter !== "all" && r.paymentStatus !== paymentFilter)
+      if (eventCityFilter !== "all") {
+        const eventCity = resolveEventCity(r, eventCityById);
+        if (eventCity !== eventCityFilter) return false;
+      }
+      if (classFilter !== "all" && r.classLabel !== classFilter) return false;
+      if (streamFilter !== "all" && r.interestedStream !== streamFilter)
         return false;
+      if (boardFilter !== "all" && r.board !== boardFilter) return false;
+      if (cityFilter !== "all" && r.city !== cityFilter) return false;
+      if (genderFilter !== "all" && r.gender !== genderFilter) return false;
 
       if (!query) return true;
 
@@ -158,18 +190,24 @@ export function RegistrationsList() {
         r.studentName.toLowerCase().includes(query) ||
         r.email.toLowerCase().includes(query) ||
         r.phone.includes(query) ||
+        (r.parentPhone ?? "").includes(query) ||
         r.college.toLowerCase().includes(query) ||
-        r.registrationNumber.toLowerCase().includes(query) ||
-        r.course.toLowerCase().includes(query)
+        (r.classLabel ?? "").toLowerCase().includes(query) ||
+        (r.interestedStream ?? "").toLowerCase().includes(query) ||
+        (r.board ?? "").toLowerCase().includes(query) ||
+        r.city.toLowerCase().includes(query)
       );
     });
   }, [
     registrations,
     search,
-    statusFilter,
-    eventFilter,
+    eventCityFilter,
+    eventCityById,
+    classFilter,
+    streamFilter,
+    boardFilter,
     cityFilter,
-    paymentFilter,
+    genderFilter,
   ]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -178,50 +216,9 @@ export function RegistrationsList() {
     return filtered.slice(start, start + PAGE_SIZE);
   }, [filtered, page]);
 
-  const selectedIds = Object.keys(rowSelection).filter(
-    (id) => rowSelection[id]
-  );
-  const selectedCount = selectedIds.length;
-
   const handleView = (registration: Registration) => {
     setSelectedRegistration(registration);
     setDrawerOpen(true);
-  };
-
-  const handleBulkConfirm = async () => {
-    try {
-      await Promise.all(
-        selectedIds.map((id) =>
-          updateMutation.mutateAsync({
-            id,
-            data: { status: "Confirmed" as RegistrationStatus },
-          })
-        )
-      );
-      toast.success(`Confirmed ${selectedIds.length} registration(s)`);
-      setRowSelection({});
-      setBulkAction(null);
-    } catch {
-      toast.error("Failed to update registrations");
-    }
-  };
-
-  const handleBulkCancel = async () => {
-    try {
-      await Promise.all(
-        selectedIds.map((id) =>
-          updateMutation.mutateAsync({
-            id,
-            data: { status: "Cancelled" as RegistrationStatus },
-          })
-        )
-      );
-      toast.success(`Cancelled ${selectedIds.length} registration(s)`);
-      setRowSelection({});
-      setBulkAction(null);
-    } catch {
-      toast.error("Failed to cancel registrations");
-    }
   };
 
   const handleExport = (items: Registration[]) => {
@@ -237,28 +234,38 @@ export function RegistrationsList() {
   };
 
   const clearFilters = () => {
-    setStatusFilter("all");
-    setEventFilter("all");
+    setEventCityFilter("all");
+    setClassFilter("all");
+    setStreamFilter("all");
+    setBoardFilter("all");
     setCityFilter("all");
-    setPaymentFilter("all");
+    setGenderFilter("all");
     setSearch("");
     setPage(1);
   };
 
+  const hasActiveFilters =
+    Boolean(search.trim()) ||
+    eventCityFilter !== "all" ||
+    classFilter !== "all" ||
+    streamFilter !== "all" ||
+    boardFilter !== "all" ||
+    cityFilter !== "all" ||
+    genderFilter !== "all";
+
   const columns: ColumnDef<Registration, unknown>[] = [
     {
       accessorKey: "studentName",
-      header: "Name",
+      header: "Student Name",
       cell: ({ row }) => (
-        <div>
-          <p className="font-medium text-foreground">{row.original.studentName}</p>
-          <p className="text-xs text-muted-foreground">{row.original.email}</p>
-        </div>
+        <span className="font-medium whitespace-nowrap">
+          {row.original.studentName}
+        </span>
       ),
     },
     {
       accessorKey: "college",
-      header: "College",
+      header: "School/College",
       cell: ({ row }) => (
         <span className="line-clamp-2 max-w-[200px] text-sm">
           {row.original.college}
@@ -266,107 +273,71 @@ export function RegistrationsList() {
       ),
     },
     {
+      accessorKey: "classLabel",
+      header: "Class",
+      cell: ({ row }) => (
+        <span className="whitespace-nowrap text-sm">
+          {row.original.classLabel ?? "—"}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "interestedStream",
+      header: "Stream",
+      cell: ({ row }) => (
+        <span className="whitespace-nowrap text-sm">
+          {row.original.interestedStream ?? "—"}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "board",
+      header: "Board",
+      cell: ({ row }) => (
+        <span className="whitespace-nowrap text-sm">
+          {row.original.board ?? "—"}
+        </span>
+      ),
+    },
+    {
       accessorKey: "city",
       header: "City",
       cell: ({ row }) => (
-        <span className="text-sm">{row.original.city}</span>
+        <span className="whitespace-nowrap text-sm">{row.original.city}</span>
+      ),
+    },
+    {
+      accessorKey: "gender",
+      header: "Gender",
+      cell: ({ row }) => (
+        <span className="whitespace-nowrap text-sm">
+          {row.original.gender ?? "—"}
+        </span>
       ),
     },
     {
       accessorKey: "phone",
-      header: "Phone",
+      header: "Student Mobile Number",
       cell: ({ row }) => (
         <span className="whitespace-nowrap text-sm">{row.original.phone}</span>
       ),
     },
     {
-      accessorKey: "course",
-      header: "Course",
-      cell: ({ row }) => (
-        <span className="line-clamp-1 max-w-[140px] text-sm">
-          {row.original.course}
-        </span>
-      ),
-    },
-    {
-      accessorKey: "registeredAt",
-      header: "Registration Date",
+      accessorKey: "parentPhone",
+      header: "Parent Mobile Number",
       cell: ({ row }) => (
         <span className="whitespace-nowrap text-sm">
-          {formatDate(row.original.registeredAt)}
+          {row.original.parentPhone ?? "—"}
         </span>
       ),
     },
     {
-      accessorKey: "status",
-      header: "Status",
-      cell: ({ row }) => <StatusChip status={row.original.status} />,
-    },
-    {
-      id: "qrGenerated",
-      header: "QR Generated",
-      enableSorting: false,
-      cell: ({ row }) => {
-        const generated = hasQrGenerated(row.original);
-        return (
-          <Badge
-            variant={generated ? "success" : "muted"}
-            className="gap-1 font-normal"
-          >
-            <QrCode className="h-3 w-3" />
-            {generated ? "Yes" : "No"}
-          </Badge>
-        );
-      },
-    },
-    {
-      id: "actions",
-      header: "Actions",
-      enableSorting: false,
+      accessorKey: "email",
+      header: "Email Address",
       cell: ({ row }) => (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <MoreHorizontal className="h-4 w-4" />
-              <span className="sr-only">Actions</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => handleView(row.original)}>
-              <Eye className="h-4 w-4" />
-              View Profile
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={() =>
-                updateMutation.mutate({
-                  id: row.original.id,
-                  data: { status: "Confirmed" },
-                })
-              }
-            >
-              <CheckCircle2 className="h-4 w-4" />
-              Mark Confirmed
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className="text-destructive focus:text-destructive"
-              onClick={() =>
-                updateMutation.mutate({
-                  id: row.original.id,
-                  data: { status: "Cancelled" },
-                })
-              }
-            >
-              <XCircle className="h-4 w-4" />
-              Cancel
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <span className="max-w-[200px] truncate text-sm">
+          {row.original.email}
+        </span>
       ),
     },
   ];
@@ -378,7 +349,7 @@ export function RegistrationsList() {
           title="Registrations"
           description="Manage student registrations across all Career Utsav events."
         />
-        <TableSkeleton rows={8} columns={9} />
+        <TableSkeleton rows={8} columns={10} />
       </div>
     );
   }
@@ -402,16 +373,14 @@ export function RegistrationsList() {
         title="Registrations"
         description="Manage student registrations across all Career Utsav events."
         actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              onClick={() => handleExport(filtered)}
-              className="gap-2"
-            >
-              <Download className="h-4 w-4" />
-              Export CSV
-            </Button>
-          </div>
+          <Button
+            variant="outline"
+            onClick={() => handleExport(filtered)}
+            className="gap-2"
+          >
+            <Download className="h-4 w-4" />
+            Export CSV
+          </Button>
         }
       />
 
@@ -422,7 +391,7 @@ export function RegistrationsList() {
             setSearch(value);
             setPage(1);
           }}
-          placeholder="Search by name, email, college, or registration ID..."
+          placeholder="Search by name, school, email, or mobile…"
           containerClassName="max-w-xl"
         />
         <p className="text-sm text-muted-foreground">
@@ -434,27 +403,44 @@ export function RegistrationsList() {
       <FiltersBar
         filters={[
           {
-            id: "status",
-            label: "Status",
-            value: statusFilter,
-            onChange: (v) => {
-              setStatusFilter(v);
-              setPage(1);
-            },
-            options: REGISTRATION_STATUSES.map((s) => ({
-              label: s,
-              value: s,
-            })),
-          },
-          {
             id: "event",
             label: "Event",
-            value: eventFilter,
+            value: eventCityFilter,
             onChange: (v) => {
-              setEventFilter(v);
+              setEventCityFilter(v);
               setPage(1);
             },
-            options: eventOptions,
+            options: eventCityOptions,
+          },
+          {
+            id: "class",
+            label: "Class",
+            value: classFilter,
+            onChange: (v) => {
+              setClassFilter(v);
+              setPage(1);
+            },
+            options: classOptions,
+          },
+          {
+            id: "stream",
+            label: "Stream",
+            value: streamFilter,
+            onChange: (v) => {
+              setStreamFilter(v);
+              setPage(1);
+            },
+            options: streamOptions,
+          },
+          {
+            id: "board",
+            label: "Board",
+            value: boardFilter,
+            onChange: (v) => {
+              setBoardFilter(v);
+              setPage(1);
+            },
+            options: boardOptions,
           },
           {
             id: "city",
@@ -467,81 +453,30 @@ export function RegistrationsList() {
             options: cityOptions,
           },
           {
-            id: "payment",
-            label: "Payment",
-            value: paymentFilter,
+            id: "gender",
+            label: "Gender",
+            value: genderFilter,
             onChange: (v) => {
-              setPaymentFilter(v);
+              setGenderFilter(v);
               setPage(1);
             },
-            options: [
-              { label: "Paid", value: "Paid" },
-              { label: "Pending", value: "Pending" },
-              { label: "Waived", value: "Waived" },
-            ],
+            options: genderOptions,
           },
         ]}
         onClearAll={clearFilters}
       />
-
-      {selectedCount > 0 && (
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-primary/5 px-4 py-3">
-          <span className="text-sm font-medium">
-            {selectedCount} selected
-          </span>
-          <Button
-            size="sm"
-            variant="outline"
-            className="gap-1.5"
-            onClick={() => setBulkAction("confirm")}
-          >
-            <CheckCircle2 className="h-3.5 w-3.5" />
-            Confirm
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="gap-1.5 text-destructive hover:text-destructive"
-            onClick={() => setBulkAction("cancel")}
-          >
-            <XCircle className="h-3.5 w-3.5" />
-            Cancel
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="gap-1.5"
-            onClick={() => {
-              const selected = registrations.filter((r) =>
-                selectedIds.includes(r.id)
-              );
-              handleExport(selected);
-            }}
-          >
-            <Download className="h-3.5 w-3.5" />
-            Export Selected
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setRowSelection({})}
-          >
-            Clear selection
-          </Button>
-        </div>
-      )}
 
       {filtered.length === 0 ? (
         <EmptyState
           icon={Users}
           title="No registrations found"
           description={
-            search || statusFilter !== "all" || eventFilter !== "all"
+            hasActiveFilters
               ? "Try adjusting your search or filters to find registrations."
               : "Student registrations will appear here once events are live."
           }
           action={
-            search || statusFilter !== "all"
+            hasActiveFilters
               ? { label: "Clear filters", onClick: clearFilters }
               : undefined
           }
@@ -551,9 +486,6 @@ export function RegistrationsList() {
           <DataTable
             columns={columns}
             data={paginated}
-            enableSelection
-            rowSelection={rowSelection}
-            onRowSelectionChange={setRowSelection}
             getRowId={(row) => row.id}
             onRowClick={handleView}
             emptyMessage="No registrations on this page."
@@ -574,27 +506,6 @@ export function RegistrationsList() {
         registration={selectedRegistration}
         open={drawerOpen}
         onOpenChange={setDrawerOpen}
-      />
-
-      <ConfirmDialog
-        open={bulkAction === "confirm"}
-        onOpenChange={(open) => !open && setBulkAction(null)}
-        title="Confirm registrations"
-        description={`Mark ${selectedCount} registration(s) as confirmed? QR codes will be generated.`}
-        confirmLabel="Confirm All"
-        onConfirm={handleBulkConfirm}
-        loading={updateMutation.isPending}
-      />
-
-      <ConfirmDialog
-        open={bulkAction === "cancel"}
-        onOpenChange={(open) => !open && setBulkAction(null)}
-        title="Cancel registrations"
-        description={`Cancel ${selectedCount} registration(s)? This action cannot be easily undone.`}
-        confirmLabel="Cancel All"
-        variant="destructive"
-        onConfirm={handleBulkCancel}
-        loading={updateMutation.isPending}
       />
     </div>
   );

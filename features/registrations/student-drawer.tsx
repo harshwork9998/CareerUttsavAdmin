@@ -127,8 +127,13 @@ export function StudentDrawer({
                 />
                 <DetailRow
                   icon={Phone}
-                  label="Phone"
+                  label="Student Mobile"
                   value={registration.phone}
+                />
+                <DetailRow
+                  icon={Phone}
+                  label="Parent Mobile"
+                  value={registration.parentPhone ?? "—"}
                 />
                 <DetailRow
                   icon={MapPin}
@@ -145,18 +150,28 @@ export function StudentDrawer({
               <div className="space-y-4 rounded-xl border bg-muted/30 p-4">
                 <DetailRow
                   icon={GraduationCap}
-                  label="College"
+                  label="School/College"
                   value={registration.college}
                 />
                 <DetailRow
                   icon={GraduationCap}
-                  label="Course"
-                  value={registration.course}
+                  label="Class"
+                  value={registration.classLabel ?? "—"}
                 />
                 <DetailRow
                   icon={GraduationCap}
-                  label="Year"
-                  value={registration.year}
+                  label="Stream"
+                  value={registration.interestedStream ?? "—"}
+                />
+                <DetailRow
+                  icon={GraduationCap}
+                  label="Board"
+                  value={registration.board ?? "—"}
+                />
+                <DetailRow
+                  icon={GraduationCap}
+                  label="Gender"
+                  value={registration.gender ?? "—"}
                 />
               </div>
             </section>

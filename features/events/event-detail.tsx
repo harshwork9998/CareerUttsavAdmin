@@ -149,25 +149,79 @@ export function EventDetail({ eventId }: EventDetailProps) {
 
   const registrationColumns: ColumnDef<Registration>[] = [
     {
-      accessorKey: "registrationNumber",
-      header: "Reg. No.",
-      cell: ({ row }) => (
-        <span className="font-mono text-xs">{row.original.registrationNumber}</span>
-      ),
-    },
-    {
       accessorKey: "studentName",
-      header: "Student",
+      header: "Student Name",
       cell: ({ row }) => (
-        <div>
-          <p className="font-medium">{row.original.studentName}</p>
-          <p className="text-xs text-muted-foreground">{row.original.email}</p>
-        </div>
+        <span className="font-medium whitespace-nowrap">
+          {row.original.studentName}
+        </span>
       ),
     },
     {
       accessorKey: "college",
-      header: "College",
+      header: "School/College",
+      cell: ({ row }) => (
+        <span className="line-clamp-2 max-w-[180px] text-sm">
+          {row.original.college}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "classLabel",
+      header: "Class",
+      cell: ({ row }) => (
+        <span className="text-sm">{row.original.classLabel ?? "—"}</span>
+      ),
+    },
+    {
+      accessorKey: "interestedStream",
+      header: "Stream",
+      cell: ({ row }) => (
+        <span className="text-sm">{row.original.interestedStream ?? "—"}</span>
+      ),
+    },
+    {
+      accessorKey: "board",
+      header: "Board",
+      cell: ({ row }) => (
+        <span className="text-sm">{row.original.board ?? "—"}</span>
+      ),
+    },
+    {
+      accessorKey: "city",
+      header: "City",
+    },
+    {
+      accessorKey: "gender",
+      header: "Gender",
+      cell: ({ row }) => (
+        <span className="text-sm">{row.original.gender ?? "—"}</span>
+      ),
+    },
+    {
+      accessorKey: "phone",
+      header: "Student Mobile",
+      cell: ({ row }) => (
+        <span className="whitespace-nowrap text-sm">{row.original.phone}</span>
+      ),
+    },
+    {
+      accessorKey: "parentPhone",
+      header: "Parent Mobile",
+      cell: ({ row }) => (
+        <span className="whitespace-nowrap text-sm">
+          {row.original.parentPhone ?? "—"}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "email",
+      header: "Email Address",
+      cell: ({ row }) => (
+        <span className="max-w-[160px] truncate text-sm">
+          {row.original.email}
+        </span>
+      ),
     },
   ];
 
@@ -554,7 +608,7 @@ export function EventDetail({ eventId }: EventDetailProps) {
               </span>
             </div>
             {registrationsQuery.isLoading ? (
-              <TableSkeleton rows={5} columns={3} />
+              <TableSkeleton rows={5} columns={10} />
             ) : registrations.length === 0 ? (
               <EmptyState
                 icon={Users}
