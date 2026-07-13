@@ -178,6 +178,10 @@ export function EventForm({ eventId }: EventFormProps) {
         pincode: values.pincode,
         startDate: fromDatetimeLocal(values.startDate),
         endDate: fromDatetimeLocal(values.endDate),
+        startTime: "09:00",
+        endTime: "18:00",
+        hallCount: 1,
+        seminars: [],
         registrationDeadline: fromDatetimeLocal(values.registrationDeadline),
         maxCapacity: values.maxCapacity,
         registrationCount: 0,
@@ -280,7 +284,7 @@ export function EventForm({ eventId }: EventFormProps) {
           { label: "Events", href: "/events" },
           isEditing && eventQuery.data
             ? { label: eventQuery.data.title, href: `/events/${eventId}` }
-            : { label: "New", href: "/events/new" },
+            : { label: "New", href: "/events" },
           { label: isEditing ? "Edit" : "Create" },
         ]}
       />

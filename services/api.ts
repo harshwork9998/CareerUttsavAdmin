@@ -38,14 +38,45 @@ async function simulate<T>(data: T): Promise<T> {
   return data;
 }
 
+/** In-memory event store so create/update/delete persist for the session. */
+let eventsStore: Event[] = [...mockEvents];
+
 export const eventsService = {
-  getAll: () => simulate([...mockEvents]),
-  getById: (id: string) => simulate(mockEvents.find((e) => e.id === id) ?? null),
-  create: (event: Omit<Event, "id" | "createdAt" | "updatedAt">) =>
-    simulate({ ...event, id: generateId(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } as Event),
-  update: (id: string, data: Partial<Event>) =>
-    simulate({ ...mockEvents.find((e) => e.id === id)!, ...data, updatedAt: new Date().toISOString() }),
-  delete: (id: string) => simulate(mockEvents.filter((e) => e.id !== id)),
+  getAll: () => simulate([...eventsStore]),
+  getById: (id: string) =>
+    simulate(eventsStore.find((e) => e.id === id) ?? null),
+  create: (event: Omit<Event, "id" | "createdAt" | "updatedAt">) => {
+    const created: Event = {
+      ...event,
+      id: generateId(),
+      seminars: event.seminars ?? [],
+      startTime: event.startTime ?? "09:00",
+      endTime: event.endTime ?? "18:00",
+      hallCount: event.hallCount ?? 1,
+      venue: event.venue ?? "",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    eventsStore = [created, ...eventsStore];
+    return simulate(created);
+  },
+  update: (id: string, data: Partial<Event>) => {
+    const existing = eventsStore.find((e) => e.id === id);
+    if (!existing) {
+      return simulate(null as unknown as Event);
+    }
+    const updated: Event = {
+      ...existing,
+      ...data,
+      updatedAt: new Date().toISOString(),
+    };
+    eventsStore = eventsStore.map((e) => (e.id === id ? updated : e));
+    return simulate(updated);
+  },
+  delete: (id: string) => {
+    eventsStore = eventsStore.filter((e) => e.id !== id);
+    return simulate([...eventsStore]);
+  },
 };
 
 export const registrationsService = {

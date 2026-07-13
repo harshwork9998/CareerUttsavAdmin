@@ -11,7 +11,7 @@ import type {
   PartnerSalesAnalytics,
   StudentRegistrationAnalytics,
 } from "@/types";
-import { ErrorState } from "@/components/shared";
+import { ErrorState, PageHeader } from "@/components/shared";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StudentRegistrationSection } from "@/features/dashboard/student-registration-section";
 import { PartnerSalesSection } from "@/features/dashboard/partner-sales-section";
@@ -226,7 +226,10 @@ function CityHeroCards({
 function DashboardSkeleton() {
   return (
     <div className="space-y-8">
-      <Skeleton className="h-10 w-56" />
+      <PageHeader
+        title="Dashboard"
+        description="Track student registrations and university partners across Career Utsav cities."
+      />
       <Skeleton className="h-72 rounded-2xl" />
       <Skeleton className="h-48 rounded-xl" />
     </div>
@@ -289,25 +292,34 @@ export function DashboardView() {
 
   if (dashboardQuery.isError || !dashboard || !studentView || !partnerView) {
     return (
-      <ErrorState
-        title="Couldn't load Career Utsav"
-        message="Please check your connection and try again."
-        onRetry={() => void dashboardQuery.refetch()}
-      />
+      <div className="space-y-6">
+        <PageHeader title="Dashboard" />
+        <ErrorState
+          title="Couldn't load Career Utsav"
+          message="Please check your connection and try again."
+          onRetry={() => void dashboardQuery.refetch()}
+        />
+      </div>
     );
   }
 
   return (
     <div className="pb-10">
+      <PageHeader
+        className="mb-8 sm:mb-10"
+        title="Dashboard"
+        description="Track student registrations and university partner performance across Career Utsav cities."
+      />
+
       <header className="mb-6 sm:mb-7">
-        <h1
+        <h2
           className={cn(
             displayClass,
             "text-[28px] font-bold leading-none text-foreground sm:text-[34px]"
           )}
         >
           Student details
-        </h1>
+        </h2>
         <p className="mt-2 text-[13px] text-muted-foreground">
           {studentView.isAllCities
             ? "Bangalore · Mysore · Hubli"

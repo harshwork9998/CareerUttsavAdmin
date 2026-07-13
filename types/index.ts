@@ -105,6 +105,17 @@ export interface User {
   updatedAt: string;
 }
 
+export interface EventSeminar {
+  id: string;
+  title: string;
+  date: string; // YYYY-MM-DD within event start..end
+  startTime: string; // HH:mm
+  endTime: string; // HH:mm
+  panelistSlots: number;
+  /** 1-based auditorium number within the venue (1..event.hallCount) */
+  hall: number;
+}
+
 export interface Event {
   id: string;
   title: string;
@@ -119,6 +130,13 @@ export interface Event {
   pincode: string;
   startDate: string;
   endDate: string;
+  /** Fair open time (HH:mm) */
+  startTime: string;
+  /** Fair close time (HH:mm) */
+  endTime: string;
+  /** Number of auditoriums / seminar rooms at the venue */
+  hallCount: number;
+  seminars: EventSeminar[];
   registrationDeadline: string;
   maxCapacity: number;
   registrationCount: number;

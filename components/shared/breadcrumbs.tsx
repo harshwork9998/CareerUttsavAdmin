@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronRight, Home } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -11,26 +11,18 @@ export interface BreadcrumbItem {
 export interface BreadcrumbsProps {
   items: BreadcrumbItem[];
   className?: string;
+  /** @deprecated Dashboard is a peer section, not a parent — ignored. */
   showHome?: boolean;
 }
 
-export function Breadcrumbs({
-  items,
-  className,
-  showHome = true,
-}: BreadcrumbsProps) {
-  if (items.length === 0 && !showHome) return null;
-
-  const allItems: BreadcrumbItem[] = showHome
-    ? [{ label: "Dashboard", href: "/dashboard" }, ...items]
-    : items;
+export function Breadcrumbs({ items, className }: BreadcrumbsProps) {
+  if (items.length === 0) return null;
 
   return (
     <nav aria-label="Breadcrumb" className={cn("flex items-center", className)}>
       <ol className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
-        {allItems.map((item, index) => {
-          const isLast = index === allItems.length - 1;
-          const isHome = showHome && index === 0;
+        {items.map((item, index) => {
+          const isLast = index === items.length - 1;
 
           return (
             <li key={`${item.label}-${index}`} className="flex items-center gap-1.5">
@@ -48,28 +40,14 @@ export function Breadcrumbs({
                   )}
                   aria-current={isLast ? "page" : undefined}
                 >
-                  {isHome ? (
-                    <span className="inline-flex items-center gap-1.5">
-                      <Home className="h-3.5 w-3.5" />
-                      {item.label}
-                    </span>
-                  ) : (
-                    item.label
-                  )}
+                  {item.label}
                 </span>
               ) : (
                 <Link
                   href={item.href}
-                  className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
+                  className="transition-colors hover:text-foreground"
                 >
-                  {isHome ? (
-                    <>
-                      <Home className="h-3.5 w-3.5" />
-                      {item.label}
-                    </>
-                  ) : (
-                    item.label
-                  )}
+                  {item.label}
                 </Link>
               )}
             </li>

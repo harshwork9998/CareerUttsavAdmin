@@ -1,5 +1,6 @@
-import { EventForm } from "@/features/events/event-form";
+import { redirect } from "next/navigation";
 
+/** Create flow is modal-first on /events. */
 export default function NewEventPage() {
-  return <EventForm />;
+  redirect("/events");
 }

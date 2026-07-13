@@ -1,8 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, ExternalLink, Globe, Mail, Phone } from "lucide-react";
+import { ExternalLink, Globe, Mail, Phone } from "lucide-react";
 
 import { partnersService } from "@/services/api";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -75,14 +74,6 @@ export function PartnerDetail({ id }: PartnerDetailProps) {
           { label: "Partners", href: "/partners" },
           { label: partner.name },
         ]}
-        actions={
-          <Button variant="outline" asChild className="gap-2">
-            <Link href="/partners">
-              <ArrowLeft className="h-4 w-4" />
-              Back
-            </Link>
-          </Button>
-        }
       />
 
       <div className="grid gap-6 lg:grid-cols-3">

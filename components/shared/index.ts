@@ -21,6 +21,12 @@ export {
 } from "./data-table";
 export { ConfirmDialog, type ConfirmDialogProps } from "./confirm-dialog";
 export {
+  SectionBackButton,
+  getSectionBackHref,
+  getSectionBackLabel,
+  type SectionBackButtonProps,
+} from "./section-back-button";
+export {
   StatusChip,
   getVariantForStatus,
   STATUS_VARIANT_MAP,

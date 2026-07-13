@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Eye, Loader2, Save, Send } from "lucide-react";
+import { Eye, Loader2, Save, Send } from "lucide-react";
 import { toast } from "sonner";
 
 import { blogsService } from "@/services/api";
@@ -184,12 +184,6 @@ export function BlogForm({ blogId }: BlogFormProps) {
         ]}
         actions={
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" asChild className="gap-2">
-              <Link href="/blogs">
-                <ArrowLeft className="h-4 w-4" />
-                Back
-              </Link>
-            </Button>
             <Button
               variant="outline"
               className="gap-2"

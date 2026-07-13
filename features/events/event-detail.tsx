@@ -1,84 +1,115 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import {
   CalendarDays,
-  Download,
+  Clock,
   Edit,
   FileText,
   GraduationCap,
-  Handshake,
   MapPin,
-  Megaphone,
+  Presentation,
+  Trash2,
   Users,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import {
   eventsService,
-  notificationsService,
-  partnersService,
   registrationsService,
-  reportsService,
   universitiesService,
 } from "@/services/api";
-import { BRAND } from "@/constants";
+import { cn, formatDate, formatDateTime, formatNumber } from "@/lib/utils";
+import { CreateEventDialog } from "@/features/events/create-event-dialog";
 import {
-  formatCurrency,
-  formatDate,
-  formatDateTime,
-  formatNumber,
-} from "@/lib/utils";
+  BRAND,
+  INK,
+  LINE,
+  PAPER,
+  displayClass,
+  labelClass,
+  sectionMotion,
+  surface,
+} from "@/features/dashboard/dashboard-ui";
 import {
+  ConfirmDialog,
   DataTable,
   EmptyState,
   ErrorState,
-  PageHeader,
-  StatusChip,
   TableSkeleton,
   type ColumnDef,
 } from "@/components/shared";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Separator } from "@/components/ui/separator";
-import type {
-  Notification,
-  Partner,
-  Registration,
-  Report,
-  University,
-} from "@/types";
+import type { Event, EventSeminar, Registration } from "@/types";
+
+function formatSeminarTime(time: string): string {
+  if (!time) return "—";
+  const [h, m] = time.split(":").map(Number);
+  if (Number.isNaN(h)) return time;
+  const d = new Date();
+  d.setHours(h, m || 0, 0, 0);
+  return d.toLocaleTimeString("en-IN", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
+function toDateOnly(value: string): string {
+  if (!value) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  return value.slice(0, 10);
+}
+
+function eachDayInclusive(start: string, end: string): string[] {
+  const s = toDateOnly(start);
+  const e = toDateOnly(end) || s;
+  if (!s) return [];
+  const days: string[] = [];
+  const cur = new Date(`${s}T12:00:00`);
+  const last = new Date(`${e}T12:00:00`);
+  while (cur <= last) {
+    const y = cur.getFullYear();
+    const m = String(cur.getMonth() + 1).padStart(2, "0");
+    const d = String(cur.getDate()).padStart(2, "0");
+    days.push(`${y}-${m}-${d}`);
+    cur.setDate(cur.getDate() + 1);
+  }
+  return days;
+}
 
 export interface EventDetailProps {
   eventId: string;
 }
 
 export function EventDetail({ eventId }: EventDetailProps) {
+  const router = useRouter();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("overview");
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
   const eventQuery = useQuery({
     queryKey: ["events", eventId],
     queryFn: () => eventsService.getById(eventId),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => eventsService.delete(eventId),
+    onSuccess: () => {
+      queryClient.setQueryData<Event[]>(["events"], (old) =>
+        old?.filter((e) => e.id !== eventId)
+      );
+      void queryClient.invalidateQueries({ queryKey: ["events"] });
+      toast.success("Event deleted");
+      router.push("/events");
+    },
+    onError: () => toast.error("Failed to delete event"),
   });
 
   const registrationsQuery = useQuery({
@@ -93,54 +124,28 @@ export function EventDetail({ eventId }: EventDetailProps) {
     enabled: activeTab === "universities" || activeTab === "overview",
   });
 
-  const partnersQuery = useQuery({
-    queryKey: ["partners", "event", eventId],
-    queryFn: async () => {
-      const all = await partnersService.getAll();
-      return all.filter((p) => p.eventIds.includes(eventId));
-    },
-    enabled: activeTab === "partners" || activeTab === "overview",
-  });
-
-  const reportsQuery = useQuery({
-    queryKey: ["reports"],
-    queryFn: () => reportsService.getAll(),
-    enabled: activeTab === "reports",
-  });
-
-  const notificationsQuery = useQuery({
-    queryKey: ["notifications"],
-    queryFn: () => notificationsService.getAll(),
-    enabled: activeTab === "notifications",
-  });
-
   const event = eventQuery.data;
   const registrations = registrationsQuery.data ?? [];
   const universities = universitiesQuery.data ?? [];
-  const partners = partnersQuery.data ?? [];
-  const reports = reportsQuery.data ?? [];
-  const notifications = notificationsQuery.data ?? [];
 
-  const eventReports = useMemo(
-    () =>
-      reports.filter((r) =>
-        r.name.toLowerCase().includes(event?.city.toLowerCase() ?? "")
+  const seminarDays = useMemo(() => {
+    if (!event) return [];
+    const days = eachDayInclusive(event.startDate, event.endDate);
+    const byDate = new Map<string, EventSeminar[]>();
+    for (const day of days) byDate.set(day, []);
+    for (const seminar of event.seminars ?? []) {
+      const key = toDateOnly(seminar.date);
+      if (!byDate.has(key)) byDate.set(key, []);
+      byDate.get(key)!.push(seminar);
+    }
+    return Array.from(byDate.entries()).map(([date, seminars], index) => ({
+      date,
+      dayLabel: `Day ${index + 1}`,
+      seminars: [...seminars].sort((a, b) =>
+        a.startTime.localeCompare(b.startTime)
       ),
-    [reports, event?.city]
-  );
-
-  const eventNotifications = useMemo(
-    () => notifications.filter((n) => n.eventId === eventId),
-    [notifications, eventId]
-  );
-
-  const registrationStatusChart = useMemo(() => {
-    const counts = registrations.reduce<Record<string, number>>((acc, reg) => {
-      acc[reg.status] = (acc[reg.status] ?? 0) + 1;
-      return acc;
-    }, {});
-    return Object.entries(counts).map(([name, value]) => ({ name, value }));
-  }, [registrations]);
+    }));
+  }, [event]);
 
   const registrationColumns: ColumnDef<Registration>[] = [
     {
@@ -164,151 +169,6 @@ export function EventDetail({ eventId }: EventDetailProps) {
       accessorKey: "college",
       header: "College",
     },
-    {
-      accessorKey: "status",
-      header: "Status",
-      cell: ({ row }) => <StatusChip status={row.original.status} />,
-    },
-    {
-      accessorKey: "paymentStatus",
-      header: "Payment",
-      cell: ({ row }) => <StatusChip status={row.original.paymentStatus} />,
-    },
-  ];
-
-  const universityColumns: ColumnDef<University>[] = [
-    {
-      accessorKey: "name",
-      header: "University",
-      cell: ({ row }) => (
-        <div>
-          <p className="font-medium">{row.original.name}</p>
-          {row.original.shortName && (
-            <p className="text-xs text-muted-foreground">{row.original.shortName}</p>
-          )}
-        </div>
-      ),
-    },
-    {
-      accessorKey: "type",
-      header: "Type",
-    },
-    {
-      accessorKey: "status",
-      header: "Status",
-      cell: ({ row }) => <StatusChip status={row.original.status} />,
-    },
-    {
-      accessorKey: "stallNumber",
-      header: "Stall",
-      cell: ({ row }) => row.original.stallNumber ?? "—",
-    },
-    {
-      accessorKey: "contactPerson",
-      header: "Contact",
-    },
-  ];
-
-  const partnerColumns: ColumnDef<Partner>[] = [
-    {
-      accessorKey: "name",
-      header: "Partner",
-      cell: ({ row }) => <p className="font-medium">{row.original.name}</p>,
-    },
-    {
-      accessorKey: "category",
-      header: "Category",
-      cell: ({ row }) => <Badge variant="secondary">{row.original.category}</Badge>,
-    },
-    {
-      accessorKey: "sponsorshipAmount",
-      header: "Sponsorship",
-      cell: ({ row }) =>
-        row.original.sponsorshipAmount
-          ? formatCurrency(row.original.sponsorshipAmount)
-          : "—",
-    },
-    {
-      accessorKey: "contactPerson",
-      header: "Contact",
-    },
-    {
-      accessorKey: "isActive",
-      header: "Active",
-      cell: ({ row }) => (
-        <StatusChip status={row.original.isActive ? "Active" : "Inactive"} />
-      ),
-    },
-  ];
-
-  const reportColumns: ColumnDef<Report>[] = [
-    {
-      accessorKey: "name",
-      header: "Report",
-      cell: ({ row }) => (
-        <div>
-          <p className="font-medium">{row.original.name}</p>
-          <p className="text-xs text-muted-foreground">{row.original.type}</p>
-        </div>
-      ),
-    },
-    {
-      accessorKey: "format",
-      header: "Format",
-    },
-    {
-      accessorKey: "status",
-      header: "Status",
-      cell: ({ row }) => <StatusChip status={row.original.status} />,
-    },
-    {
-      id: "actions",
-      header: "",
-      cell: ({ row }) =>
-        row.original.downloadUrl ? (
-          <Button variant="ghost" size="sm" asChild>
-            <a href={row.original.downloadUrl} download>
-              <Download className="h-4 w-4" />
-              Download
-            </a>
-          </Button>
-        ) : (
-          <span className="text-xs text-muted-foreground">—</span>
-        ),
-    },
-  ];
-
-  const notificationColumns: ColumnDef<Notification>[] = [
-    {
-      accessorKey: "title",
-      header: "Notification",
-      cell: ({ row }) => (
-        <div>
-          <p className="font-medium">{row.original.title}</p>
-          <p className="line-clamp-1 text-xs text-muted-foreground">
-            {row.original.message}
-          </p>
-        </div>
-      ),
-    },
-    {
-      accessorKey: "channel",
-      header: "Channel",
-    },
-    {
-      accessorKey: "audience",
-      header: "Audience",
-    },
-    {
-      accessorKey: "status",
-      header: "Status",
-      cell: ({ row }) => <StatusChip status={row.original.status} />,
-    },
-    {
-      accessorKey: "createdAt",
-      header: "Created",
-      cell: ({ row }) => formatDateTime(row.original.createdAt),
-    },
   ];
 
   if (eventQuery.isLoading) {
@@ -331,330 +191,454 @@ export function EventDetail({ eventId }: EventDetailProps) {
     );
   }
 
-  const capacityPercent = Math.round(
-    (event.registrationCount / event.maxCapacity) * 100
-  );
-  const checkInPercent =
-    event.registrationCount > 0
-      ? Math.round((event.checkInCount / event.registrationCount) * 100)
-      : 0;
-
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="space-y-6"
-    >
-      <PageHeader
-        title={event.title}
-        description={event.shortDescription ?? event.description.slice(0, 120)}
-        breadcrumbs={[
-          { label: "Events", href: "/events" },
-          { label: event.title },
-        ]}
-        actions={
-          <div className="flex gap-2">
-            <Button variant="outline" asChild>
-              <Link href={`/events/${event.id}/edit`}>
-                <Edit className="h-4 w-4" />
-                Edit
-              </Link>
-            </Button>
-            <Button asChild>
-              <Link href="/notifications">
-                <Megaphone className="h-4 w-4" />
-                Notify
-              </Link>
-            </Button>
-          </div>
-        }
+    <motion.div {...sectionMotion} className="space-y-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 space-y-1">
+          <p className={labelClass}>Event</p>
+          <h1
+            className={cn(
+              displayClass,
+              "text-3xl font-semibold tracking-tight sm:text-4xl"
+            )}
+            style={{ color: INK.primary }}
+          >
+            {event.title}
+          </h1>
+          {event.shortDescription ? (
+            <p className="max-w-2xl text-sm" style={{ color: INK.muted }}>
+              {event.shortDescription}
+            </p>
+          ) : null}
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <Button
+            variant="outline"
+            className="rounded-full border-[rgba(212,209,200,0.85)] bg-white"
+            onClick={() => setEditOpen(true)}
+          >
+            <Edit className="h-4 w-4" />
+            Edit
+          </Button>
+          <Button
+            variant="outline"
+            className="rounded-full text-destructive hover:bg-destructive/10 hover:text-destructive"
+            onClick={() => setDeleteOpen(true)}
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete
+          </Button>
+        </div>
+      </div>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Delete event?"
+        description={`“${event.title}” will be permanently removed. This cannot be undone.`}
+        confirmLabel="Delete event"
+        variant="destructive"
+        loading={deleteMutation.isPending}
+        onConfirm={async () => {
+          await deleteMutation.mutateAsync();
+        }}
       />
 
-      <Card className="overflow-hidden">
-        <div className="bg-gradient-to-r from-primary/10 via-secondary/5 to-transparent p-6">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <StatusChip status={event.status} />
-                {event.isFeatured && <Badge variant="success">Featured</Badge>}
-              </div>
-              <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-                <span className="flex items-center gap-1.5">
-                  <CalendarDays className="h-4 w-4" />
-                  {formatDateTime(event.startDate)} – {formatDate(event.endDate)}
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <MapPin className="h-4 w-4" />
-                  {event.venue}, {event.city}
-                </span>
-              </div>
-              {event.tags.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {event.tags.map((tag) => (
-                    <Badge key={tag} variant="outline">
-                      {tag}
-                    </Badge>
-                  ))}
-                </div>
-              )}
-            </div>
+      <CreateEventDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        event={event}
+      />
 
-            <div className="grid grid-cols-3 gap-4 text-center">
-              <div className="rounded-lg border bg-card/80 px-4 py-3 backdrop-blur">
-                <p className="text-2xl font-bold">{formatNumber(event.registrationCount)}</p>
-                <p className="text-xs text-muted-foreground">Registrations</p>
-              </div>
-              <div className="rounded-lg border bg-card/80 px-4 py-3 backdrop-blur">
-                <p className="text-2xl font-bold">{formatNumber(event.checkInCount)}</p>
-                <p className="text-xs text-muted-foreground">Check-ins</p>
-              </div>
-              <div className="rounded-lg border bg-card/80 px-4 py-3 backdrop-blur">
-                <p className="text-2xl font-bold">{capacityPercent}%</p>
-                <p className="text-xs text-muted-foreground">Capacity</p>
-              </div>
+      <div className={cn(surface.opening, "p-6 sm:p-7")}>
+        <div className="flex flex-wrap items-center justify-between gap-6">
+          <div className="min-w-0 flex-1 space-y-3.5 text-base leading-snug sm:text-lg">
+            <div
+              className="grid grid-cols-[1.5rem_1fr] items-start gap-x-3"
+              style={{ color: INK.primary }}
+            >
+              <CalendarDays
+                className="mt-0.5 h-5 w-5 shrink-0"
+                style={{ color: BRAND[600] }}
+              />
+              <span>
+                {formatDate(event.startDate)}
+                {toDateOnly(event.startDate) !== toDateOnly(event.endDate)
+                  ? ` – ${formatDate(event.endDate)}`
+                  : ""}
+              </span>
+            </div>
+            <div
+              className="grid grid-cols-[1.5rem_1fr] items-start gap-x-3"
+              style={{ color: INK.primary }}
+            >
+              <Clock
+                className="mt-0.5 h-5 w-5 shrink-0"
+                style={{ color: BRAND[600] }}
+              />
+              <span>
+                {formatSeminarTime(event.startTime)} –{" "}
+                {formatSeminarTime(event.endTime)}
+              </span>
+            </div>
+            <div
+              className="grid grid-cols-[1.5rem_1fr] items-start gap-x-3"
+              style={{ color: INK.primary }}
+            >
+              <MapPin
+                className="mt-0.5 h-5 w-5 shrink-0"
+                style={{ color: BRAND[600] }}
+              />
+              <span className="min-w-0 break-words">
+                {event.venue?.trim() ? event.venue : "Venue TBD"}
+                {event.city ? `, ${event.city}` : ""}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid shrink-0 grid-cols-2 gap-3">
+            <div
+              className="flex min-w-[8.5rem] flex-col items-center justify-center rounded-2xl px-6 py-5 text-center sm:min-w-[10rem]"
+              style={{
+                background: PAPER.muted,
+                border: `1px solid ${LINE.subtle}`,
+              }}
+            >
+              <p
+                className={cn(
+                  displayClass,
+                  "text-3xl font-semibold leading-none tabular-nums sm:text-4xl"
+                )}
+                style={{ color: INK.primary }}
+              >
+                {formatNumber(event.registrationCount)}
+              </p>
+              <p className="mt-2 text-sm leading-none" style={{ color: INK.muted }}>
+                Registrations
+              </p>
+            </div>
+            <div
+              className="flex min-w-[8.5rem] flex-col items-center justify-center rounded-2xl px-6 py-5 text-center sm:min-w-[10rem]"
+              style={{
+                background: PAPER.muted,
+                border: `1px solid ${LINE.subtle}`,
+              }}
+            >
+              <p
+                className={cn(
+                  displayClass,
+                  "text-3xl font-semibold leading-none tabular-nums sm:text-4xl"
+                )}
+                style={{ color: INK.primary }}
+              >
+                {formatNumber(event.checkInCount)}
+              </p>
+              <p className="mt-2 text-sm leading-none" style={{ color: INK.muted }}>
+                Check-ins
+              </p>
             </div>
           </div>
         </div>
-      </Card>
+      </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 bg-muted/50 p-1">
-          <TabsTrigger value="overview" className="gap-1.5">
+        <TabsList
+          className="h-auto w-full justify-start gap-1 rounded-2xl border p-1.5"
+          style={{
+            background: PAPER.muted,
+            borderColor: LINE.subtle,
+          }}
+        >
+          <TabsTrigger
+            value="overview"
+            className="gap-1.5 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm"
+          >
             <FileText className="h-4 w-4" />
             Overview
           </TabsTrigger>
-          <TabsTrigger value="registrations" className="gap-1.5">
+          <TabsTrigger
+            value="registrations"
+            className="gap-1.5 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm"
+          >
             <Users className="h-4 w-4" />
             Registrations
-            <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
-              {event.registrationCount}
-            </Badge>
           </TabsTrigger>
-          <TabsTrigger value="universities" className="gap-1.5">
+          <TabsTrigger
+            value="universities"
+            className="gap-1.5 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm"
+          >
             <GraduationCap className="h-4 w-4" />
             Universities
-          </TabsTrigger>
-          <TabsTrigger value="partners" className="gap-1.5">
-            <Handshake className="h-4 w-4" />
-            Partners
-          </TabsTrigger>
-          <TabsTrigger value="reports" className="gap-1.5">
-            <FileText className="h-4 w-4" />
-            Reports
-          </TabsTrigger>
-          <TabsTrigger value="notifications" className="gap-1.5">
-            <Megaphone className="h-4 w-4" />
-            Notifications
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-6 space-y-6">
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Event Details</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
+          <div className="grid gap-5 lg:grid-cols-2">
+            <div className={cn(surface.opening, "p-6")}>
+              <p className={labelClass}>Details</p>
+              <h3
+                className={cn(displayClass, "mt-1 text-xl font-semibold")}
+                style={{ color: INK.primary }}
+              >
+                Event details
+              </h3>
+              <div className="mt-5 space-y-4">
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Description</p>
+                  <p className={labelClass}>Description</p>
                   <div
-                    className="prose prose-sm mt-1 max-w-none text-foreground"
+                    className="prose prose-sm mt-2 max-w-none"
+                    style={{ color: INK.secondary }}
                     dangerouslySetInnerHTML={{ __html: event.description }}
                   />
                 </div>
-                <Separator />
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div
+                  className="grid gap-4 border-t pt-4 sm:grid-cols-2"
+                  style={{ borderColor: LINE.subtle }}
+                >
                   <div>
-                    <p className="text-xs text-muted-foreground">Venue</p>
-                    <p className="text-sm font-medium">{event.venue}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Address</p>
-                    <p className="text-sm font-medium">
-                      {event.address}, {event.city} – {event.pincode}
+                    <p className={labelClass}>Venue</p>
+                    <p className="mt-1 text-sm font-medium" style={{ color: INK.primary }}>
+                      {event.venue?.trim() ? event.venue : "Venue TBD"}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Registration Deadline</p>
-                    <p className="text-sm font-medium">
+                    <p className={labelClass}>Address</p>
+                    <p className="mt-1 text-sm font-medium" style={{ color: INK.primary }}>
+                      {[event.address, event.city, event.pincode]
+                        .filter(Boolean)
+                        .join(", ") || "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className={labelClass}>Registration deadline</p>
+                    <p className="mt-1 text-sm font-medium" style={{ color: INK.primary }}>
                       {formatDateTime(event.registrationDeadline)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Max Capacity</p>
-                    <p className="text-sm font-medium">
-                      {formatNumber(event.maxCapacity)} attendees
+                    <p className={labelClass}>Audis</p>
+                    <p className="mt-1 text-sm font-medium" style={{ color: INK.primary }}>
+                      {event.hallCount}
                     </p>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Performance Snapshot</CardTitle>
-                <CardDescription>Key metrics at a glance</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Capacity filled</span>
-                    <span className="font-medium">{capacityPercent}%</span>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="h-full rounded-full bg-primary"
-                      style={{ width: `${Math.min(capacityPercent, 100)}%` }}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Check-in rate</span>
-                    <span className="font-medium">{checkInPercent}%</span>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="h-full rounded-full bg-secondary"
-                      style={{ width: `${Math.min(checkInPercent, 100)}%` }}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 pt-2">
-                  <div className="flex items-center gap-3 rounded-lg border p-3">
-                    <GraduationCap className="h-5 w-5 text-primary" />
-                    <div>
-                      <p className="text-lg font-bold">{universities.length}</p>
-                      <p className="text-xs text-muted-foreground">Universities</p>
+            <div className={cn(surface.opening, "p-6")}>
+              <p className={labelClass}>Schedule</p>
+              <h3
+                className={cn(displayClass, "mt-1 text-xl font-semibold")}
+                style={{ color: INK.primary }}
+              >
+                Seminar flow
+              </h3>
+              <div className="mt-5 space-y-5">
+                {(event.seminars?.length ?? 0) === 0 ? (
+                  <EmptyState
+                    icon={Presentation}
+                    title="No seminars scheduled"
+                    description="Add seminars when you edit this event."
+                    className="py-8"
+                  />
+                ) : (
+                  seminarDays.map((day) => (
+                    <div key={day.date} className="space-y-3">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <h4
+                          className="text-sm font-semibold"
+                          style={{ color: BRAND[700] }}
+                        >
+                          {day.dayLabel}
+                        </h4>
+                        <span className="text-xs" style={{ color: INK.muted }}>
+                          {formatDate(day.date)}
+                        </span>
+                      </div>
+                      {day.seminars.length === 0 ? (
+                        <p
+                          className="rounded-xl border border-dashed px-3 py-4 text-sm"
+                          style={{
+                            borderColor: LINE.strong,
+                            color: INK.muted,
+                            background: PAPER.muted,
+                          }}
+                        >
+                          No seminars on this day
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          {day.seminars.map((seminar) => (
+                            <div
+                              key={seminar.id}
+                              className="rounded-xl border px-4 py-3"
+                              style={{
+                                borderColor: LINE.subtle,
+                                background: PAPER.muted,
+                              }}
+                            >
+                              <div className="flex flex-wrap items-start gap-3">
+                                <div className="min-w-[7.5rem] shrink-0">
+                                  <p
+                                    className="text-sm font-semibold tabular-nums"
+                                    style={{ color: INK.primary }}
+                                  >
+                                    {formatSeminarTime(seminar.startTime)}
+                                  </p>
+                                  <p
+                                    className="text-xs tabular-nums"
+                                    style={{ color: INK.muted }}
+                                  >
+                                    to {formatSeminarTime(seminar.endTime)}
+                                  </p>
+                                </div>
+                                <div className="min-w-0 flex-1 space-y-1.5">
+                                  <p
+                                    className="text-sm font-medium leading-snug"
+                                    style={{ color: INK.primary }}
+                                  >
+                                    {seminar.title}
+                                  </p>
+                                  <div className="flex flex-wrap gap-2 text-xs">
+                                    <span
+                                      className="inline-flex items-center rounded-md border bg-white px-2 py-0.5"
+                                      style={{
+                                        borderColor: LINE.subtle,
+                                        color: INK.secondary,
+                                      }}
+                                    >
+                                      Audi {seminar.hall}
+                                    </span>
+                                    <span
+                                      className="inline-flex items-center rounded-md border bg-white px-2 py-0.5"
+                                      style={{
+                                        borderColor: LINE.subtle,
+                                        color: INK.secondary,
+                                      }}
+                                    >
+                                      {seminar.panelistSlots} panelist
+                                      {seminar.panelistSlots === 1 ? "" : "s"}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                  <div className="flex items-center gap-3 rounded-lg border p-3">
-                    <Handshake className="h-5 w-5 text-primary" />
-                    <div>
-                      <p className="text-lg font-bold">{partners.length}</p>
-                      <p className="text-xs text-muted-foreground">Partners</p>
-                    </div>
-                  </div>
-                </div>
-
-                {registrationStatusChart.length > 0 && (
-                  <ResponsiveContainer width="100%" height={180}>
-                    <BarChart data={registrationStatusChart} barSize={28}>
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                      <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                      <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-                      <Tooltip />
-                      <Bar dataKey="value" fill={BRAND.primary} radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  ))
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
         </TabsContent>
 
         <TabsContent value="registrations" className="mt-6">
-          {registrationsQuery.isLoading ? (
-            <TableSkeleton rows={5} columns={5} />
-          ) : registrations.length === 0 ? (
-            <EmptyState
-              icon={Users}
-              title="No registrations yet"
-              description="Student registrations for this event will appear here."
-            />
-          ) : (
-            <DataTable
-              columns={registrationColumns}
-              data={registrations}
-              getRowId={(row) => row.id}
-              emptyMessage="No registrations found."
-            />
-          )}
+          <div className={cn(surface.opening, "overflow-hidden p-4 sm:p-5")}>
+            <div className="mb-4 flex items-baseline gap-2 px-1">
+              <h3
+                className={cn(displayClass, "text-xl font-semibold")}
+                style={{ color: INK.primary }}
+              >
+                Registrations
+              </h3>
+              <span className="text-xl font-semibold" style={{ color: INK.muted }}>
+                –
+              </span>
+              <span
+                className="text-xl font-semibold tabular-nums"
+                style={{ color: INK.muted }}
+              >
+                {formatNumber(registrations.length || event.registrationCount)}
+              </span>
+            </div>
+            {registrationsQuery.isLoading ? (
+              <TableSkeleton rows={5} columns={3} />
+            ) : registrations.length === 0 ? (
+              <EmptyState
+                icon={Users}
+                title="No registrations yet"
+                description="Student registrations for this event will appear here."
+              />
+            ) : (
+              <DataTable
+                columns={registrationColumns}
+                data={registrations}
+                getRowId={(row) => row.id}
+                emptyMessage="No registrations found."
+              />
+            )}
+          </div>
         </TabsContent>
 
         <TabsContent value="universities" className="mt-6">
-          {universitiesQuery.isLoading ? (
-            <TableSkeleton rows={4} columns={5} />
-          ) : universities.length === 0 ? (
-            <EmptyState
-              icon={GraduationCap}
-              title="No universities linked"
-              description="Universities participating in this event will appear here."
-              action={{
-                label: "Invite University",
-                onClick: () => {},
-              }}
-            />
-          ) : (
-            <DataTable
-              columns={universityColumns}
-              data={universities}
-              getRowId={(row) => row.id}
-            />
-          )}
-        </TabsContent>
-
-        <TabsContent value="partners" className="mt-6">
-          {partnersQuery.isLoading ? (
-            <TableSkeleton rows={4} columns={5} />
-          ) : partners.length === 0 ? (
-            <EmptyState
-              icon={Handshake}
-              title="No partners linked"
-              description="Sponsors and partners for this event will appear here."
-            />
-          ) : (
-            <DataTable
-              columns={partnerColumns}
-              data={partners}
-              getRowId={(row) => row.id}
-            />
-          )}
-        </TabsContent>
-
-        <TabsContent value="reports" className="mt-6">
-          {reportsQuery.isLoading ? (
-            <TableSkeleton rows={3} columns={4} />
-          ) : eventReports.length === 0 ? (
-            <EmptyState
-              icon={FileText}
-              title="No reports available"
-              description="Generated reports related to this event will appear here."
-              action={{
-                label: "Generate Report",
-                onClick: () => {},
-              }}
-            />
-          ) : (
-            <DataTable
-              columns={reportColumns}
-              data={eventReports}
-              getRowId={(row) => row.id}
-            />
-          )}
-        </TabsContent>
-
-        <TabsContent value="notifications" className="mt-6">
-          {notificationsQuery.isLoading ? (
-            <TableSkeleton rows={4} columns={5} />
-          ) : eventNotifications.length === 0 ? (
-            <EmptyState
-              icon={Megaphone}
-              title="No notifications sent"
-              description="Notifications for this event will appear here."
-              action={{
-                label: "Send Notification",
-                onClick: () => {},
-              }}
-            />
-          ) : (
-            <DataTable
-              columns={notificationColumns}
-              data={eventNotifications}
-              getRowId={(row) => row.id}
-            />
-          )}
+          <div className={cn(surface.opening, "overflow-hidden p-4 sm:p-5")}>
+            <div className="mb-4 flex items-baseline gap-2 px-1">
+              <h3
+                className={cn(displayClass, "text-xl font-semibold")}
+                style={{ color: INK.primary }}
+              >
+                Universities
+              </h3>
+              <span className="text-xl font-semibold" style={{ color: INK.muted }}>
+                –
+              </span>
+              <span
+                className="text-xl font-semibold tabular-nums"
+                style={{ color: INK.muted }}
+              >
+                {formatNumber(universities.length)}
+              </span>
+            </div>
+            {universitiesQuery.isLoading ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} className="h-28 rounded-xl" />
+                ))}
+              </div>
+            ) : universities.length === 0 ? (
+              <EmptyState
+                icon={GraduationCap}
+                title="No universities yet"
+                description="Universities that take a sponsorship package for this event will appear here."
+              />
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {universities.map((uni) => (
+                  <div
+                    key={uni.id}
+                    className="rounded-xl border px-4 py-3.5"
+                    style={{
+                      borderColor: LINE.subtle,
+                      background: PAPER.muted,
+                    }}
+                  >
+                    <p
+                      className="text-sm font-semibold leading-snug"
+                      style={{ color: INK.primary }}
+                    >
+                      {uni.name}
+                    </p>
+                    <div
+                      className="mt-3 space-y-1 text-xs"
+                      style={{ color: INK.secondary }}
+                    >
+                      <p>
+                        {[uni.city, uni.state].filter(Boolean).join(", ") || "—"}
+                      </p>
+                      <p>{uni.contactPerson}</p>
+                      <p className="truncate">
+                        {[uni.contactPhone, uni.contactEmail]
+                          .filter(Boolean)
+                          .join(" | ") || "—"}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </TabsContent>
       </Tabs>
     </motion.div>
