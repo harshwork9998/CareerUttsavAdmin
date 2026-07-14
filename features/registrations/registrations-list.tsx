@@ -97,7 +97,7 @@ function uniqueSorted(
 
 export function RegistrationsList() {
   const [search, setSearch] = useState("");
-  const [eventCityFilter, setEventCityFilter] = useState("all");
+  const [eventCityFilter, setEventCityFilter] = useState<string[]>([]);
   const [classFilter, setClassFilter] = useState("all");
   const [streamFilter, setStreamFilter] = useState("all");
   const [boardFilter, setBoardFilter] = useState("all");
@@ -173,9 +173,9 @@ export function RegistrationsList() {
     const query = search.trim().toLowerCase();
 
     return registrations.filter((r) => {
-      if (eventCityFilter !== "all") {
+      if (eventCityFilter.length > 0) {
         const eventCity = resolveEventCity(r, eventCityById);
-        if (eventCity !== eventCityFilter) return false;
+        if (!eventCity || !eventCityFilter.includes(eventCity)) return false;
       }
       if (classFilter !== "all" && r.classLabel !== classFilter) return false;
       if (streamFilter !== "all" && r.interestedStream !== streamFilter)
@@ -234,7 +234,7 @@ export function RegistrationsList() {
   };
 
   const clearFilters = () => {
-    setEventCityFilter("all");
+    setEventCityFilter([]);
     setClassFilter("all");
     setStreamFilter("all");
     setBoardFilter("all");
@@ -246,7 +246,7 @@ export function RegistrationsList() {
 
   const hasActiveFilters =
     Boolean(search.trim()) ||
-    eventCityFilter !== "all" ||
+    eventCityFilter.length > 0 ||
     classFilter !== "all" ||
     streamFilter !== "all" ||
     boardFilter !== "all" ||
@@ -405,12 +405,14 @@ export function RegistrationsList() {
           {
             id: "event",
             label: "Event",
-            value: eventCityFilter,
+            mode: "multi",
+            values: eventCityFilter,
             onChange: (v) => {
               setEventCityFilter(v);
               setPage(1);
             },
             options: eventCityOptions,
+            placeholder: "All cities",
           },
           {
             id: "class",

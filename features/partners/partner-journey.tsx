@@ -1,0 +1,1680 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  ArrowRight,
+  Check,
+  Lock,
+  Loader2,
+  Plus,
+  Trash2,
+} from "lucide-react";
+import { toast } from "sonner";
+
+import {
+  RELATIONSHIP_OWNER_ORGS,
+  SPONSORSHIP_TIERS,
+  PARTNER_DELIVERABLE_DEFINITIONS,
+  applyTierDefaultsPreservingCustom,
+  buildDeliverablesForTier,
+} from "@/constants";
+import { eventsService, partnersService } from "@/services/api";
+import { DateField } from "@/features/events/event-datetime-fields";
+import {
+  BRAND,
+  INK,
+  LINE,
+  PAPER,
+  displayClass,
+} from "@/features/dashboard/dashboard-ui";
+import { cn, generateId } from "@/lib/utils";
+import type {
+  Partner,
+  PartnerContact,
+  PartnerDeliverable,
+  PartnerLifecycleStage,
+  PartnerSeminarSlotAssignment,
+  RelationshipOwner,
+  SponsorshipTier,
+} from "@/types";
+import { ChapterSeminarSlots } from "@/features/partners/chapter-seminar-slots";
+import {
+  ChapterCommercials,
+  parseAmount,
+} from "@/features/partners/chapter-commercials";
+import { ChapterPartnerInvite } from "@/features/partners/chapter-partner-invite";
+import {
+  generatePartnerLogin,
+  generateTempPassword,
+} from "@/lib/partner-invite";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+const EVENT_CITIES = ["Bangalore", "Mysore", "Hubli"] as const;
+const CUSTOM_ORG = "__custom__";
+
+type ChapterId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+
+const CHAPTERS: Array<{
+  id: ChapterId;
+  title: string;
+}> = [
+  { id: 1, title: "University details" },
+  { id: 2, title: "First contact" },
+  { id: 3, title: "Meeting scheduled" },
+  { id: 4, title: "Partnership details" },
+  { id: 5, title: "Deliverables" },
+  { id: 6, title: "Seminar slots" },
+  { id: 7, title: "Commercials" },
+  { id: 8, title: "Partner access" },
+];
+
+const emptyContact = (): PartnerContact => ({
+  name: "",
+  designation: "",
+  phone: "",
+  email: "",
+});
+
+const emptyOwner = (): RelationshipOwner => ({
+  organization: "",
+  managerName: "",
+  managerPhone: "",
+  managerEmail: "",
+});
+
+function maxUnlockedChapter(partner: Partner | null): ChapterId {
+  if (!partner) return 1;
+  if (!partner.contactedAt) return 2;
+  if (!partner.meetingAt) return 3;
+  if (!partner.sponsorshipTier) return 4;
+  if (!partner.deliverablesConfirmedAt) return 5;
+  if (!partner.seminarSlotsConfirmedAt) return 6;
+  if (!partner.commercialsConfirmedAt) return 7;
+  return 8;
+}
+
+function startingChapter(partner: Partner | null): ChapterId {
+  if (!partner) return 1;
+  if (!partner.contactedAt) return 2;
+  if (!partner.meetingAt) return 3;
+  const ownerReady = Boolean(partner.relationshipOwner?.managerName);
+  const eventsReady = partner.eventIds.length > 0;
+  if (!ownerReady || !eventsReady || !partner.sponsorshipTier) return 4;
+  if (!partner.deliverablesConfirmedAt) return 5;
+  if (!partner.seminarSlotsConfirmedAt) return 6;
+  if (!partner.commercialsConfirmedAt) return 7;
+  return 8;
+}
+
+export function PartnerJourney({ partnerId }: { partnerId?: string }) {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const isNew = !partnerId;
+
+  const partnerQuery = useQuery({
+    queryKey: ["partners", partnerId],
+    queryFn: () => partnersService.getById(partnerId!),
+    enabled: Boolean(partnerId),
+  });
+
+  const eventsQuery = useQuery({
+    queryKey: ["events"],
+    queryFn: () => eventsService.getAll(),
+  });
+
+  const allPartnersQuery = useQuery({
+    queryKey: ["partners"],
+    queryFn: () => partnersService.getAll(),
+  });
+
+  const partner = partnerQuery.data ?? null;
+  const unlocked = maxUnlockedChapter(isNew ? null : partner);
+  const [chapter, setChapter] = useState<ChapterId>(1);
+
+  useEffect(() => {
+    if (isNew) {
+      setChapter(1);
+      return;
+    }
+    if (partner) setChapter(startingChapter(partner));
+  }, [
+    isNew,
+    partner?.id,
+    partner?.contactedAt,
+    partner?.meetingAt,
+    partner?.deliverablesConfirmedAt,
+    partner?.seminarSlotsConfirmedAt,
+    partner?.commercialsConfirmedAt,
+  ]);
+
+  const events = useMemo(
+    () =>
+      (eventsQuery.data ?? []).filter((e) =>
+        EVENT_CITIES.includes(e.city as (typeof EVENT_CITIES)[number])
+      ),
+    [eventsQuery.data]
+  );
+
+  const allPartners = allPartnersQuery.data ?? [];
+
+  // Chapter 1
+  const [name, setName] = useState("");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  const [primary, setPrimary] = useState<PartnerContact>(emptyContact());
+  const [secondary, setSecondary] = useState<PartnerContact>(emptyContact());
+
+  // Chapter 2
+  const [contactedAt, setContactedAt] = useState("");
+  const [contactedNotes, setContactedNotes] = useState("");
+
+  // Chapter 3
+  const [meetingAt, setMeetingAt] = useState("");
+  const [meetingNotes, setMeetingNotes] = useState("");
+
+  // Chapter 4
+  const [orgChoice, setOrgChoice] = useState<string>("K2");
+  const [customOrg, setCustomOrg] = useState("");
+  const [managerName, setManagerName] = useState("");
+  const [managerPhone, setManagerPhone] = useState("");
+  const [managerEmail, setManagerEmail] = useState("");
+  const [eventIds, setEventIds] = useState<string[]>([]);
+  const [sponsorshipTier, setSponsorshipTier] = useState("");
+  const [sponsorshipNotes, setSponsorshipNotes] = useState("");
+  const [deliverables, setDeliverables] = useState<PartnerDeliverable[]>([]);
+  const [slotAssignments, setSlotAssignments] = useState<
+    PartnerSeminarSlotAssignment[]
+  >([]);
+  const [totalAmount, setTotalAmount] = useState("");
+  const [discountAmount, setDiscountAmount] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [portalLogin, setPortalLogin] = useState("");
+  const [tempPassword, setTempPassword] = useState("");
+  const [notProceedingOpen, setNotProceedingOpen] = useState(false);
+  const [notProceedingReason, setNotProceedingReason] = useState("");
+  const [notProceedingError, setNotProceedingError] = useState("");
+  const [resetOpen, setResetOpen] = useState(false);
+  const [seminarSlotsUiKey, setSeminarSlotsUiKey] = useState(0);
+
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!partner) return;
+    setName(partner.name);
+    setCity(partner.city);
+    setState(partner.state);
+    setPrimary({ ...partner.primaryContact });
+    setSecondary({ ...partner.secondaryContact });
+    setContactedAt(partner.contactedAt ?? "");
+    setContactedNotes(partner.contactedNotes ?? "");
+    setMeetingAt(partner.meetingAt ?? "");
+    setMeetingNotes(partner.meetingNotes ?? "");
+    const org = partner.relationshipOwner?.organization ?? "";
+    if (
+      RELATIONSHIP_OWNER_ORGS.includes(
+        org as (typeof RELATIONSHIP_OWNER_ORGS)[number]
+      )
+    ) {
+      setOrgChoice(org);
+      setCustomOrg("");
+    } else if (org) {
+      setOrgChoice(CUSTOM_ORG);
+      setCustomOrg(org);
+    } else {
+      setOrgChoice("K2");
+      setCustomOrg("");
+    }
+    setManagerName(partner.relationshipOwner?.managerName ?? "");
+    setManagerPhone(partner.relationshipOwner?.managerPhone ?? "");
+    setManagerEmail(partner.relationshipOwner?.managerEmail ?? "");
+    setEventIds([...partner.eventIds]);
+    setSponsorshipTier(partner.sponsorshipTier ?? "");
+    setSponsorshipNotes(partner.sponsorshipNotes ?? "");
+    if (partner.deliverables?.length) {
+      setDeliverables(partner.deliverables.map((d) => ({ ...d })));
+    } else if (partner.sponsorshipTier) {
+      setDeliverables(
+        applyTierDefaultsPreservingCustom(
+          partner.sponsorshipTier,
+          undefined,
+          generateId
+        )
+      );
+    } else {
+      setDeliverables([]);
+    }
+    setSlotAssignments(
+      (partner.seminarSlotAssignments ?? []).map((a) => ({ ...a }))
+    );
+    setTotalAmount(
+      partner.totalAmount != null && partner.totalAmount > 0
+        ? String(partner.totalAmount)
+        : ""
+    );
+    setDiscountAmount(
+      partner.discountAmount != null && partner.discountAmount > 0
+        ? String(partner.discountAmount)
+        : ""
+    );
+    setInviteEmail(
+      partner.portalInviteEmail || partner.primaryContact.email || ""
+    );
+    setPortalLogin(partner.portalLogin || generatePartnerLogin(partner));
+    setTempPassword((prev) => partner.portalTempPassword || prev || generateTempPassword());
+  }, [partner]);
+
+  const persistCache = (saved: Partner) => {
+    queryClient.setQueryData(["partners", saved.id], saved);
+    queryClient.setQueryData<Partner[]>(["partners"], (old) => {
+      if (!old) return [saved];
+      const exists = old.some((p) => p.id === saved.id);
+      return exists
+        ? old.map((p) => (p.id === saved.id ? saved : p))
+        : [saved, ...old];
+    });
+    void queryClient.invalidateQueries({ queryKey: ["partners"] });
+  };
+
+  const saveMutation = useMutation({
+    mutationFn: async (payload: {
+      data: Partial<Partner> &
+        Pick<
+          Partner,
+          | "name"
+          | "city"
+          | "state"
+          | "primaryContact"
+          | "secondaryContact"
+          | "eventIds"
+          | "relationshipOwner"
+          | "stage"
+          | "stageRemarks"
+        >;
+      create: boolean;
+      advance: boolean;
+      isFinal?: boolean;
+      markNotProceeding?: boolean;
+    }) => {
+      if (payload.create) {
+        return partnersService.create(payload.data);
+      }
+      return partnersService.update(partnerId!, payload.data);
+    },
+    onSuccess: (saved, vars) => {
+      if (!saved) {
+        toast.error("Could not save this step");
+        return;
+      }
+      persistCache(saved);
+      if (vars.markNotProceeding) {
+        toast.success("Marked as not proceeding");
+        router.push("/partners");
+        return;
+      }
+      if (vars.create) {
+        router.replace(`/partners/${saved.id}`);
+        return;
+      }
+      if (vars.isFinal) {
+        toast.success("Welcome email sent with partner login");
+        router.push("/partners");
+        return;
+      }
+      if (vars.advance && chapter < 8) {
+        setChapter((Math.min(8, chapter + 1) as ChapterId));
+      }
+    },
+    onError: () => toast.error("Could not save this step"),
+  });
+
+  const goChapter = (id: ChapterId) => {
+    if (id > unlocked) return;
+    setErrors({});
+    setChapter(id);
+  };
+
+  const pushRemark = (
+    from: PartnerLifecycleStage,
+    to: PartnerLifecycleStage,
+    remark: string
+  ) => {
+    const existing = partner?.stageRemarks ?? [];
+    return [
+      {
+        id: generateId(),
+        fromStage: from,
+        toStage: to,
+        remark,
+        createdAt: new Date().toISOString(),
+      },
+      ...existing,
+    ];
+  };
+
+  const submitChapter1 = () => {
+    const next: Record<string, string> = {};
+    if (!name.trim()) next.name = "Required";
+    if (!city.trim()) next.city = "Required";
+    if (!state.trim()) next.state = "Required";
+    if (!primary.name.trim() || !primary.phone.trim() || !primary.email.trim()) {
+      next.primary = "Primary contact needs name, phone & email";
+    }
+    if (
+      !secondary.name.trim() ||
+      !secondary.phone.trim() ||
+      !secondary.email.trim()
+    ) {
+      next.secondary = "Secondary contact needs name, phone & email";
+    }
+    setErrors(next);
+    if (Object.keys(next).length) return;
+
+    const base = {
+      name: name.trim(),
+      city: city.trim(),
+      state: state.trim(),
+      primaryContact: { ...primary },
+      secondaryContact: { ...secondary },
+      eventIds: partner?.eventIds ?? [],
+      relationshipOwner: partner?.relationshipOwner ?? emptyOwner(),
+      stage: "New" as const,
+      stageRemarks: partner?.stageRemarks ?? [],
+      contactedAt: partner?.contactedAt,
+      contactedNotes: partner?.contactedNotes,
+      meetingAt: partner?.meetingAt,
+      meetingNotes: partner?.meetingNotes,
+      sponsorshipTier: partner?.sponsorshipTier,
+      sponsorshipNotes: partner?.sponsorshipNotes,
+      deliverables: partner?.deliverables,
+      deliverablesConfirmedAt: partner?.deliverablesConfirmedAt,
+      seminarSlotAssignments: partner?.seminarSlotAssignments,
+      seminarSlotsConfirmedAt: partner?.seminarSlotsConfirmedAt,
+      totalAmount: partner?.totalAmount,
+      discountAmount: partner?.discountAmount,
+      netAmount: partner?.netAmount,
+      commercialsConfirmedAt: partner?.commercialsConfirmedAt,
+      portalLogin: partner?.portalLogin,
+      portalTempPassword: partner?.portalTempPassword,
+      portalInviteEmail: partner?.portalInviteEmail,
+      portalInviteSentAt: partner?.portalInviteSentAt,
+    };
+
+    saveMutation.mutate({ create: isNew, data: base, advance: true });
+  };
+
+  const submitChapter2 = () => {
+    if (!partner) return;
+    if (!contactedAt) {
+      setErrors({ contactedAt: "Contact date is required" });
+      return;
+    }
+    setErrors({});
+    saveMutation.mutate({
+      create: false,
+      advance: true,
+      data: {
+        ...partner,
+        contactedAt,
+        contactedNotes: contactedNotes.trim(),
+        stage: "Contacted",
+        stageRemarks: pushRemark(
+          partner.stage,
+          "Contacted",
+          contactedNotes.trim() || "Marked as contacted"
+        ),
+      },
+    });
+  };
+
+  const submitChapter3 = () => {
+    if (!partner) return;
+    if (!meetingAt) {
+      setErrors({ meetingAt: "Meeting date is required" });
+      return;
+    }
+    setErrors({});
+    saveMutation.mutate({
+      create: false,
+      advance: true,
+      data: {
+        ...partner,
+        meetingAt,
+        meetingNotes: meetingNotes.trim(),
+        stage: "Meeting Scheduled",
+        stageRemarks: pushRemark(
+          partner.stage,
+          "Meeting Scheduled",
+          meetingNotes.trim() || "Meeting scheduled"
+        ),
+      },
+    });
+  };
+
+  const submitChapter4 = () => {
+    if (!partner) return;
+    const organization =
+      orgChoice === CUSTOM_ORG ? customOrg.trim() : orgChoice;
+    const next: Record<string, string> = {};
+    if (!organization) next.org = "Required";
+    if (!managerName.trim()) next.mName = "Required";
+    if (!managerPhone.trim()) next.mPhone = "Required";
+    if (!managerEmail.trim()) next.mEmail = "Required";
+    if (eventIds.length === 0) next.events = "Select at least one event";
+    if (!sponsorshipTier) next.tier = "Select a sponsorship tier";
+    setErrors(next);
+    if (Object.keys(next).length) return;
+
+    const tier = sponsorshipTier as SponsorshipTier;
+    const tierUnchanged = partner.sponsorshipTier === tier;
+    const nextDeliverables =
+      tierUnchanged && deliverables.length > 0
+        ? deliverables
+        : applyTierDefaultsPreservingCustom(
+            tier,
+            deliverables.length ? deliverables : partner.deliverables,
+            generateId
+          );
+
+    setDeliverables(nextDeliverables);
+
+    saveMutation.mutate({
+      create: false,
+      advance: true,
+      data: {
+        ...partner,
+        relationshipOwner: {
+          organization,
+          managerName: managerName.trim(),
+          managerPhone: managerPhone.trim(),
+          managerEmail: managerEmail.trim(),
+        },
+        eventIds,
+        sponsorshipTier: tier,
+        sponsorshipNotes: sponsorshipNotes.trim(),
+        deliverables: nextDeliverables,
+        deliverablesConfirmedAt: tierUnchanged
+          ? partner.deliverablesConfirmedAt
+          : undefined,
+        stage: "Negotiation",
+        stageRemarks: pushRemark(
+          partner.stage,
+          "Negotiation",
+          sponsorshipNotes.trim() || "Partnership terms captured"
+        ),
+      },
+    });
+  };
+
+  const submitChapter5 = () => {
+    if (!partner) return;
+    const next: Record<string, string> = {};
+    for (const item of deliverables) {
+      if (!item.included) continue;
+      const def = PARTNER_DELIVERABLE_DEFINITIONS.find((d) => d.key === item.key);
+      if (def?.options?.length && !item.option) {
+        next[item.id] = "Select an option";
+      }
+      if (item.isCustom && !item.label.trim()) {
+        next[item.id] = "Label required";
+      }
+    }
+    setErrors(next);
+    if (Object.keys(next).length) return;
+
+    saveMutation.mutate({
+      create: false,
+      advance: true,
+      data: {
+        ...partner,
+        deliverables: deliverables.map((d) => ({
+          ...d,
+          label: d.label.trim(),
+        })),
+        deliverablesConfirmedAt: new Date().toISOString(),
+      },
+    });
+  };
+
+  const submitChapter6 = () => {
+    if (!partner) return;
+    const next: Record<string, string> = {};
+    for (const eventId of partner.eventIds) {
+      const count = slotAssignments
+        .filter((a) => a.eventId === eventId)
+        .reduce((s, a) => s + a.slots, 0);
+      if (count < 1) {
+        next[`event-${eventId}`] = "Allot at least one seminar slot for this event";
+      }
+    }
+    setErrors(next);
+    if (Object.keys(next).length) return;
+
+    saveMutation.mutate({
+      create: false,
+      advance: true,
+      data: {
+        ...partner,
+        seminarSlotAssignments: slotAssignments.map((a) => ({
+          eventId: a.eventId,
+          seminarId: a.seminarId,
+          slots: a.slots,
+        })),
+        seminarSlotsConfirmedAt: new Date().toISOString(),
+      },
+    });
+  };
+
+  const submitChapter7 = () => {
+    if (!partner) return;
+    const total = parseAmount(totalAmount);
+    const discount = parseAmount(discountAmount);
+    const next: Record<string, string> = {};
+    if (total <= 0) next.totalAmount = "Enter total amount";
+    if (discount < 0) next.discountAmount = "Invalid discount";
+    if (discount > total) next.discountAmount = "Discount cannot exceed total";
+    setErrors(next);
+    if (Object.keys(next).length) return;
+
+    const net = Math.max(0, total - discount);
+    saveMutation.mutate({
+      create: false,
+      advance: true,
+      data: {
+        ...partner,
+        totalAmount: total,
+        discountAmount: discount,
+        netAmount: net,
+        commercialsConfirmedAt: new Date().toISOString(),
+      },
+    });
+  };
+
+  const submitChapter8 = () => {
+    if (!partner) return;
+    const email = inviteEmail.trim();
+    const next: Record<string, string> = {};
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      next.inviteEmail = "Enter a valid email";
+    }
+    if (!portalLogin.trim()) next.login = "Login required";
+    if (!tempPassword.trim()) next.password = "Password required";
+    setErrors(next);
+    if (Object.keys(next).length) return;
+
+    // Mock send — credentials are persisted for the partner portal.
+    saveMutation.mutate({
+      create: false,
+      advance: false,
+      isFinal: true,
+      data: {
+        ...partner,
+        portalLogin: portalLogin.trim(),
+        portalTempPassword: tempPassword,
+        portalInviteEmail: email,
+        portalInviteSentAt: new Date().toISOString(),
+        stage: partner.stage === "Not Proceeding" ? partner.stage : "Confirmed",
+        stageRemarks: pushRemark(
+          partner.stage,
+          partner.stage === "Not Proceeding" ? "Not Proceeding" : "Confirmed",
+          `Partner access emailed to ${email}`
+        ),
+      },
+    });
+  };
+
+  const confirmNotProceeding = () => {
+    if (!partner) return;
+    const reason = notProceedingReason.trim();
+    if (!reason) {
+      setNotProceedingError("Reason is required");
+      return;
+    }
+    setNotProceedingError("");
+    saveMutation.mutate({
+      create: false,
+      advance: false,
+      markNotProceeding: true,
+      data: {
+        ...partner,
+        stage: "Not Proceeding",
+        notProceedingAt: new Date().toISOString(),
+        notProceedingReason: reason,
+        stageRemarks: pushRemark(partner.stage, "Not Proceeding", reason),
+      },
+    });
+  };
+
+  const canMarkNotProceeding =
+    Boolean(partner) &&
+    chapter >= 2 &&
+    partner?.stage !== "Not Proceeding";
+
+  const canResetPage = Boolean(partner) && chapter >= 2;
+
+  const resetCurrentPage = () => {
+    if (!partner) return;
+    setErrors({});
+
+    if (chapter === 2) {
+      setContactedAt(partner.contactedAt ?? "");
+      setContactedNotes(partner.contactedNotes ?? "");
+    } else if (chapter === 3) {
+      setMeetingAt(partner.meetingAt ?? "");
+      setMeetingNotes(partner.meetingNotes ?? "");
+    } else if (chapter === 4) {
+      const org = partner.relationshipOwner?.organization ?? "";
+      if (
+        RELATIONSHIP_OWNER_ORGS.includes(
+          org as (typeof RELATIONSHIP_OWNER_ORGS)[number]
+        )
+      ) {
+        setOrgChoice(org);
+        setCustomOrg("");
+      } else if (org) {
+        setOrgChoice(CUSTOM_ORG);
+        setCustomOrg(org);
+      } else {
+        setOrgChoice("K2");
+        setCustomOrg("");
+      }
+      setManagerName(partner.relationshipOwner?.managerName ?? "");
+      setManagerPhone(partner.relationshipOwner?.managerPhone ?? "");
+      setManagerEmail(partner.relationshipOwner?.managerEmail ?? "");
+      setEventIds([...partner.eventIds]);
+      setSponsorshipTier(partner.sponsorshipTier ?? "");
+      setSponsorshipNotes(partner.sponsorshipNotes ?? "");
+    } else if (chapter === 5) {
+      if (partner.sponsorshipTier) {
+        setDeliverables(
+          buildDeliverablesForTier(partner.sponsorshipTier, generateId)
+        );
+      } else {
+        setDeliverables([]);
+      }
+    } else if (chapter === 6) {
+      setSlotAssignments([]);
+      setSeminarSlotsUiKey((key) => key + 1);
+    } else if (chapter === 7) {
+      setTotalAmount("");
+      setDiscountAmount("");
+    } else if (chapter === 8) {
+      if (!partner) return;
+      setInviteEmail(partner.primaryContact.email || "");
+      setPortalLogin(generatePartnerLogin(partner));
+      setTempPassword(generateTempPassword());
+    }
+
+    setResetOpen(false);
+    toast.success("Page reset");
+  };
+
+  if (partnerId && partnerQuery.isLoading) {
+    return (
+      <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
+        <Skeleton className="h-[420px] rounded-2xl" />
+        <Skeleton className="h-[520px] rounded-2xl" />
+      </div>
+    );
+  }
+
+  if (partnerId && (partnerQuery.isError || !partner)) {
+    return (
+      <div className="rounded-2xl border p-10 text-center" style={{ borderColor: LINE.subtle }}>
+        <p className="text-lg font-semibold" style={{ color: INK.primary }}>
+          Journey not found
+        </p>
+        <Button className="mt-4" variant="outline" onClick={() => router.push("/partners")}>
+          Back to partners
+        </Button>
+      </div>
+    );
+  }
+
+  const meta = CHAPTERS.find((c) => c.id === chapter)!;
+
+  return (
+    <div className="pb-12">
+      <header className="mb-8">
+        <h1
+          className={cn(displayClass, "text-3xl font-bold tracking-tight sm:text-4xl")}
+          style={{ color: INK.primary }}
+        >
+          {partner?.name || "New partner"}
+        </h1>
+      </header>
+
+      <div className="grid gap-8 lg:grid-cols-[220px_minmax(0,1fr)]">
+        <nav
+          className="relative h-fit rounded-2xl border p-5 lg:sticky lg:top-6"
+          style={{
+            borderColor: LINE.subtle,
+            background: `linear-gradient(180deg, ${PAPER.surface} 0%, ${PAPER.muted} 100%)`,
+          }}
+          aria-label="Journey steps"
+        >
+          <div
+            className="absolute bottom-8 left-[34px] top-8 w-px"
+            style={{ background: LINE.strong }}
+            aria-hidden
+          />
+          <ol className="relative space-y-5">
+            {CHAPTERS.map((c) => {
+              const isLocked = c.id > unlocked;
+              const isDone =
+                c.id < unlocked ||
+                (c.id === 8 && Boolean(partner?.portalInviteSentAt));
+              const isActive = c.id === chapter;
+              return (
+                <li key={c.id}>
+                  <button
+                    type="button"
+                    onClick={() => goChapter(c.id)}
+                    disabled={isLocked}
+                    className={cn(
+                      "flex w-full items-center gap-3 text-left transition-opacity",
+                      isLocked && "cursor-not-allowed opacity-45"
+                    )}
+                  >
+                    <span
+                      className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold"
+                      style={{
+                        background: isActive || isDone ? BRAND[700] : PAPER.surface,
+                        color: isActive || isDone ? "#fff" : INK.muted,
+                        border: `2px solid ${isActive ? BRAND[700] : isDone ? BRAND[700] : LINE.strong}`,
+                        boxShadow: isActive
+                          ? `0 0 0 3px ${BRAND[50]}`
+                          : undefined,
+                      }}
+                    >
+                      {isLocked ? (
+                        <Lock className="h-3.5 w-3.5" />
+                      ) : isDone && !isActive ? (
+                        <Check className="h-3.5 w-3.5" />
+                      ) : (
+                        c.id
+                      )}
+                    </span>
+                    <span
+                      className="text-sm font-semibold leading-tight"
+                      style={{ color: isActive ? INK.primary : INK.secondary }}
+                    >
+                      {c.title}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        </nav>
+
+        <div
+          className="overflow-hidden rounded-3xl border"
+          style={{
+            borderColor: LINE.subtle,
+            background: PAPER.surface,
+            boxShadow: "0 24px 60px -36px rgba(18, 35, 63, 0.35)",
+          }}
+        >
+          <div className="relative overflow-hidden px-6 py-8 sm:px-10 sm:py-10">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={chapter}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -12 }}
+                transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                className="space-y-8"
+              >
+                <div className="flex items-center gap-3">
+                  <span
+                    className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold"
+                    style={{
+                      background: BRAND[700],
+                      color: "#fff",
+                      boxShadow: `0 0 0 4px ${BRAND[50]}`,
+                    }}
+                  >
+                    {chapter}
+                  </span>
+                  <h2
+                    className={cn(displayClass, "text-2xl font-bold sm:text-3xl")}
+                    style={{ color: INK.primary }}
+                  >
+                    {meta.title}
+                  </h2>
+                </div>
+
+                {chapter === 1 && (
+                  <ChapterUniversity
+                    name={name}
+                    setName={setName}
+                    city={city}
+                    setCity={setCity}
+                    state={state}
+                    setState={setState}
+                    primary={primary}
+                    setPrimary={setPrimary}
+                    secondary={secondary}
+                    setSecondary={setSecondary}
+                    errors={errors}
+                  />
+                )}
+
+                {chapter === 2 && (
+                  <ChapterContacted
+                    contactedAt={contactedAt}
+                    setContactedAt={setContactedAt}
+                    contactedNotes={contactedNotes}
+                    setContactedNotes={setContactedNotes}
+                    errors={errors}
+                  />
+                )}
+
+                {chapter === 3 && (
+                  <ChapterMeeting
+                    meetingAt={meetingAt}
+                    setMeetingAt={setMeetingAt}
+                    meetingNotes={meetingNotes}
+                    setMeetingNotes={setMeetingNotes}
+                    errors={errors}
+                  />
+                )}
+
+                {chapter === 4 && (
+                  <ChapterPartnership
+                    orgChoice={orgChoice}
+                    setOrgChoice={setOrgChoice}
+                    customOrg={customOrg}
+                    setCustomOrg={setCustomOrg}
+                    managerName={managerName}
+                    setManagerName={setManagerName}
+                    managerPhone={managerPhone}
+                    setManagerPhone={setManagerPhone}
+                    managerEmail={managerEmail}
+                    setManagerEmail={setManagerEmail}
+                    eventIds={eventIds}
+                    setEventIds={setEventIds}
+                    events={events}
+                    sponsorshipTier={sponsorshipTier}
+                    setSponsorshipTier={setSponsorshipTier}
+                    sponsorshipNotes={sponsorshipNotes}
+                    setSponsorshipNotes={setSponsorshipNotes}
+                    errors={errors}
+                  />
+                )}
+
+                {chapter === 5 && (
+                  <ChapterDeliverables
+                    deliverables={deliverables}
+                    setDeliverables={setDeliverables}
+                    errors={errors}
+                  />
+                )}
+
+                {chapter === 6 && partner && (
+                  <ChapterSeminarSlots
+                    key={seminarSlotsUiKey}
+                    partnerId={partner.id}
+                    eventIds={partner.eventIds}
+                    events={eventsQuery.data ?? []}
+                    allPartners={allPartners}
+                    assignments={slotAssignments}
+                    setAssignments={setSlotAssignments}
+                    errors={errors}
+                  />
+                )}
+
+                {chapter === 7 && (
+                  <ChapterCommercials
+                    totalAmount={totalAmount}
+                    setTotalAmount={setTotalAmount}
+                    discountAmount={discountAmount}
+                    setDiscountAmount={setDiscountAmount}
+                    deliverables={deliverables}
+                    slotAssignments={slotAssignments}
+                    events={eventsQuery.data ?? []}
+                    errors={errors}
+                  />
+                )}
+
+                {chapter === 8 && partner && (
+                  <ChapterPartnerInvite
+                    partnerName={partner.name}
+                    inviteEmail={inviteEmail}
+                    setInviteEmail={setInviteEmail}
+                    login={portalLogin}
+                    temporaryPassword={tempPassword}
+                    onRegeneratePassword={() =>
+                      setTempPassword(generateTempPassword())
+                    }
+                    errors={errors}
+                  />
+                )}
+
+                <div
+                  className="flex flex-wrap items-center justify-between gap-3 border-t pt-6"
+                  style={{ borderColor: LINE.subtle }}
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        if (chapter === 1) {
+                          router.push("/partners");
+                          return;
+                        }
+                        setErrors({});
+                        setChapter((chapter - 1) as ChapterId);
+                      }}
+                    >
+                      {chapter === 1 ? "University overview" : "Back"}
+                    </Button>
+                    {canResetPage ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => setResetOpen(true)}
+                      >
+                        Reset
+                      </Button>
+                    ) : null}
+                    {canMarkNotProceeding ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        onClick={() => {
+                          setNotProceedingReason("");
+                          setNotProceedingError("");
+                          setNotProceedingOpen(true);
+                        }}
+                      >
+                        Not proceeding
+                      </Button>
+                    ) : null}
+                  </div>
+                  <Button
+                    type="button"
+                    disabled={saveMutation.isPending}
+                    onClick={() => {
+                      if (chapter === 1) submitChapter1();
+                      else if (chapter === 2) submitChapter2();
+                      else if (chapter === 3) submitChapter3();
+                      else if (chapter === 4) submitChapter4();
+                      else if (chapter === 5) submitChapter5();
+                      else if (chapter === 6) submitChapter6();
+                      else if (chapter === 7) submitChapter7();
+                      else submitChapter8();
+                    }}
+                    className="gap-2 rounded-full px-6 text-white"
+                    style={{ backgroundColor: BRAND[700] }}
+                  >
+                    {saveMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : null}
+                    {chapter === 8 ? "Send email & finish" : "Save & next"}
+                    {!saveMutation.isPending && chapter < 8 ? (
+                      <ArrowRight className="h-4 w-4" />
+                    ) : null}
+                  </Button>
+                </div>
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        </div>
+      </div>
+
+      <Dialog
+        open={resetOpen}
+        onOpenChange={(open) => {
+          if (saveMutation.isPending) return;
+          setResetOpen(open);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className={cn(displayClass, "text-2xl")}>
+              Reset changes
+            </DialogTitle>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={saveMutation.isPending}
+              onClick={() => setResetOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={saveMutation.isPending}
+              onClick={resetCurrentPage}
+              className="gap-2"
+            >
+              Reset
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={notProceedingOpen}
+        onOpenChange={(open) => {
+          if (saveMutation.isPending) return;
+          setNotProceedingOpen(open);
+          if (!open) {
+            setNotProceedingReason("");
+            setNotProceedingError("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className={cn(displayClass, "text-2xl")}>
+              Not proceeding
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 py-1">
+            <Label htmlFor="not-proceeding-reason">Reason</Label>
+            <Textarea
+              id="not-proceeding-reason"
+              rows={4}
+              value={notProceedingReason}
+              onChange={(e) => {
+                setNotProceedingReason(e.target.value);
+                if (notProceedingError) setNotProceedingError("");
+              }}
+              aria-invalid={Boolean(notProceedingError)}
+            />
+            {notProceedingError ? (
+              <p className="text-xs text-destructive">{notProceedingError}</p>
+            ) : null}
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={saveMutation.isPending}
+              onClick={() => setNotProceedingOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={saveMutation.isPending}
+              onClick={confirmNotProceeding}
+              className="gap-2"
+            >
+              {saveMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : null}
+              Mark as not proceeding
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return <p className="text-xs text-destructive">{message}</p>;
+}
+
+function ContactFields({
+  title,
+  value,
+  onChange,
+}: {
+  title: string;
+  value: PartnerContact;
+  onChange: (v: PartnerContact) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <p className="text-sm font-semibold" style={{ color: INK.primary }}>
+        {title}
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {(
+          [
+            ["name", "Name"],
+            ["designation", "Designation"],
+            ["phone", "Phone"],
+            ["email", "Email"],
+          ] as const
+        ).map(([key, label]) => (
+          <div key={key} className="space-y-1.5">
+            <Label>{label}</Label>
+            <Input
+              type={key === "email" ? "email" : "text"}
+              value={value[key]}
+              onChange={(e) => onChange({ ...value, [key]: e.target.value })}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ChapterUniversity(props: {
+  name: string;
+  setName: (v: string) => void;
+  city: string;
+  setCity: (v: string) => void;
+  state: string;
+  setState: (v: string) => void;
+  primary: PartnerContact;
+  setPrimary: (v: PartnerContact) => void;
+  secondary: PartnerContact;
+  setSecondary: (v: PartnerContact) => void;
+  errors: Record<string, string>;
+}) {
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-1.5 sm:col-span-2">
+          <Label>University name</Label>
+          <Input value={props.name} onChange={(e) => props.setName(e.target.value)} />
+          <FieldError message={props.errors.name} />
+        </div>
+        <div className="space-y-1.5">
+          <Label>City</Label>
+          <Input
+            value={props.city}
+            onChange={(e) => props.setCity(e.target.value)}
+          />
+          <FieldError message={props.errors.city} />
+        </div>
+        <div className="space-y-1.5">
+          <Label>State</Label>
+          <Input
+            value={props.state}
+            onChange={(e) => props.setState(e.target.value)}
+          />
+          <FieldError message={props.errors.state} />
+        </div>
+      </div>
+      <div className="border-t pt-6" style={{ borderColor: LINE.subtle }}>
+        <ContactFields title="Primary contact" value={props.primary} onChange={props.setPrimary} />
+        <FieldError message={props.errors.primary} />
+      </div>
+      <div className="border-t pt-6" style={{ borderColor: LINE.subtle }}>
+        <ContactFields
+          title="Secondary contact"
+          value={props.secondary}
+          onChange={props.setSecondary}
+        />
+        <FieldError message={props.errors.secondary} />
+      </div>
+    </div>
+  );
+}
+
+function ChapterContacted(props: {
+  contactedAt: string;
+  setContactedAt: (v: string) => void;
+  contactedNotes: string;
+  setContactedNotes: (v: string) => void;
+  errors: Record<string, string>;
+}) {
+  return (
+    <div className="mx-auto max-w-lg space-y-5">
+      <div className="space-y-1.5">
+        <Label>Contact date</Label>
+        <DateField value={props.contactedAt} onChange={props.setContactedAt} />
+        <FieldError message={props.errors.contactedAt} />
+      </div>
+      <div className="space-y-1.5">
+        <Label>
+          Notes{" "}
+          <span className="font-normal text-muted-foreground">(optional)</span>
+        </Label>
+        <Textarea
+          rows={4}
+          value={props.contactedNotes}
+          onChange={(e) => props.setContactedNotes(e.target.value)}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ChapterMeeting(props: {
+  meetingAt: string;
+  setMeetingAt: (v: string) => void;
+  meetingNotes: string;
+  setMeetingNotes: (v: string) => void;
+  errors: Record<string, string>;
+}) {
+  return (
+    <div className="mx-auto max-w-lg space-y-5">
+      <div className="space-y-1.5">
+        <Label>Meeting date</Label>
+        <DateField value={props.meetingAt} onChange={props.setMeetingAt} />
+        <FieldError message={props.errors.meetingAt} />
+      </div>
+      <div className="space-y-1.5">
+        <Label>
+          Notes{" "}
+          <span className="font-normal text-muted-foreground">(optional)</span>
+        </Label>
+        <Textarea
+          rows={4}
+          value={props.meetingNotes}
+          onChange={(e) => props.setMeetingNotes(e.target.value)}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ChapterPartnership(props: {
+  orgChoice: string;
+  setOrgChoice: (v: string) => void;
+  customOrg: string;
+  setCustomOrg: (v: string) => void;
+  managerName: string;
+  setManagerName: (v: string) => void;
+  managerPhone: string;
+  setManagerPhone: (v: string) => void;
+  managerEmail: string;
+  setManagerEmail: (v: string) => void;
+  eventIds: string[];
+  setEventIds: (v: string[] | ((p: string[]) => string[])) => void;
+  events: Array<{ id: string; title: string; city: string; venue?: string }>;
+  sponsorshipTier: string;
+  setSponsorshipTier: (v: string) => void;
+  sponsorshipNotes: string;
+  setSponsorshipNotes: (v: string) => void;
+  errors: Record<string, string>;
+}) {
+  const toggleEvent = (id: string, checked: boolean) => {
+    props.setEventIds((prev) =>
+      checked ? [...prev, id] : prev.filter((x) => x !== id)
+    );
+  };
+
+  return (
+    <div className="space-y-8">
+      <section className="space-y-4">
+        <h3 className="text-sm font-semibold tracking-wide uppercase" style={{ color: BRAND[700] }}>
+          Relationship owner
+        </h3>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label>Closing organization</Label>
+            <Select value={props.orgChoice} onValueChange={props.setOrgChoice}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {RELATIONSHIP_OWNER_ORGS.map((org) => (
+                  <SelectItem key={org} value={org}>
+                    {org}
+                  </SelectItem>
+                ))}
+                <SelectItem value={CUSTOM_ORG}>Create / enter company…</SelectItem>
+              </SelectContent>
+            </Select>
+            <FieldError message={props.errors.org} />
+          </div>
+          {props.orgChoice === CUSTOM_ORG && (
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label>Company name</Label>
+              <Input
+                value={props.customOrg}
+                onChange={(e) => props.setCustomOrg(e.target.value)}
+              />
+            </div>
+          )}
+          <div className="space-y-1.5">
+            <Label>SPOC name</Label>
+            <Input
+              value={props.managerName}
+              onChange={(e) => props.setManagerName(e.target.value)}
+            />
+            <FieldError message={props.errors.mName} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Contact number</Label>
+            <Input
+              value={props.managerPhone}
+              onChange={(e) => props.setManagerPhone(e.target.value)}
+            />
+            <FieldError message={props.errors.mPhone} />
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label>Official email</Label>
+            <Input
+              type="email"
+              value={props.managerEmail}
+              onChange={(e) => props.setManagerEmail(e.target.value)}
+            />
+            <FieldError message={props.errors.mEmail} />
+          </div>
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <h3 className="text-sm font-semibold tracking-wide uppercase" style={{ color: BRAND[700] }}>
+          Events they will sponsor
+        </h3>
+        <div
+          className="space-y-1 rounded-xl border p-3"
+          style={{ borderColor: LINE.subtle, background: PAPER.muted }}
+        >
+          {props.events.length === 0 ? (
+            <p className="px-2 py-3 text-sm text-muted-foreground">No events yet.</p>
+          ) : (
+            props.events.map((event) => (
+              <label
+                key={event.id}
+                className="flex cursor-pointer items-start gap-3 rounded-lg px-2 py-2 hover:bg-white/70"
+              >
+                <Checkbox
+                  checked={props.eventIds.includes(event.id)}
+                  onCheckedChange={(v) => toggleEvent(event.id, v === true)}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="block text-sm font-medium">{event.title}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {event.city}
+                    {event.venue ? ` · ${event.venue}` : ""}
+                  </span>
+                </span>
+              </label>
+            ))
+          )}
+        </div>
+        <FieldError message={props.errors.events} />
+      </section>
+
+      <section className="space-y-4">
+        <h3 className="text-sm font-semibold tracking-wide uppercase" style={{ color: BRAND[700] }}>
+          Sponsorship details
+        </h3>
+        <div className="space-y-1.5 max-w-md">
+          <Label>Sponsorship tier</Label>
+          <Select
+            value={props.sponsorshipTier || undefined}
+            onValueChange={props.setSponsorshipTier}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SPONSORSHIP_TIERS.map((tier) => (
+                <SelectItem key={tier} value={tier}>
+                  {tier}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <FieldError message={props.errors.tier} />
+        </div>
+        <div className="space-y-1.5">
+          <Label>
+            Discussion notes{" "}
+            <span className="font-normal text-muted-foreground">(optional)</span>
+          </Label>
+          <Textarea
+            rows={4}
+            value={props.sponsorshipNotes}
+            onChange={(e) => props.setSponsorshipNotes(e.target.value)}
+          />
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ChapterDeliverables(props: {
+  deliverables: PartnerDeliverable[];
+  setDeliverables: (
+    v: PartnerDeliverable[] | ((p: PartnerDeliverable[]) => PartnerDeliverable[])
+  ) => void;
+  errors: Record<string, string>;
+}) {
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [customLabel, setCustomLabel] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!composerOpen) return;
+    const id = window.setTimeout(() => inputRef.current?.focus(), 180);
+    return () => window.clearTimeout(id);
+  }, [composerOpen]);
+
+  const updateItem = (id: string, patch: Partial<PartnerDeliverable>) => {
+    props.setDeliverables((prev) =>
+      prev.map((d) => (d.id === id ? { ...d, ...patch } : d))
+    );
+  };
+
+  const addCustom = () => {
+    const label = customLabel.trim();
+    if (!label) return;
+    props.setDeliverables((prev) => [
+      ...prev,
+      {
+        id: generateId(),
+        key: "custom",
+        label,
+        included: true,
+        isCustom: true,
+      },
+    ]);
+    setCustomLabel("");
+    setComposerOpen(false);
+  };
+
+  const cancelComposer = () => {
+    setCustomLabel("");
+    setComposerOpen(false);
+  };
+
+  const removeCustom = (id: string) => {
+    props.setDeliverables((prev) => prev.filter((d) => d.id !== id));
+  };
+
+  const standard = props.deliverables.filter((d) => !d.isCustom);
+  const customs = props.deliverables.filter((d) => d.isCustom);
+
+  return (
+    <div className="space-y-6">
+      <ul className="space-y-2">
+        {standard.map((item) => {
+          const def = PARTNER_DELIVERABLE_DEFINITIONS.find(
+            (d) => d.key === item.key
+          );
+          const options = def?.options;
+          return (
+            <li
+              key={item.id}
+              className="flex flex-col gap-2 rounded-xl border px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
+              style={{
+                borderColor: LINE.subtle,
+                background: item.included ? BRAND[50] : PAPER.muted,
+              }}
+            >
+              <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-3">
+                <Checkbox
+                  checked={item.included}
+                  onCheckedChange={(v) =>
+                    updateItem(item.id, { included: v === true })
+                  }
+                  className="mt-0.5"
+                />
+                <span
+                  className="text-sm font-medium leading-snug"
+                  style={{ color: INK.primary }}
+                >
+                  {item.label}
+                </span>
+              </label>
+              {options ? (
+                <div className="w-full sm:w-56 sm:shrink-0">
+                  <Select
+                    value={item.option || undefined}
+                    onValueChange={(v) => updateItem(item.id, { option: v })}
+                    disabled={!item.included}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {options.map((opt) => (
+                        <SelectItem key={opt} value={opt}>
+                          {opt}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FieldError message={props.errors[item.id]} />
+                </div>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+
+      {customs.length > 0 ? (
+        <div className="space-y-2 border-t pt-6" style={{ borderColor: LINE.subtle }}>
+          <p
+            className="text-sm font-semibold tracking-wide uppercase"
+            style={{ color: BRAND[700] }}
+          >
+            Custom deliverables
+          </p>
+          <ul className="space-y-2">
+            {customs.map((item) => (
+              <li
+                key={item.id}
+                className="flex items-center gap-3 rounded-xl border px-3 py-3"
+                style={{ borderColor: LINE.subtle, background: BRAND[50] }}
+              >
+                <Checkbox
+                  checked={item.included}
+                  onCheckedChange={(v) =>
+                    updateItem(item.id, { included: v === true })
+                  }
+                />
+                <Input
+                  className="flex-1"
+                  value={item.label}
+                  onChange={(e) => updateItem(item.id, { label: e.target.value })}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="shrink-0"
+                  onClick={() => removeCustom(item.id)}
+                  aria-label="Remove custom deliverable"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      <div className="space-y-3">
+        {!composerOpen ? (
+          <Button
+            type="button"
+            variant="outline"
+            className="gap-2"
+            onClick={() => setComposerOpen(true)}
+          >
+            <Plus className="h-4 w-4" />
+            Create & add
+          </Button>
+        ) : null}
+
+        <AnimatePresence initial={false}>
+          {composerOpen ? (
+            <motion.div
+              key="custom-composer"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+              className="overflow-hidden"
+            >
+              <div
+                className="flex flex-col gap-3 rounded-xl border border-dashed p-4 sm:flex-row sm:items-end"
+                style={{ borderColor: LINE.strong }}
+              >
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <Label>Custom deliverable</Label>
+                  <Input
+                    ref={inputRef}
+                    value={customLabel}
+                    onChange={(e) => setCustomLabel(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addCustom();
+                      }
+                      if (e.key === "Escape") {
+                        e.preventDefault();
+                        cancelComposer();
+                      }
+                    }}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button type="button" variant="ghost" onClick={cancelComposer}>
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    className="gap-2 text-white"
+                    style={{ backgroundColor: BRAND[700] }}
+                    onClick={addCustom}
+                    disabled={!customLabel.trim()}
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
+

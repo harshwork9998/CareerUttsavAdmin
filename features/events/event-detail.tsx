@@ -9,7 +9,7 @@ import {
   Clock,
   Edit,
   FileText,
-  GraduationCap,
+  Handshake,
   MapPin,
   Presentation,
   Trash2,
@@ -20,7 +20,7 @@ import { toast } from "sonner";
 import {
   eventsService,
   registrationsService,
-  universitiesService,
+  partnersService,
 } from "@/services/api";
 import { cn, formatDate, formatDateTime, formatNumber } from "@/lib/utils";
 import { CreateEventDialog } from "@/features/events/create-event-dialog";
@@ -118,15 +118,15 @@ export function EventDetail({ eventId }: EventDetailProps) {
     enabled: activeTab === "registrations" || activeTab === "overview",
   });
 
-  const universitiesQuery = useQuery({
-    queryKey: ["universities", "event", eventId],
-    queryFn: () => universitiesService.getByEvent(eventId),
-    enabled: activeTab === "universities" || activeTab === "overview",
+  const partnersQuery = useQuery({
+    queryKey: ["partners", "event", eventId],
+    queryFn: () => partnersService.getByEvent(eventId),
+    enabled: activeTab === "partners" || activeTab === "overview",
   });
 
   const event = eventQuery.data;
   const registrations = registrationsQuery.data ?? [];
-  const universities = universitiesQuery.data ?? [];
+  const partners = partnersQuery.data ?? [];
 
   const seminarDays = useMemo(() => {
     if (!event) return [];
@@ -418,11 +418,11 @@ export function EventDetail({ eventId }: EventDetailProps) {
             Registrations
           </TabsTrigger>
           <TabsTrigger
-            value="universities"
+            value="partners"
             className="gap-1.5 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm"
           >
-            <GraduationCap className="h-4 w-4" />
-            Universities
+            <Handshake className="h-4 w-4" />
+            Partners
           </TabsTrigger>
         </TabsList>
 
@@ -626,14 +626,14 @@ export function EventDetail({ eventId }: EventDetailProps) {
           </div>
         </TabsContent>
 
-        <TabsContent value="universities" className="mt-6">
+        <TabsContent value="partners" className="mt-6">
           <div className={cn(surface.opening, "overflow-hidden p-4 sm:p-5")}>
             <div className="mb-4 flex items-baseline gap-2 px-1">
               <h3
                 className={cn(displayClass, "text-xl font-semibold")}
                 style={{ color: INK.primary }}
               >
-                Universities
+                Partners
               </h3>
               <span className="text-xl font-semibold" style={{ color: INK.muted }}>
                 –
@@ -642,26 +642,26 @@ export function EventDetail({ eventId }: EventDetailProps) {
                 className="text-xl font-semibold tabular-nums"
                 style={{ color: INK.muted }}
               >
-                {formatNumber(universities.length)}
+                {formatNumber(partners.length)}
               </span>
             </div>
-            {universitiesQuery.isLoading ? (
+            {partnersQuery.isLoading ? (
               <div className="grid gap-3 sm:grid-cols-2">
                 {Array.from({ length: 4 }).map((_, i) => (
                   <Skeleton key={i} className="h-28 rounded-xl" />
                 ))}
               </div>
-            ) : universities.length === 0 ? (
+            ) : partners.length === 0 ? (
               <EmptyState
-                icon={GraduationCap}
-                title="No universities yet"
-                description="Universities that take a sponsorship package for this event will appear here."
+                icon={Handshake}
+                title="No partners yet"
+                description="University partners linked to this event will appear here."
               />
             ) : (
               <div className="grid gap-3 sm:grid-cols-2">
-                {universities.map((uni) => (
+                {partners.map((partner) => (
                   <div
-                    key={uni.id}
+                    key={partner.id}
                     className="rounded-xl border px-4 py-3.5"
                     style={{
                       borderColor: LINE.subtle,
@@ -672,18 +672,29 @@ export function EventDetail({ eventId }: EventDetailProps) {
                       className="text-sm font-semibold leading-snug"
                       style={{ color: INK.primary }}
                     >
-                      {uni.name}
+                      {partner.name}
+                    </p>
+                    <p className="mt-1 text-xs" style={{ color: INK.muted }}>
+                      {partner.stage}
+                      {partner.sponsorshipTier
+                        ? ` · ${partner.sponsorshipTier}`
+                        : ""}
                     </p>
                     <div
                       className="mt-3 space-y-1 text-xs"
                       style={{ color: INK.secondary }}
                     >
                       <p>
-                        {[uni.city, uni.state].filter(Boolean).join(", ") || "—"}
+                        {[partner.city, partner.state]
+                          .filter(Boolean)
+                          .join(", ") || "—"}
                       </p>
-                      <p>{uni.contactPerson}</p>
+                      <p>{partner.primaryContact.name}</p>
                       <p className="truncate">
-                        {[uni.contactPhone, uni.contactEmail]
+                        {[
+                          partner.primaryContact.phone,
+                          partner.primaryContact.email,
+                        ]
                           .filter(Boolean)
                           .join(" | ") || "—"}
                       </p>

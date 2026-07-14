@@ -113,8 +113,10 @@ function buildAllCitiesPartnerSales(): PartnerSalesAnalytics {
   const stageMap = new Map<string, { count: number; amount: number }>();
   for (const slice of slices) {
     for (const stage of slice.byStage) {
-      const prev = stageMap.get(String(stage.name)) ?? { count: 0, amount: 0 };
-      stageMap.set(String(stage.name), {
+      let name = String(stage.name);
+      if (name === "Discussion" || name === "Proposal Sent") name = "Negotiation";
+      const prev = stageMap.get(name) ?? { count: 0, amount: 0 };
+      stageMap.set(name, {
         count: prev.count + stage.count,
         amount: prev.amount + stage.amount,
       });

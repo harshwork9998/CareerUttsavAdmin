@@ -1,224 +1,391 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
-import { Handshake, Plus } from "lucide-react";
-
-import { partnersService } from "@/services/api";
-import { PARTNER_CATEGORIES } from "@/constants";
-import { formatCurrency } from "@/lib/utils";
-import type { Partner } from "@/types";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { motion } from "framer-motion";
 import {
-  DataTable,
-  EmptyState,
+  ArrowRight,
+  Building2,
+  MapPin,
+  MoreHorizontal,
+  Plus,
+  Trash2,
+  UserRound,
+} from "lucide-react";
+import { toast } from "sonner";
+
+import { PARTNER_LIFECYCLE_STAGES, SPONSORSHIP_TIERS } from "@/constants";
+import { partnersService } from "@/services/api";
+import { cn } from "@/lib/utils";
+import type { Partner, PartnerLifecycleStage } from "@/types";
+import {
+  BRAND,
+  ELEVATION,
+  INK,
+  LINE,
+  PAPER,
+  displayClass,
+  sectionMotion,
+  surface,
+} from "@/features/dashboard/dashboard-ui";
+import { PartnerSummaryDialog } from "@/features/partners/partner-summary-dialog";
+import {
+  ConfirmDialog,
   ErrorState,
   FiltersBar,
   PageHeader,
-  Pagination,
-  SearchBar,
-  StatusChip,
-  TableSkeleton,
-  type ColumnDef,
 } from "@/components/shared";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
-const PAGE_SIZE = 8;
+function stageTone(stage: PartnerLifecycleStage): {
+  bg: string;
+  color: string;
+} {
+  switch (stage) {
+    case "Confirmed":
+      return { bg: "rgba(47,107,79,0.12)", color: "#2F6B4F" };
+    case "Not Proceeding":
+      return { bg: "rgba(163,59,59,0.12)", color: "#A33B3B" };
+    case "Negotiation":
+      return { bg: "rgba(176,125,42,0.14)", color: "#B07D2A" };
+    default:
+      return { bg: BRAND[50], color: BRAND[700] };
+  }
+}
+
+function journeyProgress(partner: Partner): string {
+  if (partner.stage === "Not Proceeding") return "Not proceeding";
+  if (!partner.contactedAt) return "University details complete";
+  if (!partner.meetingAt) return "Awaiting meeting";
+  if (!partner.relationshipOwner?.managerName || partner.eventIds.length === 0) {
+    return "Partnership details next";
+  }
+  if (!partner.deliverablesConfirmedAt) return "Deliverables next";
+  if (!partner.seminarSlotsConfirmedAt) return "Seminar slots next";
+  if (!partner.commercialsConfirmedAt) return "Commercials next";
+  if (!partner.portalInviteSentAt) return "Partner access next";
+  return "Complete";
+}
+
+function PartnerCard({
+  partner,
+  onOpenSummary,
+  onDelete,
+}: {
+  partner: Partner;
+  onOpenSummary: (p: Partner) => void;
+  onDelete: (p: Partner) => void;
+}) {
+  const tone = stageTone(partner.stage);
+
+  return (
+    <motion.article
+      {...sectionMotion}
+      role="button"
+      tabIndex={0}
+      onClick={() => onOpenSummary(partner)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpenSummary(partner);
+        }
+      }}
+      className={cn(
+        surface.opening,
+        "flex cursor-pointer flex-col overflow-hidden p-5 outline-none transition-shadow hover:shadow-md focus-visible:ring-2 focus-visible:ring-brand-700/30"
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1 space-y-1">
+          <h2
+            className={cn(displayClass, "text-xl font-semibold leading-snug")}
+            style={{ color: INK.primary }}
+          >
+            {partner.name}
+          </h2>
+          <p className="text-sm" style={{ color: INK.secondary }}>
+            {partner.city}
+            {partner.state ? ` · ${partner.state}` : ""}
+          </p>
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+            <DropdownMenuItem asChild>
+              <Link href={`/partners/${partner.id}`}>
+                <ArrowRight className="h-4 w-4" />
+                Edit partnership
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              onClick={() => onDelete(partner)}
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <span
+          className="rounded-full px-2.5 py-1 text-xs font-medium"
+          style={{ background: tone.bg, color: tone.color }}
+        >
+          {partner.stage}
+        </span>
+        <span
+          className="rounded-full px-2.5 py-1 text-xs font-medium"
+          style={{
+            background: PAPER.muted,
+            color: INK.secondary,
+            border: `1px solid ${LINE.subtle}`,
+          }}
+        >
+          {journeyProgress(partner)}
+        </span>
+      </div>
+
+      <div
+        className="mt-4 space-y-2 border-t pt-4 text-xs"
+        style={{ borderColor: LINE.subtle, color: INK.secondary }}
+      >
+        {partner.relationshipOwner?.managerName ? (
+          <p className="flex items-center gap-2">
+            <UserRound className="h-3.5 w-3.5 shrink-0" />
+            {partner.relationshipOwner.organization} ·{" "}
+            {partner.relationshipOwner.managerName}
+          </p>
+        ) : (
+          <p className="flex items-center gap-2">
+            <Building2 className="h-3.5 w-3.5 shrink-0" />
+            Relationship owner pending
+          </p>
+        )}
+        <p className="flex items-center gap-2">
+          <MapPin className="h-3.5 w-3.5 shrink-0" />
+          {partner.eventIds.length} event
+          {partner.eventIds.length === 1 ? "" : "s"} linked
+        </p>
+      </div>
+
+      <Link
+        href={`/partners/${partner.id}`}
+        onClick={(e) => e.stopPropagation()}
+        className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium transition-opacity hover:opacity-80"
+        style={{ color: BRAND[700] }}
+      >
+        Edit partnership
+        <ArrowRight className="h-3.5 w-3.5" />
+      </Link>
+    </motion.article>
+  );
+}
 
 export function PartnersList() {
   const router = useRouter();
-  const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [page, setPage] = useState(1);
+  const queryClient = useQueryClient();
+  const [pendingDelete, setPendingDelete] = useState<Partner | null>(null);
+  const [summaryPartner, setSummaryPartner] = useState<Partner | null>(null);
+  const [stageFilter, setStageFilter] = useState("all");
+  const [tierFilter, setTierFilter] = useState("all");
+  const [cityFilter, setCityFilter] = useState<string[]>([]);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["partners"],
     queryFn: () => partnersService.getAll(),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => partnersService.delete(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["partners"] });
+      toast.success("Partner deleted");
+      setPendingDelete(null);
+    },
+    onError: () => toast.error("Failed to delete partner"),
+  });
+
+  const partners = useMemo(() => data ?? [], [data]);
+
+  const cityOptions = useMemo(() => {
+    const cities = [...new Set(partners.map((p) => p.city))].sort();
+    return cities.map((c) => ({ label: c, value: c }));
+  }, [partners]);
+
   const filtered = useMemo(() => {
-    if (!data) return [];
-    return data.filter((partner) => {
-      const q = search.toLowerCase();
-      const matchesSearch =
-        !q ||
-        partner.name.toLowerCase().includes(q) ||
-        partner.contactPerson.toLowerCase().includes(q) ||
-        partner.contactEmail.toLowerCase().includes(q);
-      const matchesCategory =
-        categoryFilter === "all" || partner.category === categoryFilter;
-      const matchesStatus =
-        statusFilter === "all" ||
-        (statusFilter === "active" && partner.isActive) ||
-        (statusFilter === "inactive" && !partner.isActive);
-      return matchesSearch && matchesCategory && matchesStatus;
+    return partners.filter((p) => {
+      if (stageFilter !== "all" && p.stage !== stageFilter) return false;
+      if (tierFilter !== "all" && (p.sponsorshipTier ?? "") !== tierFilter) {
+        return false;
+      }
+      if (cityFilter.length > 0 && !cityFilter.includes(p.city)) return false;
+      return true;
     });
-  }, [data, search, categoryFilter, statusFilter]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-
-  const columns: ColumnDef<Partner>[] = [
-    {
-      accessorKey: "name",
-      header: "Company",
-      cell: ({ row }) => {
-        const partner = row.original;
-        return (
-          <div className="flex items-center gap-3">
-            <Avatar className="h-9 w-9">
-              <AvatarImage src={partner.logo} alt={partner.name} />
-              <AvatarFallback>{partner.name.slice(0, 2).toUpperCase()}</AvatarFallback>
-            </Avatar>
-            <div>
-              <p className="font-medium">{partner.name}</p>
-              <p className="text-xs text-muted-foreground">{partner.city}</p>
-            </div>
-          </div>
-        );
-      },
-    },
-    {
-      id: "contact",
-      header: "Contact",
-      cell: ({ row }) => (
-        <div>
-          <p className="text-sm">{row.original.contactPerson}</p>
-          <p className="text-xs text-muted-foreground">{row.original.contactEmail}</p>
-        </div>
-      ),
-    },
-    {
-      accessorKey: "category",
-      header: "Category",
-      cell: ({ row }) => (
-        <span className="text-sm">{row.original.category}</span>
-      ),
-    },
-    {
-      id: "sponsorship",
-      header: "Sponsorship",
-      cell: ({ row }) =>
-        row.original.sponsorshipAmount ? (
-          <span className="font-medium">{formatCurrency(row.original.sponsorshipAmount)}</span>
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        ),
-    },
-    {
-      id: "status",
-      header: "Status",
-      cell: ({ row }) => (
-        <StatusChip status={row.original.isActive ? "Active" : "Inactive"} />
-      ),
-    },
-  ];
-
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <PageHeader title="Partners" description="Manage sponsors and partner organizations." />
-        <TableSkeleton rows={6} columns={5} />
-      </div>
-    );
-  }
-
-  if (isError) {
-    return (
-      <div className="space-y-6">
-        <PageHeader title="Partners" />
-        <ErrorState onRetry={() => refetch()} />
-      </div>
-    );
-  }
+  }, [partners, stageFilter, tierFilter, cityFilter]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <PageHeader
         title="Partners"
-        description="Manage sponsors, media partners, and technology collaborators."
+        description="Walk each university through the sponsorship partnership — one step at a time."
         actions={
-          <Button className="gap-2">
-            <Plus className="h-4 w-4" />
-            Add Partner
+          <Button
+            onClick={() => router.push("/partners/new")}
+            className="h-10 rounded-full px-5 text-white hover:opacity-90"
+            style={{ backgroundColor: BRAND[700] }}
+          >
+            <Plus className="mr-1.5 h-4 w-4" />
+            New partner
           </Button>
         }
       />
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <SearchBar
-          value={search}
-          onChange={(v) => {
-            setSearch(v);
-            setPage(1);
-          }}
-          placeholder="Search partners..."
-        />
-      </div>
-
       <FiltersBar
         filters={[
           {
-            id: "category",
-            label: "Category",
-            value: categoryFilter,
-            onChange: (v) => {
-              setCategoryFilter(v);
-              setPage(1);
-            },
-            options: PARTNER_CATEGORIES.map((c) => ({ label: c, value: c })),
+            id: "stage",
+            label: "Stage",
+            value: stageFilter,
+            onChange: setStageFilter,
+            options: PARTNER_LIFECYCLE_STAGES.map((s) => ({
+              label: s,
+              value: s,
+            })),
           },
           {
-            id: "status",
-            label: "Status",
-            value: statusFilter,
-            onChange: (v) => {
-              setStatusFilter(v);
-              setPage(1);
-            },
-            options: [
-              { label: "Active", value: "active" },
-              { label: "Inactive", value: "inactive" },
-            ],
+            id: "tier",
+            label: "Sponsorship tier",
+            value: tierFilter,
+            onChange: setTierFilter,
+            options: SPONSORSHIP_TIERS.map((tier) => ({
+              label: tier,
+              value: tier,
+            })),
+          },
+          {
+            id: "city",
+            label: "Event city",
+            mode: "multi",
+            values: cityFilter,
+            onChange: setCityFilter,
+            options: cityOptions,
+            placeholder: "All cities",
           },
         ]}
         onClearAll={() => {
-          setCategoryFilter("all");
-          setStatusFilter("all");
-          setPage(1);
+          setStageFilter("all");
+          setTierFilter("all");
+          setCityFilter([]);
         }}
       />
 
-      {filtered.length === 0 ? (
-        <EmptyState
-          icon={Handshake}
-          title="No partners found"
-          description="Try adjusting your search or filters."
-          action={{ label: "Clear filters", onClick: () => {
-            setSearch("");
-            setCategoryFilter("all");
-            setStatusFilter("all");
-          }}}
+      {isError && (
+        <ErrorState
+          title="Couldn’t load partners"
+          message="Something went wrong while fetching partners."
+          onRetry={() => void refetch()}
         />
-      ) : (
-        <>
-          <DataTable
-            columns={columns}
-            data={paginated}
-            onRowClick={(row) => router.push(`/partners/${row.id}`)}
-          />
-          <Pagination
-            page={page}
-            totalPages={totalPages}
-            onPageChange={setPage}
-            showPageInfo
-            totalItems={filtered.length}
-            pageSize={PAGE_SIZE}
-          />
-        </>
       )}
+
+      {isLoading && (
+        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-56 rounded-[24px]" />
+          ))}
+        </div>
+      )}
+
+      {!isLoading && !isError && filtered.length === 0 && (
+        <motion.button
+          type="button"
+          onClick={() => router.push("/partners/new")}
+          {...sectionMotion}
+          whileHover={{ scale: 1.01 }}
+          whileTap={{ scale: 0.99 }}
+          className={cn(
+            surface.mint,
+            "flex min-h-[40vh] w-full flex-col items-center justify-center gap-4 border-dashed outline-none focus-visible:ring-2 focus-visible:ring-brand-700/30"
+          )}
+        >
+          <span
+            className="flex h-28 w-28 items-center justify-center rounded-full text-6xl font-light leading-none"
+            style={{
+              backgroundColor: BRAND[50],
+              color: BRAND[700],
+              boxShadow: ELEVATION[1],
+            }}
+          >
+            +
+          </span>
+          <div className="space-y-1 text-center">
+            <p
+              className={cn(displayClass, "text-xl font-semibold")}
+              style={{ color: INK.primary }}
+            >
+              Add a partner
+            </p>
+            <p className="text-sm" style={{ color: INK.muted }}>
+              Start with university details — the rest unlocks as you go.
+            </p>
+          </div>
+        </motion.button>
+      )}
+
+      {!isLoading && !isError && filtered.length > 0 && (
+        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+          {filtered.map((partner) => (
+            <PartnerCard
+              key={partner.id}
+              partner={partner}
+              onOpenSummary={setSummaryPartner}
+              onDelete={setPendingDelete}
+            />
+          ))}
+        </div>
+      )}
+
+      <PartnerSummaryDialog
+        partner={summaryPartner}
+        open={Boolean(summaryPartner)}
+        onOpenChange={(open) => {
+          if (!open) setSummaryPartner(null);
+        }}
+      />
+
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title="Delete partner"
+        description={`Remove ${pendingDelete?.name ?? "this partner"}?`}
+        confirmLabel="Delete"
+        variant="destructive"
+        onConfirm={() => {
+          if (pendingDelete) deleteMutation.mutate(pendingDelete.id);
+        }}
+        loading={deleteMutation.isPending}
+      />
     </div>
   );
 }

@@ -38,8 +38,11 @@ export { KpiCard, type KpiCardProps } from "./kpi-card";
 export {
   FiltersBar,
   FilterSelect,
+  FilterMultiSelect,
   type FiltersBarProps,
   type FilterConfig,
+  type SingleFilterConfig,
+  type MultiFilterConfig,
   type FilterOption,
 } from "./filters-bar";
 export { RichTextEditor, type RichTextEditorProps } from "./rich-text-editor";

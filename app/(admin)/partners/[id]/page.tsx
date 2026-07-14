@@ -1,10 +1,12 @@
-import { PartnerDetail } from "@/features/partners/partner-detail";
+import { PartnerJourney } from "@/features/partners/partner-journey";
 
 interface PartnerDetailPageProps {
   params: Promise<{ id: string }>;
 }
 
-export default async function PartnerDetailPage({ params }: PartnerDetailPageProps) {
+export default async function PartnerDetailPage({
+  params,
+}: PartnerDetailPageProps) {
   const { id } = await params;
-  return <PartnerDetail id={id} />;
+  return <PartnerJourney partnerId={id} />;
 }

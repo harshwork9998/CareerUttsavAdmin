@@ -71,7 +71,7 @@ function normalizeStatus(status: string): PartnerSalesStatus {
 }
 
 function normalizeStage(stage: string): PartnerJourneyStage {
-  if (stage === "Negotiation") return "Discussion";
+  if (stage === "Discussion" || stage === "Proposal Sent") return "Negotiation";
   if (stage === "Won") return "Confirmed";
   if (stage === "Lost") return "Not Proceeding";
   return stage as PartnerJourneyStage;
@@ -361,14 +361,17 @@ export function PartnerSalesSection({
     lastSeeAllTick.current = seeAllTick;
   }, [seeAllTick]);
 
-  const stages = useMemo(
-    () =>
-      data.byStage.map((stage) => ({
-        name: normalizeStage(stage.name),
-        count: stage.count,
-      })),
-    [data.byStage]
-  );
+  const stages = useMemo(() => {
+    const merged = new Map<string, number>();
+    for (const stage of data.byStage) {
+      const name = normalizeStage(stage.name);
+      merged.set(name, (merged.get(name) ?? 0) + stage.count);
+    }
+    return Array.from(merged.entries()).map(([name, count]) => ({
+      name,
+      count,
+    }));
+  }, [data.byStage]);
 
   const confirmedPartners = useMemo(
     () =>

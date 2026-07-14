@@ -207,24 +207,99 @@ export interface University {
   updatedAt: string;
 }
 
+export interface PartnerContact {
+  name: string;
+  designation: string;
+  phone: string;
+  email: string;
+}
+
+export interface RelationshipOwner {
+  /** K2, IES, or a custom company name */
+  organization: string;
+  managerName: string;
+  managerPhone: string;
+  managerEmail: string;
+}
+
+export interface PartnerStageRemark {
+  id: string;
+  fromStage: PartnerLifecycleStage;
+  toStage: PartnerLifecycleStage;
+  remark: string;
+  createdAt: string;
+}
+
+/** Checklist item for a partner's package — custom rows are unique to that partner. */
+export interface PartnerDeliverable {
+  id: string;
+  /** Predefined key, or `"custom"` for salesperson-added items */
+  key: string;
+  label: string;
+  included: boolean;
+  /** Selected option when the deliverable has a dropdown */
+  option?: string;
+  isCustom?: boolean;
+}
+
 export interface Partner {
   id: string;
+  /** University / institution name */
   name: string;
-  category: PartnerCategory;
-  logo?: string;
-  website?: string;
-  description?: string;
-  contactPerson: string;
-  contactEmail: string;
-  contactPhone: string;
   city: string;
   state: string;
-  sponsorshipAmount?: number;
-  benefits: string[];
+  primaryContact: PartnerContact;
+  secondaryContact: PartnerContact;
   eventIds: string[];
-  isActive: boolean;
+  relationshipOwner: RelationshipOwner;
+  stage: PartnerLifecycleStage;
+  stageRemarks: PartnerStageRemark[];
+  sponsorshipTier?: SponsorshipTier;
+  /** Notes from the meeting on sponsorship interest */
+  sponsorshipNotes?: string;
+  /** Package deliverables checklist (standard + per-partner customs) */
+  deliverables?: PartnerDeliverable[];
+  /** Set when the deliverables step is submitted */
+  deliverablesConfirmedAt?: string;
+  /** Panelist slot allotments across selected events/seminars */
+  seminarSlotAssignments?: PartnerSeminarSlotAssignment[];
+  /** Set when seminar slot allotment is submitted */
+  seminarSlotsConfirmedAt?: string;
+  /** Package list price (INR) */
+  totalAmount?: number;
+  /** Discount offered (INR) */
+  discountAmount?: number;
+  /** Net payable after discount (INR) */
+  netAmount?: number;
+  /** Set when commercials step is submitted */
+  commercialsConfirmedAt?: string;
+  /** Partner portal login (usually primary contact email) */
+  portalLogin?: string;
+  /** Temporary password issued for first partner-portal login */
+  portalTempPassword?: string;
+  /** Email address the invite was sent to */
+  portalInviteEmail?: string;
+  /** When the welcome email with credentials was sent */
+  portalInviteSentAt?: string;
+  /** First outreach */
+  contactedAt?: string;
+  contactedNotes?: string;
+  /** Meeting fixed */
+  meetingAt?: string;
+  meetingNotes?: string;
+  /** When marked Not Proceeding */
+  notProceedingAt?: string;
+  /** Mandatory reason when marked Not Proceeding */
+  notProceedingReason?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+/** How many panelist seats a partner holds on a seminar */
+export interface PartnerSeminarSlotAssignment {
+  eventId: string;
+  seminarId: string;
+  slots: number;
 }
 
 export interface Blog {
@@ -459,17 +534,22 @@ export type SponsorshipTier =
   | "Co-Presenting Partner"
   | "Presenting Partner";
 
-export type PartnerJourneyStage =
+export type PartnerLifecycleStage =
   | "New"
   | "Contacted"
   | "Meeting Scheduled"
-  | "Proposal Sent"
-  | "Discussion"
-  | "Confirmed"
-  | "Not Proceeding"
   | "Negotiation"
+  | "Confirmed"
+  | "Not Proceeding";
+
+export type PartnerJourneyStage =
+  | PartnerLifecycleStage
   | "Won"
-  | "Lost";
+  | "Lost"
+  /** @deprecated Use Negotiation */
+  | "Discussion"
+  /** @deprecated Removed from lifecycle */
+  | "Proposal Sent";
 
 /** @deprecated Use PartnerJourneyStage */
 export type PartnerPipelineStage = PartnerJourneyStage;

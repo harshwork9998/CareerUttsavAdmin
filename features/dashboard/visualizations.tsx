@@ -357,22 +357,20 @@ export function ActivityFeed({
   );
 }
 
-/* ─── In-discussion pipeline — large connected stages ─── */
+/* ─── Partner pipeline — large connected stages ─── */
 
 const DISCUSSION_STAGES = [
   "New",
   "Contacted",
   "Meeting Scheduled",
-  "Proposal Sent",
-  "Discussion",
+  "Negotiation",
 ] as const;
 
 const DISCUSSION_LABELS: Record<(typeof DISCUSSION_STAGES)[number], string> = {
   New: "New",
   Contacted: "Contacted",
   "Meeting Scheduled": "Meeting",
-  "Proposal Sent": "Proposal",
-  Discussion: "Discussion",
+  Negotiation: "Negotiation",
 };
 
 function PipelineArrow({ delay }: { delay: number }) {
@@ -449,10 +447,10 @@ export function PartnerJourneyFlow({
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <h3 className="text-[15px] font-bold tracking-tight text-foreground">
-            In discussion pipeline
+            Partner pipeline
           </h3>
           <p className="mt-0.5 text-[12px] text-muted-foreground">
-            Path from first hello to a decision
+            Path from first hello to negotiation
           </p>
         </div>
         <p className="text-[12px] tabular-nums text-muted-foreground">

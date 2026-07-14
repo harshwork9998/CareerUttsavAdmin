@@ -114,10 +114,92 @@ const config: Config = {
         shimmer: {
           "100%": { transform: "translateX(100%)" },
         },
+        "dialog-overlay-in": {
+          from: { opacity: "0" },
+          to: { opacity: "1" },
+        },
+        "dialog-overlay-out": {
+          from: { opacity: "1" },
+          to: { opacity: "0" },
+        },
+        "dialog-content-in": {
+          from: {
+            opacity: "0",
+            transform: "translate(-50%, calc(-50% + 18px)) scale(0.94)",
+          },
+          to: {
+            opacity: "1",
+            transform: "translate(-50%, -50%) scale(1)",
+          },
+        },
+        "dialog-content-out": {
+          from: {
+            opacity: "1",
+            transform: "translate(-50%, -50%) scale(1)",
+          },
+          to: {
+            opacity: "0",
+            transform: "translate(-50%, calc(-50% + 10px)) scale(0.96)",
+          },
+        },
+        "sheet-in-right": {
+          from: { transform: "translateX(100%)" },
+          to: { transform: "translateX(0)" },
+        },
+        "sheet-out-right": {
+          from: { transform: "translateX(0)" },
+          to: { transform: "translateX(100%)" },
+        },
+        "sheet-in-left": {
+          from: { transform: "translateX(-100%)" },
+          to: { transform: "translateX(0)" },
+        },
+        "sheet-out-left": {
+          from: { transform: "translateX(0)" },
+          to: { transform: "translateX(-100%)" },
+        },
+        "sheet-in-top": {
+          from: { transform: "translateY(-100%)" },
+          to: { transform: "translateY(0)" },
+        },
+        "sheet-out-top": {
+          from: { transform: "translateY(0)" },
+          to: { transform: "translateY(-100%)" },
+        },
+        "sheet-in-bottom": {
+          from: { transform: "translateY(100%)" },
+          to: { transform: "translateY(0)" },
+        },
+        "sheet-out-bottom": {
+          from: { transform: "translateY(0)" },
+          to: { transform: "translateY(100%)" },
+        },
       },
       animation: {
         "fade-in": "fade-in 0.4s ease-out",
         shimmer: "shimmer 2s infinite",
+        "dialog-overlay-in":
+          "dialog-overlay-in 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
+        "dialog-overlay-out":
+          "dialog-overlay-out 0.28s cubic-bezier(0.4, 0, 1, 1)",
+        "dialog-content-in":
+          "dialog-content-in 0.48s cubic-bezier(0.16, 1, 0.3, 1)",
+        "dialog-content-out":
+          "dialog-content-out 0.26s cubic-bezier(0.4, 0, 1, 1)",
+        "sheet-in-right":
+          "sheet-in-right 0.45s cubic-bezier(0.16, 1, 0.3, 1)",
+        "sheet-out-right":
+          "sheet-out-right 0.3s cubic-bezier(0.4, 0, 1, 1)",
+        "sheet-in-left":
+          "sheet-in-left 0.45s cubic-bezier(0.16, 1, 0.3, 1)",
+        "sheet-out-left":
+          "sheet-out-left 0.3s cubic-bezier(0.4, 0, 1, 1)",
+        "sheet-in-top": "sheet-in-top 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
+        "sheet-out-top": "sheet-out-top 0.28s cubic-bezier(0.4, 0, 1, 1)",
+        "sheet-in-bottom":
+          "sheet-in-bottom 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
+        "sheet-out-bottom":
+          "sheet-out-bottom 0.28s cubic-bezier(0.4, 0, 1, 1)",
       },
     },
   },
