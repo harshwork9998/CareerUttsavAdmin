@@ -26,6 +26,7 @@ export function ChapterPartnerInvite(props: {
   login: string;
   temporaryPassword: string;
   onRegeneratePassword: () => void;
+  hasSeminarSlots?: boolean;
   errors: Record<string, string>;
 }) {
   const emailPreview = useMemo(
@@ -34,8 +35,14 @@ export function ChapterPartnerInvite(props: {
         partnerName: props.partnerName,
         login: props.login,
         temporaryPassword: props.temporaryPassword,
+        hasSeminarSlots: props.hasSeminarSlots,
       }),
-    [props.partnerName, props.login, props.temporaryPassword]
+    [
+      props.partnerName,
+      props.login,
+      props.temporaryPassword,
+      props.hasSeminarSlots,
+    ]
   );
 
   const copyText = async (label: string, value: string) => {

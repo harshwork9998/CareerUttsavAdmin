@@ -164,10 +164,9 @@ export const mockRoles: Role[] = [
   {
     id: "role-003",
     name: "Marketing",
-    description: "Manage campaigns, notifications, and promotional content.",
+    description: "Manage partner outreach and promotional campaigns.",
     permissions: [
-      { resource: "notifications", actions: ["create", "read", "update"] },
-      { resource: "blogs", actions: ["read"] },
+      { resource: "partners", actions: ["create", "read", "update"] },
       { resource: "events", actions: ["read"] },
       { resource: "reports", actions: ["read"] },
     ],
@@ -178,11 +177,10 @@ export const mockRoles: Role[] = [
   {
     id: "role-004",
     name: "Content Editor",
-    description: "Create and publish blogs, gallery items, and event content.",
+    description: "Update event content and partner-facing materials.",
     permissions: [
-      { resource: "blogs", actions: ["create", "read", "update", "delete"] },
-      { resource: "gallery", actions: ["create", "read", "update", "delete"] },
       { resource: "events", actions: ["read", "update"] },
+      { resource: "partners", actions: ["read", "update"] },
     ],
     userCount: 2,
     createdAt: "2024-01-01T00:00:00+05:30",

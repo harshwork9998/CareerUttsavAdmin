@@ -559,17 +559,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
 
   const submitChapter6 = () => {
     if (!partner) return;
-    const next: Record<string, string> = {};
-    for (const eventId of partner.eventIds) {
-      const count = slotAssignments
-        .filter((a) => a.eventId === eventId)
-        .reduce((s, a) => s + a.slots, 0);
-      if (count < 1) {
-        next[`event-${eventId}`] = "Allot at least one seminar slot for this event";
-      }
-    }
-    setErrors(next);
-    if (Object.keys(next).length) return;
+    setErrors({});
 
     saveMutation.mutate({
       create: false,
@@ -969,6 +959,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
                     onRegeneratePassword={() =>
                       setTempPassword(generateTempPassword())
                     }
+                    hasSeminarSlots={slotAssignments.some((a) => a.slots > 0)}
                     errors={errors}
                   />
                 )}

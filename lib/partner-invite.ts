@@ -26,7 +26,20 @@ export function buildPartnerWelcomeEmail(input: {
   partnerName: string;
   login: string;
   temporaryPassword: string;
+  hasSeminarSlots?: boolean;
 }) {
+  const dashboardLine = input.hasSeminarSlots
+    ? "We're excited to have you on board. Your partner dashboard is ready — review your package, check seminar slots, and upload the brand assets we need (logo, banner, and more)."
+    : "We're excited to have you on board. Your partner dashboard is ready — review your package and upload the brand assets we need (logo, banner, and more).";
+
+  const waitingLines = [
+    "    Discussed deliverables in your package",
+    ...(input.hasSeminarSlots ? ["    Seminar slots allotted"] : []),
+    "    Partner dashboard with your benefits at a glance",
+    "    Secure upload for logos, banners & required documents",
+    "    Exclusive Career Uttsav partnership updates",
+  ].join("\n");
+
   return {
     subject: `Congratulations !! You're In 🎉`,
     body: `Congratulations !! You're In 🎉
@@ -35,7 +48,7 @@ Hey ${input.partnerName} 👋
 
 Congratulations! 🎉 You've successfully partnered with Career Uttsav.
 
-We're excited to have you on board. Your partner dashboard is ready — review your package, check seminar slots, and upload the brand assets we need (logo, banner, and more).
+${dashboardLine}
 
 🔐 Your partner login
 Login: ${input.login}
@@ -45,11 +58,7 @@ Please sign in from the Partner Login tab on our website and change your passwor
 
 💡 What's waiting for you
 
-    Discussed deliverables in your package
-    Seminar slots allotted
-    Partner dashboard with your benefits at a glance
-    Secure upload for logos, banners & required documents
-    Exclusive Career Uttsav partnership updates
+${waitingLines}
 
 We look forward to an amazing partnership at Career Uttsav!
 

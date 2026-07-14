@@ -4,9 +4,6 @@ import {
   mockRegistrations,
   mockUniversities,
   mockPartners,
-  mockBlogs,
-  mockGalleryImages,
-  mockNotifications,
   mockUsers,
   mockRoles,
   mockActivityLogs,
@@ -20,9 +17,6 @@ import type {
   Registration,
   University,
   Partner,
-  Blog,
-  GalleryImage,
-  Notification,
   User,
   Role,
   ActivityLog,
@@ -143,45 +137,6 @@ export const partnersService = {
     partnersStore = partnersStore.filter((p) => p.id !== id);
     return simulate([...partnersStore]);
   },
-};
-
-export const blogsService = {
-  getAll: () => simulate([...mockBlogs]),
-  getById: (id: string) => simulate(mockBlogs.find((b) => b.id === id) ?? null),
-  create: (blog: Omit<Blog, "id" | "createdAt" | "updatedAt" | "viewCount">) =>
-    simulate({
-      ...blog,
-      id: generateId(),
-      viewCount: 0,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    } as Blog),
-  update: (id: string, data: Partial<Blog>) =>
-    simulate({ ...mockBlogs.find((b) => b.id === id)!, ...data, updatedAt: new Date().toISOString() }),
-};
-
-export const galleryService = {
-  getAll: () => simulate([...mockGalleryImages]),
-  create: (image: Omit<GalleryImage, "id" | "uploadedAt">) =>
-    simulate({
-      ...image,
-      id: generateId(),
-      uploadedAt: new Date().toISOString(),
-    } as GalleryImage),
-  update: (id: string, data: Partial<GalleryImage>) =>
-    simulate({ ...mockGalleryImages.find((g) => g.id === id)!, ...data }),
-};
-
-export const notificationsService = {
-  getAll: () => simulate([...mockNotifications]),
-  create: (notification: Omit<Notification, "id" | "createdAt">) =>
-    simulate({
-      ...notification,
-      id: generateId(),
-      createdAt: new Date().toISOString(),
-    } as Notification),
-  update: (id: string, data: Partial<Notification>) =>
-    simulate({ ...mockNotifications.find((n) => n.id === id)!, ...data }),
 };
 
 export const usersService = {

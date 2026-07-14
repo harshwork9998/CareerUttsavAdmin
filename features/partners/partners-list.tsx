@@ -25,7 +25,6 @@ import {
   ELEVATION,
   INK,
   LINE,
-  PAPER,
   displayClass,
   sectionMotion,
   surface,
@@ -53,28 +52,18 @@ function stageTone(stage: PartnerLifecycleStage): {
 } {
   switch (stage) {
     case "Confirmed":
-      return { bg: "rgba(47,107,79,0.12)", color: "#2F6B4F" };
+      return { bg: "rgba(47,107,79,0.22)", color: "#247A52" };
     case "Not Proceeding":
-      return { bg: "rgba(163,59,59,0.12)", color: "#A33B3B" };
+      return { bg: "rgba(163,59,59,0.22)", color: "#C23D3D" };
     case "Negotiation":
-      return { bg: "rgba(176,125,42,0.14)", color: "#B07D2A" };
+      return { bg: "rgba(176,125,42,0.24)", color: "#C9901F" };
+    case "Meeting Scheduled":
+      return { bg: "rgba(31,56,100,0.2)", color: "#2A4F8C" };
+    case "Contacted":
+      return { bg: "rgba(31,56,100,0.18)", color: "#355A99" };
     default:
-      return { bg: BRAND[50], color: BRAND[700] };
+      return { bg: "rgba(31,56,100,0.16)", color: "#1F3864" };
   }
-}
-
-function journeyProgress(partner: Partner): string {
-  if (partner.stage === "Not Proceeding") return "Not proceeding";
-  if (!partner.contactedAt) return "University details complete";
-  if (!partner.meetingAt) return "Awaiting meeting";
-  if (!partner.relationshipOwner?.managerName || partner.eventIds.length === 0) {
-    return "Partnership details next";
-  }
-  if (!partner.deliverablesConfirmedAt) return "Deliverables next";
-  if (!partner.seminarSlotsConfirmedAt) return "Seminar slots next";
-  if (!partner.commercialsConfirmedAt) return "Commercials next";
-  if (!partner.portalInviteSentAt) return "Partner access next";
-  return "Complete";
 }
 
 function PartnerCard({
@@ -150,20 +139,10 @@ function PartnerCard({
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <span
-          className="rounded-full px-2.5 py-1 text-xs font-medium"
+          className="rounded-full px-2.5 py-1 text-xs font-semibold tracking-wide"
           style={{ background: tone.bg, color: tone.color }}
         >
           {partner.stage}
-        </span>
-        <span
-          className="rounded-full px-2.5 py-1 text-xs font-medium"
-          style={{
-            background: PAPER.muted,
-            color: INK.secondary,
-            border: `1px solid ${LINE.subtle}`,
-          }}
-        >
-          {journeyProgress(partner)}
         </span>
       </div>
 
