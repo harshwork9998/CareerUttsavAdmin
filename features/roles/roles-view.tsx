@@ -35,6 +35,7 @@ const RESOURCES = [
   "registrations",
   "universities",
   "partners",
+  "seminars",
   "users",
   "reports",
   "settings",

@@ -281,6 +281,8 @@ export interface Partner {
   portalInviteEmail?: string;
   /** When the welcome email with credentials was sent */
   portalInviteSentAt?: string;
+  /** Brand assets & documents uploaded from the partner portal */
+  portalDocuments?: PartnerPortalDocument[];
   /** First outreach */
   contactedAt?: string;
   contactedNotes?: string;
@@ -300,6 +302,49 @@ export interface PartnerSeminarSlotAssignment {
   eventId: string;
   seminarId: string;
   slots: number;
+}
+
+export type SeminarSpeakerStatus = "Confirmed" | "Invited" | "Tentative";
+
+/** Moderator or panelist seated on a seminar session */
+export interface SeminarSpeaker {
+  id: string;
+  name: string;
+  designation?: string;
+  organization: string;
+  partnerId?: string;
+  status: SeminarSpeakerStatus;
+}
+
+/** Admin-managed roster for a seminar (panel + moderator) */
+export interface SeminarSessionRoster {
+  seminarId: string;
+  eventId: string;
+  moderator: SeminarSpeaker | null;
+  panelists: SeminarSpeaker[];
+  topicBrief?: string;
+  notes?: string;
+  updatedAt: string;
+}
+
+/** Files uploaded by the partner via the Career Uttsav partner portal */
+export type PartnerPortalDocumentKind =
+  | "logo"
+  | "banner"
+  | "writeup"
+  | "document"
+  | "other";
+
+export interface PartnerPortalDocument {
+  id: string;
+  kind: PartnerPortalDocumentKind;
+  label: string;
+  fileName: string;
+  mimeType: string;
+  /** Preview / download URL (or data URI in mocks) */
+  url: string;
+  fileSizeBytes: number;
+  uploadedAt: string;
 }
 
 export interface Blog {

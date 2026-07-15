@@ -7,12 +7,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
   ArrowRight,
-  Building2,
-  MapPin,
+  FileStack,
   MoreHorizontal,
   Plus,
   Trash2,
-  UserRound,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -24,12 +22,16 @@ import {
   BRAND,
   ELEVATION,
   INK,
-  LINE,
   displayClass,
   sectionMotion,
   surface,
 } from "@/features/dashboard/dashboard-ui";
+import { PartnerDocsDialog } from "@/features/partners/partner-docs-dialog";
 import { PartnerSummaryDialog } from "@/features/partners/partner-summary-dialog";
+import {
+  formatDaysSinceUploadChip,
+  getPartnerPortalUploadStatus,
+} from "@/lib/partner-portal-docs";
 import {
   ConfirmDialog,
   ErrorState,
@@ -69,13 +71,17 @@ function stageTone(stage: PartnerLifecycleStage): {
 function PartnerCard({
   partner,
   onOpenSummary,
+  onViewDocs,
   onDelete,
 }: {
   partner: Partner;
   onOpenSummary: (p: Partner) => void;
+  onViewDocs: (p: Partner) => void;
   onDelete: (p: Partner) => void;
 }) {
   const tone = stageTone(partner.stage);
+  const uploadStatus = getPartnerPortalUploadStatus(partner);
+  const reminderChip = formatDaysSinceUploadChip(uploadStatus);
 
   return (
     <motion.article
@@ -125,6 +131,10 @@ function PartnerCard({
                 Edit partnership
               </Link>
             </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onViewDocs(partner)}>
+              <FileStack className="h-4 w-4" />
+              View docs
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               className="text-destructive focus:text-destructive"
@@ -144,40 +154,42 @@ function PartnerCard({
         >
           {partner.stage}
         </span>
+        {reminderChip ? (
+          <span
+            className="rounded-full px-2.5 py-1 text-xs font-semibold tracking-wide"
+            style={{
+              background: "rgba(176,125,42,0.18)",
+              color: "#B07D2A",
+            }}
+          >
+            {reminderChip}
+          </span>
+        ) : null}
       </div>
 
-      <div
-        className="mt-4 space-y-2 border-t pt-4 text-xs"
-        style={{ borderColor: LINE.subtle, color: INK.secondary }}
-      >
-        {partner.relationshipOwner?.managerName ? (
-          <p className="flex items-center gap-2">
-            <UserRound className="h-3.5 w-3.5 shrink-0" />
-            {partner.relationshipOwner.organization} ·{" "}
-            {partner.relationshipOwner.managerName}
-          </p>
-        ) : (
-          <p className="flex items-center gap-2">
-            <Building2 className="h-3.5 w-3.5 shrink-0" />
-            Relationship owner pending
-          </p>
-        )}
-        <p className="flex items-center gap-2">
-          <MapPin className="h-3.5 w-3.5 shrink-0" />
-          {partner.eventIds.length} event
-          {partner.eventIds.length === 1 ? "" : "s"} linked
-        </p>
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onViewDocs(partner);
+          }}
+          className="inline-flex items-center gap-1.5 text-sm font-medium transition-opacity hover:opacity-80"
+          style={{ color: BRAND[700] }}
+        >
+          <FileStack className="h-3.5 w-3.5" />
+          View docs
+        </button>
+        <Link
+          href={`/partners/${partner.id}`}
+          onClick={(e) => e.stopPropagation()}
+          className="inline-flex items-center gap-1.5 text-sm font-medium transition-opacity hover:opacity-80"
+          style={{ color: BRAND[700] }}
+        >
+          Edit partnership
+          <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
       </div>
-
-      <Link
-        href={`/partners/${partner.id}`}
-        onClick={(e) => e.stopPropagation()}
-        className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium transition-opacity hover:opacity-80"
-        style={{ color: BRAND[700] }}
-      >
-        Edit partnership
-        <ArrowRight className="h-3.5 w-3.5" />
-      </Link>
     </motion.article>
   );
 }
@@ -187,6 +199,7 @@ export function PartnersList() {
   const queryClient = useQueryClient();
   const [pendingDelete, setPendingDelete] = useState<Partner | null>(null);
   const [summaryPartner, setSummaryPartner] = useState<Partner | null>(null);
+  const [docsPartner, setDocsPartner] = useState<Partner | null>(null);
   const [stageFilter, setStageFilter] = useState("all");
   const [tierFilter, setTierFilter] = useState("all");
   const [cityFilter, setCityFilter] = useState<string[]>([]);
@@ -339,6 +352,7 @@ export function PartnersList() {
               key={partner.id}
               partner={partner}
               onOpenSummary={setSummaryPartner}
+              onViewDocs={setDocsPartner}
               onDelete={setPendingDelete}
             />
           ))}
@@ -350,6 +364,14 @@ export function PartnersList() {
         open={Boolean(summaryPartner)}
         onOpenChange={(open) => {
           if (!open) setSummaryPartner(null);
+        }}
+      />
+
+      <PartnerDocsDialog
+        partner={docsPartner}
+        open={Boolean(docsPartner)}
+        onOpenChange={(open) => {
+          if (!open) setDocsPartner(null);
         }}
       />
 

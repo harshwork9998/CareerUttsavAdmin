@@ -1,10 +1,43 @@
 import { buildDeliverablesForTier } from "@/constants";
-import type { Partner } from "@/types";
+import type { Partner, PartnerPortalDocument } from "@/types";
 
 let deliverableSeq = 0;
 function mockDeliverableId() {
   deliverableSeq += 1;
   return `deliv-mock-${deliverableSeq}`;
+}
+
+function svgDataUri(label: string, w: number, h: number, bg: string, fg: string) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><rect width="100%" height="100%" fill="${bg}"/><text x="50%" y="50%" fill="${fg}" font-family="Georgia,serif" font-size="${Math.min(w, h) / 8}" text-anchor="middle" dominant-baseline="middle">${label}</text></svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+function mockDocs(
+  partnerKey: string,
+  items: Array<Omit<PartnerPortalDocument, "id" | "url"> & { w?: number; h?: number }>
+): PartnerPortalDocument[] {
+  return items.map((item, i) => {
+    const isImage = item.mimeType.startsWith("image/");
+    const url = isImage
+      ? svgDataUri(
+          item.label,
+          item.w ?? 800,
+          item.h ?? 400,
+          "#1F3864",
+          "#F3F6FA"
+        )
+      : `data:application/pdf;base64,JVBERi0xLjQKJeLjz9MKMSAwIG9iago8PAovVHlwZSAvQ2F0YWxvZwovUGFnZXMgMiAwIFIKPj4KZW5kb2JqCjIgMCBvYmoKPDwKL1R5cGUgL1BhZ2VzCi9LaWRzIFszIDAgUl0KL0NvdW50IDEKPD4KZW5kb2JqCjMgMCBvYmoKPDwKL1R5cGUgL1BhZ2UKL1BhcmVudCAyIDAgUgovTWVkaWFCb3ggWzAgMCA2MTIgNzkyXQovQ29udGVudHMgNCAwIFIKPj4KZW5kb2JqCjQgMCBvYmoKPDwKL0xlbmd0aCA0NAo+PgpzdHJlYW0KQlQKL0YxIDI0IFRmCjEwMCA3MDAgVGQKKFNhbXBsZSBkb2MpIFRqCkVUCmVuZHN0cmVhbQplbmRvYmoKeHJlZgowIDUKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDE1IDAwMDAwIG4gCjAwMDAwMDAwNjQgMDAwMDAgbiAKMDAwMDAwMDEyMSAwMDAwMCBuIAowMDAwMDAwMjE4IDAwMDAwIG4gCnRyYWlsZXIKPDwKL1NpemUgNQovUm9vdCAxIDAgUgo+PgpzdGFydHhyZWYKMjkxCiUlRU9G`;
+    return {
+      id: `pdoc-${partnerKey}-${i + 1}`,
+      kind: item.kind,
+      label: item.label,
+      fileName: item.fileName,
+      mimeType: item.mimeType,
+      url,
+      fileSizeBytes: item.fileSizeBytes,
+      uploadedAt: item.uploadedAt,
+    };
+  });
 }
 
 export const mockPartners: Partner[] = [
@@ -57,8 +90,30 @@ export const mockPartners: Partner[] = [
       { eventId: "evt-001", seminarId: "sem-001-a", slots: 1 },
       { eventId: "evt-001", seminarId: "sem-001-b", slots: 1 },
     ],
+    portalDocuments: mockDocs("001", [
+      {
+        kind: "logo",
+        label: "Primary logo",
+        fileName: "christ-logo.svg",
+        mimeType: "image/svg+xml",
+        fileSizeBytes: 15200,
+        uploadedAt: "2026-07-05T14:10:00+05:30",
+        w: 640,
+        h: 640,
+      },
+      {
+        kind: "banner",
+        label: "Stall / venue banner",
+        fileName: "christ-banner.svg",
+        mimeType: "image/svg+xml",
+        fileSizeBytes: 88000,
+        uploadedAt: "2026-07-05T14:12:00+05:30",
+        w: 1600,
+        h: 500,
+      },
+    ]),
     createdAt: "2026-06-01T10:00:00+05:30",
-    updatedAt: "2026-07-02T11:00:00+05:30",
+    updatedAt: "2026-07-05T14:12:00+05:30",
   },
   {
     id: "partner-002",
@@ -107,8 +162,47 @@ export const mockPartners: Partner[] = [
       { eventId: "evt-001", seminarId: "sem-001-c", slots: 2 },
     ],
     seminarSlotsConfirmedAt: "2026-06-28T16:45:00+05:30",
+    portalInviteSentAt: "2026-06-29T10:00:00+05:30",
+    portalDocuments: mockDocs("002", [
+      {
+        kind: "logo",
+        label: "Primary logo",
+        fileName: "pes-logo.svg",
+        mimeType: "image/svg+xml",
+        fileSizeBytes: 18420,
+        uploadedAt: "2026-07-01T11:20:00+05:30",
+        w: 640,
+        h: 640,
+      },
+      {
+        kind: "banner",
+        label: "Stall / venue banner",
+        fileName: "pes-banner.svg",
+        mimeType: "image/svg+xml",
+        fileSizeBytes: 92600,
+        uploadedAt: "2026-07-01T11:22:00+05:30",
+        w: 1600,
+        h: 500,
+      },
+      {
+        kind: "writeup",
+        label: "Souvenir write-up",
+        fileName: "pes-souvenir-writeup.pdf",
+        mimeType: "application/pdf",
+        fileSizeBytes: 245760,
+        uploadedAt: "2026-07-02T09:15:00+05:30",
+      },
+      {
+        kind: "document",
+        label: "Brand guidelines",
+        fileName: "pes-brand-guidelines.pdf",
+        mimeType: "application/pdf",
+        fileSizeBytes: 512000,
+        uploadedAt: "2026-07-02T09:18:00+05:30",
+      },
+    ]),
     createdAt: "2026-05-20T09:00:00+05:30",
-    updatedAt: "2026-06-28T16:30:00+05:30",
+    updatedAt: "2026-07-02T09:18:00+05:30",
   },
   {
     id: "partner-003",

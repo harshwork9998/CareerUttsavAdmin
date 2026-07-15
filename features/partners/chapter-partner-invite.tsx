@@ -77,10 +77,6 @@ export function ChapterPartnerInvite(props: {
         >
           Send them in with a smile
         </h3>
-        <p className="mt-2 max-w-2xl text-sm" style={{ color: INK.secondary }}>
-          Generate login credentials for the Partner Login tab, then email a
-          cheerful welcome with their package summary and upload instructions.
-        </p>
 
         <div className="mt-6 grid gap-4 lg:grid-cols-2">
           <div
@@ -194,17 +190,11 @@ export function ChapterPartnerInvite(props: {
         >
           Email preview
         </p>
-        <p
-          className={cn(displayClass, "mt-1 text-lg font-bold")}
-          style={{ color: INK.primary }}
-        >
-          {emailPreview.subject}
-        </p>
         <Textarea
           readOnly
-          rows={18}
+          rows={28}
           value={emailPreview.body}
-          className="mt-4 resize-none bg-[color:var(--muted,#F8FAFC)] font-mono text-xs leading-relaxed"
+          className="mt-4 min-h-[32rem] resize-none bg-[color:var(--muted,#F8FAFC)] font-mono text-sm leading-relaxed"
         />
       </motion.section>
     </div>

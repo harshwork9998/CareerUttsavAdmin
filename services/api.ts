@@ -4,6 +4,7 @@ import {
   mockRegistrations,
   mockUniversities,
   mockPartners,
+  mockSeminarRosters,
   mockUsers,
   mockRoles,
   mockActivityLogs,
@@ -17,6 +18,7 @@ import type {
   Registration,
   University,
   Partner,
+  SeminarSessionRoster,
   User,
   Role,
   ActivityLog,
@@ -136,6 +138,30 @@ export const partnersService = {
   delete: (id: string) => {
     partnersStore = partnersStore.filter((p) => p.id !== id);
     return simulate([...partnersStore]);
+  },
+};
+
+let seminarRostersStore: SeminarSessionRoster[] = [...mockSeminarRosters];
+
+export const seminarsService = {
+  getRosters: () => simulate([...seminarRostersStore]),
+  getRosterBySeminarId: (seminarId: string) =>
+    simulate(
+      seminarRostersStore.find((r) => r.seminarId === seminarId) ?? null
+    ),
+  upsertRoster: (roster: SeminarSessionRoster) => {
+    const idx = seminarRostersStore.findIndex(
+      (r) => r.seminarId === roster.seminarId
+    );
+    const next = { ...roster, updatedAt: new Date().toISOString() };
+    if (idx >= 0) {
+      seminarRostersStore = seminarRostersStore.map((r, i) =>
+        i === idx ? next : r
+      );
+    } else {
+      seminarRostersStore = [...seminarRostersStore, next];
+    }
+    return simulate(next);
   },
 };
 
