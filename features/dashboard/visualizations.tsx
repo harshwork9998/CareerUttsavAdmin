@@ -443,7 +443,7 @@ export function PartnerJourneyFlow({
   const [hover, setHover] = useState<string | null>(null);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <h3 className="text-[15px] font-bold tracking-tight text-foreground">
@@ -487,12 +487,12 @@ export function PartnerJourneyFlow({
                   ease: [0.22, 1, 0.36, 1],
                 }}
                 className={cn(
-                  "group relative z-[1] flex w-full min-w-[80px] flex-col items-center gap-2 px-1 text-center outline-none transition-opacity duration-150 sm:min-w-0 sm:px-1.5",
+                  "group relative z-[1] flex w-full min-w-[72px] flex-col items-center gap-1.5 px-1 text-center outline-none transition-opacity duration-150 sm:min-w-0 sm:px-1",
                   !active && "opacity-35"
                 )}
               >
                 <motion.div
-                  className="relative flex h-14 w-14 items-center justify-center rounded-full text-white shadow-[0_0_0_4px_rgba(31,56,100,0.1)] sm:h-16 sm:w-16 sm:shadow-[0_0_0_5px_rgba(31,56,100,0.1)]"
+                  className="relative flex h-12 w-12 items-center justify-center rounded-full text-white shadow-[0_0_0_3px_rgba(31,56,100,0.1)] sm:h-14 sm:w-14"
                   style={{ backgroundColor: BRAND[700] }}
                   initial={{ scale: 0.7, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
@@ -504,16 +504,16 @@ export function PartnerJourneyFlow({
                   }}
                   whileHover={{ scale: 1.05 }}
                 >
-                  <span className="text-[22px] font-semibold leading-none tracking-[-0.04em] tabular-nums sm:text-[26px]">
+                  <span className="text-[18px] font-semibold leading-none tracking-[-0.04em] tabular-nums sm:text-[22px]">
                     {formatNumber(stage.count)}
                   </span>
                 </motion.div>
 
                 <div className="space-y-0.5">
-                  <p className="text-[12px] font-bold leading-snug tracking-tight text-foreground sm:text-[13px]">
+                  <p className="text-[11px] font-bold leading-snug tracking-tight text-foreground sm:text-[12px]">
                     {DISCUSSION_LABELS[stage.name]}
                   </p>
-                  <p className="text-[10px] tabular-nums text-muted-foreground sm:text-[11px]">
+                  <p className="text-[10px] tabular-nums text-muted-foreground">
                     {share}% of open
                   </p>
                 </div>

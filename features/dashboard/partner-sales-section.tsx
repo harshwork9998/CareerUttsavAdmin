@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 
-import { cn, formatNumber } from "@/lib/utils";
+import { cn, formatCurrency, formatNumber } from "@/lib/utils";
 import type {
   PartnerJourneyStage,
   PartnerSalesAnalytics,
@@ -27,7 +27,14 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { BRAND, surface } from "@/features/dashboard/dashboard-ui";
+import {
+  BRAND,
+  INK,
+  LINE,
+  PAPER,
+  displayClass,
+  surface,
+} from "@/features/dashboard/dashboard-ui";
 import { PartnerJourneyFlow } from "@/features/dashboard/visualizations";
 
 const LOGO_WASHES = [
@@ -333,6 +340,173 @@ function AllUniversitiesDialog({
   );
 }
 
+function TierPartnersDialog({
+  open,
+  onOpenChange,
+  tier,
+  deals,
+  isAllCities,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  tier: SponsorshipTier | null;
+  deals: PartnerSalesDeal[];
+  isAllCities?: boolean;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex max-h-[80vh] w-[calc(100%-1.5rem)] max-w-lg flex-col gap-0 overflow-hidden p-0 sm:rounded-2xl">
+        <DialogHeader className="border-b px-5 py-4 pr-12 sm:px-6" style={{ borderColor: LINE.subtle }}>
+          <DialogTitle className="text-[17px] font-bold tracking-tight">
+            {tier ?? "Partners"}
+          </DialogTitle>
+          <DialogDescription className="text-[13px]">
+            <span className="font-semibold tabular-nums text-foreground">
+              {formatNumber(deals.length)}
+            </span>{" "}
+            confirmed partner{deals.length === 1 ? "" : "s"}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="min-h-0 flex-1 overflow-auto px-5 py-4 sm:px-6">
+          {deals.length === 0 ? (
+            <div
+              className="flex h-28 items-center justify-center rounded-xl border border-dashed text-[13px]"
+              style={{ borderColor: LINE.subtle, color: INK.muted }}
+            >
+              No confirmed partners in this tier
+            </div>
+          ) : (
+            <ul className="space-y-1.5">
+              {deals.map((deal, index) => (
+                <li
+                  key={deal.id}
+                  className="flex items-center gap-2.5 rounded-lg px-1.5 py-2 hover:bg-brand-50"
+                >
+                  <PartnerLogo name={deal.universityName} index={index} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[14px] font-semibold tracking-tight">
+                      {deal.universityName}
+                    </p>
+                    <p className="text-[12px]" style={{ color: INK.muted }}>
+                      {isAllCities ? `${deal.city} · ` : ""}
+                      {formatCurrency(deal.value)}
+                      {deal.owner ? ` · ${deal.owner}` : ""}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function RevenueCard({
+  totalRevenue,
+  tierRows,
+}: {
+  totalRevenue: number;
+  tierRows: Array<{ tier: SponsorshipTier; amount: number }>;
+}) {
+  const composition = useMemo(() => {
+    const total = tierRows.reduce((s, r) => s + r.amount, 0) || 1;
+    return tierRows.map((r) => ({
+      name: r.tier,
+      value: r.amount,
+      pct: Math.round((r.amount / total) * 1000) / 10,
+    }));
+  }, [tierRows]);
+
+  return (
+    <motion.div
+      className={cn(
+        surface.opening,
+        "flex h-full min-h-0 flex-col overflow-hidden"
+      )}
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, delay: 0.14, ease: [0.22, 1, 0.36, 1] }}
+    >
+      <div
+        className="relative shrink-0 px-5 py-4 sm:px-6 sm:py-5"
+        style={{
+          background: `linear-gradient(145deg, ${BRAND[900]} 0%, ${BRAND[700]} 58%, ${BRAND[600]} 100%)`,
+        }}
+      >
+        <div
+          className="pointer-events-none absolute inset-0 opacity-40"
+          style={{
+            background:
+              "radial-gradient(ellipse 80% 70% at 100% 0%, rgba(196,163,90,0.28), transparent 55%)",
+          }}
+        />
+        <div className="relative">
+          <p className="text-[11px] font-semibold tracking-[0.18em] text-white/55 uppercase">
+            Total revenue
+          </p>
+          <p
+            className={cn(
+              displayClass,
+              "mt-1.5 text-[28px] font-semibold leading-none text-white sm:text-[32px]"
+            )}
+          >
+            {formatCurrency(totalRevenue)}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex min-h-0 flex-1 flex-col px-5 py-4 sm:px-6 sm:py-5">
+        <h4
+          className="mb-2.5 shrink-0 text-[11px] font-semibold tracking-[0.16em] uppercase"
+          style={{ color: INK.muted }}
+        >
+          Composition
+        </h4>
+        {composition.length === 0 ? (
+          <p className="text-[13px]" style={{ color: INK.muted }}>
+            No confirmed composition yet
+          </p>
+        ) : (
+          <div className="grid min-h-0 flex-1 grid-cols-2 content-start gap-2 overflow-y-auto">
+            {composition.map((row) => (
+              <div
+                key={row.name}
+                className="rounded-xl px-3 py-2.5"
+                style={{
+                  background: PAPER.muted,
+                  border: `1px solid ${LINE.subtle}`,
+                }}
+              >
+                <p
+                  className="truncate text-[11px] font-medium leading-snug"
+                  style={{ color: INK.secondary }}
+                  title={row.name}
+                >
+                  {row.name}
+                </p>
+                <p
+                  className="mt-1 text-[20px] font-semibold tabular-nums tracking-tight"
+                  style={{ color: BRAND[700] }}
+                >
+                  {row.pct}%
+                </p>
+                <p
+                  className="mt-0.5 text-[11px] tabular-nums"
+                  style={{ color: INK.muted }}
+                >
+                  {formatCurrency(row.value)}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
 export function PartnerSalesSection({
   data,
   isAllCities,
@@ -346,15 +520,11 @@ export function PartnerSalesSection({
 }) {
   const [filter, setFilter] = useState<DrillFilter | null>(null);
   const [allOpen, setAllOpen] = useState(false);
-  const [selectedTier, setSelectedTier] = useState<SponsorshipTier | null>(
-    null
-  );
+  const [tierPopup, setTierPopup] = useState<SponsorshipTier | null>(null);
   const sheetOpen = filter !== null && filter.type !== "all";
   const lastSeeAllTick = useRef(seeAllTick);
 
   useEffect(() => {
-    // Only open when the parent explicitly increments the tick —
-    // not when this section remounts after a city change.
     if (seeAllTick > lastSeeAllTick.current) {
       setAllOpen(true);
     }
@@ -396,17 +566,12 @@ export function PartnerSalesSection({
     }));
   }, [confirmedPartners]);
 
-  const activeTier =
-    selectedTier ??
-    confirmedTiers.find((row) => row.count > 0)?.tier ??
-    null;
-
-  const tierPartners = useMemo(
+  const popupPartners = useMemo(
     () =>
-      activeTier
-        ? confirmedPartners.filter((deal) => deal.tier === activeTier)
+      tierPopup
+        ? confirmedPartners.filter((deal) => deal.tier === tierPopup)
         : [],
-    [confirmedPartners, activeTier]
+    [confirmedPartners, tierPopup]
   );
 
   const filteredDeals = useMemo(
@@ -414,89 +579,100 @@ export function PartnerSalesSection({
     [data.deals, filter]
   );
 
+  const totalRevenue = useMemo(
+    () =>
+      confirmedPartners.reduce((sum, deal) => sum + (deal.value || 0), 0),
+    [confirmedPartners]
+  );
+
+  const tierRows = useMemo(() => {
+    const amountByTier = new Map<string, number>();
+    for (const deal of confirmedPartners) {
+      amountByTier.set(
+        deal.tier,
+        (amountByTier.get(deal.tier) ?? 0) + (deal.value || 0)
+      );
+    }
+    return TIER_ORDER.map((tier) => ({
+      tier,
+      amount: amountByTier.get(tier) ?? 0,
+    })).filter((r) => r.amount > 0);
+  }, [confirmedPartners]);
+
   const openFilter = (next: DrillFilter) => setFilter(next);
 
   return (
-    <section className="space-y-8">
-      <motion.div
-        className={cn(surface.mint, "p-4 sm:p-5")}
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.12, ease: [0.22, 1, 0.36, 1] }}
-      >
-        <PartnerJourneyFlow
-          stages={stages}
-          onSelect={(name) =>
-            openFilter({
-              type: "stage",
-              value: name as PartnerJourneyStage,
-            })
-          }
-        />
-      </motion.div>
+    <section>
+      {/* Left column sets height; right fills it and never grows the row */}
+      <div className="grid gap-3 lg:grid-cols-2 lg:items-stretch">
+        <div className="flex flex-col gap-3">
+          <motion.div
+            className={cn(surface.mint, "p-3.5 sm:p-4")}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.12, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <PartnerJourneyFlow
+              stages={stages}
+              onSelect={(name) =>
+                openFilter({
+                  type: "stage",
+                  value: name as PartnerJourneyStage,
+                })
+              }
+            />
+          </motion.div>
 
-      <div className="grid gap-3 lg:grid-cols-2 lg:items-start">
-        <motion.div
-          className={cn(surface.opening, "flex flex-col bg-brand-50/50 p-3.5 sm:p-4")}
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.18, ease: [0.22, 1, 0.36, 1] }}
-        >
-          <h3 className="mb-2.5 text-[16px] font-bold tracking-tight text-foreground">
-            Sponsorship tiers
-          </h3>
+          <motion.div
+            className={cn(surface.opening, "flex flex-col bg-brand-50/50 p-3.5 sm:p-4")}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.18, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <h3 className="mb-2.5 text-[16px] font-bold tracking-tight text-foreground">
+              Sponsorship tiers
+            </h3>
 
-          <div className="overflow-hidden rounded-lg border border-brand-900/8 bg-white">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-brand-900/8 bg-brand-50/80">
-                  <th className="px-3 py-1.5 text-left text-[12px] font-semibold text-brand-900/55">
-                    Tier
-                  </th>
-                  <th className="px-3 py-1.5 text-right text-[12px] font-semibold text-brand-900/55">
-                    Partners
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {confirmedTiers.map((row) => {
-                  const isActive = activeTier === row.tier;
-                  return (
+            <div className="overflow-hidden rounded-lg border border-brand-900/8 bg-white">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-brand-900/8 bg-brand-50/80">
+                    <th className="px-3 py-1.5 text-left text-[12px] font-semibold text-brand-900/55">
+                      Tier
+                    </th>
+                    <th className="px-3 py-1.5 text-right text-[12px] font-semibold text-brand-900/55">
+                      Partners
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {confirmedTiers.map((row) => (
                     <tr
                       key={row.tier}
-                      className={cn(
-                        "border-b border-brand-900/6 last:border-b-0 transition-colors",
-                        isActive ? "bg-brand-50" : "hover:bg-brand-50/50"
-                      )}
+                      className="border-b border-brand-900/6 last:border-b-0 transition-colors hover:bg-brand-50/50"
                     >
                       <td className="px-3 py-1.5">
-                        <button
-                          type="button"
-                          disabled={row.count === 0}
-                          onClick={() => setSelectedTier(row.tier)}
+                        <span
                           className={cn(
-                            "text-left text-[15px] tracking-tight disabled:cursor-default",
-                            isActive
-                              ? "font-semibold text-brand-900"
-                              : "font-medium text-foreground/90",
-                            row.count === 0 && "text-muted-foreground/60"
+                            "text-[15px] tracking-tight",
+                            row.count === 0
+                              ? "font-medium text-muted-foreground/60"
+                              : "font-medium text-foreground/90"
                           )}
                         >
                           {row.tier}
-                        </button>
+                        </span>
                       </td>
                       <td className="px-3 py-1.5 text-right">
                         <button
                           type="button"
                           disabled={row.count === 0}
-                          onClick={() => setSelectedTier(row.tier)}
+                          onClick={() => setTierPopup(row.tier)}
                           className={cn(
                             "inline-flex min-w-[1.75rem] items-center justify-center rounded-md px-1.5 py-0.5 text-[15px] font-semibold tabular-nums transition-colors",
                             row.count === 0
                               ? "cursor-default text-muted-foreground/50"
-                              : isActive
-                                ? "bg-brand-700 text-white"
-                                : "bg-brand-100 text-brand-800 hover:bg-brand-100"
+                              : "bg-brand-100 text-brand-800 hover:bg-brand-700 hover:text-white"
                           )}
                           aria-label={`Show ${row.count} ${row.tier} partners`}
                         >
@@ -504,65 +680,27 @@ export function PartnerSalesSection({
                         </button>
                       </td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </motion.div>
-
-        <motion.div
-          className={cn(surface.opening, "flex flex-col p-3.5 sm:p-4")}
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.24, ease: [0.22, 1, 0.36, 1] }}
-        >
-          <div className="mb-2.5 flex items-baseline justify-between gap-2">
-            <h3 className="text-[16px] font-bold tracking-tight text-foreground">
-              {activeTier ?? "Partners"}
-            </h3>
-            {activeTier && (
-              <p className="text-[12px] tabular-nums text-brand-700/70">
-                {formatNumber(tierPartners.length)}
-              </p>
-            )}
-          </div>
-
-          {tierPartners.length === 0 ? (
-            <div className="flex items-center justify-center rounded-lg border border-dashed border-brand-900/15 bg-brand-50/50 py-6 text-[14px] text-muted-foreground">
-              No confirmed partners in this tier
+                  ))}
+                </tbody>
+              </table>
             </div>
-          ) : (
-            <ul className="grid content-start gap-1">
-              {tierPartners.map((deal, index) => (
-                <motion.li
-                  key={deal.id}
-                  initial={{ opacity: 0, x: 8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{
-                    duration: 0.25,
-                    delay: index * 0.03,
-                    ease: [0.22, 1, 0.36, 1],
-                  }}
-                  className="flex items-center gap-2.5 rounded-lg px-1.5 py-1.5 hover:bg-brand-50"
-                >
-                  <PartnerLogo name={deal.universityName} index={index} />
-                  <div className="min-w-0">
-                    <p className="truncate text-[15px] font-semibold tracking-tight text-foreground">
-                      {deal.universityName}
-                    </p>
-                    {isAllCities && (
-                      <p className="text-[12px] text-muted-foreground">
-                        {deal.city}
-                      </p>
-                    )}
-                  </div>
-                </motion.li>
-              ))}
-            </ul>
-          )}
-        </motion.div>
+          </motion.div>
+        </div>
+
+        <div className="min-h-0 lg:h-0 lg:min-h-full">
+          <RevenueCard totalRevenue={totalRevenue} tierRows={tierRows} />
+        </div>
       </div>
+
+      <TierPartnersDialog
+        open={tierPopup !== null}
+        onOpenChange={(open) => {
+          if (!open) setTierPopup(null);
+        }}
+        tier={tierPopup}
+        deals={popupPartners}
+        isAllCities={isAllCities}
+      />
 
       <AllUniversitiesDialog
         open={allOpen}
