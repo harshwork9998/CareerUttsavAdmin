@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { motion } from "framer-motion";
 import {
@@ -27,6 +27,10 @@ import type {
 import { BRAND, surface } from "@/features/dashboard/dashboard-ui";
 import { SeminarProgram } from "@/features/dashboard/seminar-program";
 import { ShareDonutCard } from "@/features/dashboard/share-donut-card";
+import {
+  aggregateByCareerInterest,
+  type CareerInterestRow,
+} from "@/features/dashboard/seminars";
 
 type TimelineMode = "weekly" | "monthly" | "custom";
 
@@ -332,34 +336,107 @@ function LiveRegistrationFeed({ items }: { items: LiveRegistrationItem[] }) {
   );
 }
 
-function RegistrantOriginsAndTrend({
-  cities,
-  total,
+function CareerInterestPanel({ rows }: { rows: CareerInterestRow[] }) {
+  const [expandedId, setExpandedId] = useState<CareerInterestRow["id"] | null>(
+    null
+  );
+
+  return (
+    <div className="flex flex-col border-b border-brand-900/10 p-5 sm:p-6 lg:border-b-0 lg:border-r">
+      <div className="mb-4">
+        <h3 className="text-[15px] font-bold tracking-tight text-foreground">
+          Career interests
+        </h3>
+        <p className="mt-1 text-[12px] text-muted-foreground">
+          Which careers registrants want to pursue
+        </p>
+      </div>
+
+      <div className="max-h-[340px] flex-1 overflow-auto rounded-xl border border-brand-900/12">
+        <table className="w-full text-sm">
+          <thead className="sticky top-0 z-[1]">
+            <tr className="border-b border-brand-900/10 bg-brand-50/95">
+              <th className="px-3 py-2 text-left text-[11px] font-semibold text-brand-900/55">
+                Track
+              </th>
+              <th className="px-3 py-2 text-right text-[11px] font-semibold text-brand-900/55">
+                Registrations
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const expanded = expandedId === row.id;
+              return (
+                <Fragment key={row.id}>
+                  <tr
+                    className="cursor-pointer border-b border-brand-900/8 hover:bg-brand-50/40"
+                    onClick={() =>
+                      setExpandedId(expanded ? null : row.id)
+                    }
+                  >
+                    <td className="px-3 py-2.5">
+                      <div className="flex items-start gap-2">
+                        <span className="mt-0.5 text-base leading-none">
+                          {row.emoji}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-[13px] font-semibold tracking-tight text-foreground">
+                            {row.label}
+                          </p>
+                          <p className="mt-0.5 text-[11px] text-brand-900/45">
+                            {row.seminars.length} sessions · tap to view
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2.5 text-right text-[13px] font-semibold tabular-nums text-brand-950">
+                      {formatNumber(row.value)}
+                    </td>
+                  </tr>
+                  {expanded ? (
+                    <tr className="border-b border-brand-900/8 bg-brand-50/30">
+                      <td colSpan={2} className="px-3 py-2">
+                        <ul className="space-y-1.5 pl-1">
+                          {row.seminars.map((seminar) => (
+                            <li
+                              key={seminar.name}
+                              className="flex items-start justify-between gap-3 text-[12px]"
+                            >
+                              <span className="min-w-0 text-brand-900/75">
+                                {seminar.name}
+                              </span>
+                              <span className="shrink-0 font-semibold tabular-nums text-brand-950">
+                                {formatNumber(seminar.value)}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </td>
+                    </tr>
+                  ) : null}
+                </Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function CareerInterestAndTrend({
+  careerInterests,
   weeklyTrend,
   liveFeed,
 }: {
-  cities: Array<{ name: string; value: number }>;
-  total: number;
+  careerInterests: CareerInterestRow[];
   weeklyTrend: Array<{ name: string; value: number }>;
   liveFeed: LiveRegistrationItem[];
 }) {
   const [mode, setMode] = useState<TimelineMode>("weekly");
   const [customFrom, setCustomFrom] = useState<string>(SEASON_FROM);
   const [customTo, setCustomTo] = useState<string>(SEASON_TO);
-
-  const rows = useMemo(
-    () =>
-      [...cities]
-        .map((c) => ({
-          name: String(c.name),
-          value: Number(c.value),
-        }))
-        .filter((c) => c.value > 0)
-        .sort((a, b) => b.value - a.value),
-    [cities]
-  );
-
-  const denom = total || rows.reduce((s, r) => s + r.value, 0) || 1;
 
   const weeklyPoints = useMemo(() => {
     const source =
@@ -435,56 +512,7 @@ function RegistrantOriginsAndTrend({
       transition={{ duration: 0.45, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
     >
       <div className="grid lg:grid-cols-3 lg:items-stretch">
-        {/* Locations — 1/3 */}
-        <div className="flex flex-col border-b border-brand-900/10 p-5 sm:p-6 lg:border-b-0 lg:border-r">
-          <div className="mb-4">
-            <h3 className="text-[15px] font-bold tracking-tight text-foreground">
-              Where registrants are from
-            </h3>
-            <p className="mt-1 text-[12px] text-muted-foreground">
-              Location entered on the registration form
-            </p>
-          </div>
-
-          <div className="max-h-[340px] flex-1 overflow-auto rounded-xl border border-brand-900/12">
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 z-[1]">
-                <tr className="border-b border-brand-900/10 bg-brand-50/95">
-                  <th className="px-3 py-2 text-left text-[11px] font-semibold text-brand-900/55">
-                    Location
-                  </th>
-                  <th className="px-3 py-2 text-right text-[11px] font-semibold text-brand-900/55">
-                    Students
-                  </th>
-                  <th className="px-3 py-2 text-right text-[11px] font-semibold text-brand-900/55">
-                    Share
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => {
-                  const share = Math.round((row.value / denom) * 1000) / 10;
-                  return (
-                    <tr
-                      key={row.name}
-                      className="border-b border-brand-900/8 last:border-b-0 hover:bg-brand-50/40"
-                    >
-                      <td className="px-3 py-2 text-[13px] font-semibold tracking-tight text-foreground">
-                        {row.name}
-                      </td>
-                      <td className="px-3 py-2 text-right text-[13px] font-semibold tabular-nums text-brand-950">
-                        {formatNumber(row.value)}
-                      </td>
-                      <td className="px-3 py-2 text-right text-[12px] tabular-nums text-muted-foreground">
-                        {share % 1 === 0 ? share : share.toFixed(1)}%
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <CareerInterestPanel rows={careerInterests} />
 
         {/* Registration trend — 1/3 */}
         <div className="flex flex-col border-b border-brand-900/10 p-5 sm:p-6 lg:border-b-0 lg:border-r">
@@ -635,13 +663,15 @@ export function StudentRegistrationSection({
     [data.byGender]
   );
 
-  const cityData = useMemo(
+  const careerInterests = useMemo(
     () =>
-      (data.byRegistrantCity ?? data.byCity).map((item) => ({
-        name: String(item.name),
-        value: Number(item.value),
-      })),
-    [data.byRegistrantCity, data.byCity]
+      aggregateByCareerInterest(
+        data.bySeminar.map((item) => ({
+          name: String(item.name),
+          value: Number(item.value),
+        }))
+      ),
+    [data.bySeminar]
   );
 
   const weeklyTrend = useMemo(() => {
@@ -690,9 +720,8 @@ export function StudentRegistrationSection({
         <ShareDonutCard title="Gender" items={genderData} delay={0.18} />
       </div>
 
-      <RegistrantOriginsAndTrend
-        cities={cityData}
-        total={data.total}
+      <CareerInterestAndTrend
+        careerInterests={careerInterests}
         weeklyTrend={weeklyTrend}
         liveFeed={liveFeed}
       />

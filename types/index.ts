@@ -173,6 +173,8 @@ export interface Registration {
   checkInTime?: string;
   registeredAt: string;
   updatedAt: string;
+  /** Seminar sessions selected at registration (catalog titles). */
+  seminarInterests?: string[];
   /** Legacy — prefer interestedStream */
   course?: string;
   /** Legacy — prefer classLabel */
@@ -183,6 +185,24 @@ export interface Registration {
     | "4th Year"
     | "Final Year"
     | "Graduate";
+}
+
+export type BroadcastChannel = "email" | "whatsapp";
+
+export interface SeminarBroadcastRequest {
+  eventId: string;
+  seminarTitle: string;
+  channel: BroadcastChannel;
+  subject?: string;
+  message: string;
+  recipientIds: string[];
+}
+
+export interface SeminarBroadcastResult {
+  channel: BroadcastChannel;
+  sent: number;
+  failed: number;
+  batchId: string;
 }
 
 export interface University {

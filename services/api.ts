@@ -25,6 +25,8 @@ import type {
   DashboardData,
   Report,
   Settings,
+  SeminarBroadcastRequest,
+  SeminarBroadcastResult,
 } from "@/types";
 import { generateId } from "@/lib/utils";
 
@@ -199,4 +201,18 @@ export const settingsService = {
   get: () => simulate({ ...mockSettings }),
   update: (data: Partial<Settings>) =>
     simulate({ ...mockSettings, ...data }),
+};
+
+export const messagingService = {
+  sendSeminarBroadcast: (payload: SeminarBroadcastRequest) => {
+    const sent = payload.recipientIds.length;
+    const failed = payload.channel === "whatsapp" ? Math.min(1, sent > 0 ? 0 : 0) : 0;
+    const result: SeminarBroadcastResult = {
+      channel: payload.channel,
+      sent: Math.max(0, sent - failed),
+      failed,
+      batchId: `batch-${generateId()}`,
+    };
+    return simulate(result);
+  },
 };

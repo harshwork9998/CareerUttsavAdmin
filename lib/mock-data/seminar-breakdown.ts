@@ -23,35 +23,6 @@ const CITY_SHARE: Record<OperatingCity, number> = {
   Hubli: 0.2,
 };
 
-const REGISTRANT_LOCATIONS: Record<OperatingCity, string[]> = {
-  Bangalore: [
-    "Whitefield",
-    "Koramangala",
-    "Indiranagar",
-    "Jayanagar",
-    "HSR Layout",
-    "Electronic City",
-    "Yelahanka",
-    "Tumkur",
-  ],
-  Mysore: [
-    "Vijayanagar",
-    "Gokulam",
-    "Kuvempunagar",
-    "Yadavagiri",
-    "Mandya",
-    "Nanjangud",
-  ],
-  Hubli: [
-    "Vidyanagar",
-    "Deshpande Nagar",
-    "Gokul Road",
-    "Dharwad",
-    "Unkal",
-    "Navanagar",
-  ],
-};
-
 /** Stable 0–1 hash from a string (for deterministic mock variation). */
 function hash01(input: string): number {
   let h = 0;
@@ -111,7 +82,6 @@ export interface SeminarCityProfile {
   city: OperatingCity;
   total: number;
   byGender: ChartDataPoint[];
-  byRegistrantCity: ChartDataPoint[];
   byClass: ChartDataPoint[];
   byBoard: ChartDataPoint[];
   byStream: ChartDataPoint[];
@@ -153,7 +123,7 @@ export function buildSeminarBreakdown(
 }
 
 /**
- * Build gender / hometown / class / board / stream mix for one seminar in one city.
+ * Build gender / class / board / stream mix for one seminar in one city.
  */
 export function buildSeminarCityProfile(
   name: string,
@@ -161,7 +131,6 @@ export function buildSeminarCityProfile(
   city: OperatingCity
 ): SeminarCityProfile {
   const seed = `${name}:${city}`;
-  const locations = REGISTRANT_LOCATIONS[city];
 
   return {
     name,
@@ -170,12 +139,6 @@ export function buildSeminarCityProfile(
     byGender: weightedSeries(seed, GENDER_LABELS, total, (label) =>
       label === "Female" ? 1.08 : 1
     ),
-    byRegistrantCity: weightedSeries(
-      seed,
-      locations,
-      total,
-      (_label, index) => Math.max(0.35, 1.4 - index * 0.12)
-    ).sort((a, b) => Number(b.value) - Number(a.value)),
     byClass: weightedSeries(seed, CLASS_LABELS, total, (_label, idx) => {
       const isCore = idx >= 5;
       return isCore ? 1.6 + (idx - 5) * 0.25 : 0.55 + idx * 0.08;

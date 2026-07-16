@@ -19,11 +19,12 @@ import { toast } from "sonner";
 
 import {
   eventsService,
-  registrationsService,
   partnersService,
 } from "@/services/api";
 import { cn, formatDate, formatDateTime, formatNumber } from "@/lib/utils";
 import { CreateEventDialog } from "@/features/events/create-event-dialog";
+import { SeminarProgram } from "@/features/dashboard/seminar-program";
+import { buildEventSeminarRegistrationItems } from "@/features/dashboard/seminars";
 import {
   BRAND,
   INK,
@@ -36,16 +37,13 @@ import {
 } from "@/features/dashboard/dashboard-ui";
 import {
   ConfirmDialog,
-  DataTable,
   EmptyState,
   ErrorState,
-  TableSkeleton,
-  type ColumnDef,
 } from "@/components/shared";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { Event, EventSeminar, Registration } from "@/types";
+import type { Event, EventSeminar, OperatingCity } from "@/types";
 
 function formatSeminarTime(time: string): string {
   if (!time) return "—";
@@ -58,6 +56,13 @@ function formatSeminarTime(time: string): string {
     minute: "2-digit",
     hour12: true,
   });
+}
+
+function eventOperatingCity(city: string): OperatingCity {
+  if (city === "Mysore" || city === "Hubli" || city === "Bangalore") {
+    return city;
+  }
+  return "Bangalore";
 }
 
 function toDateOnly(value: string): string {
@@ -112,12 +117,6 @@ export function EventDetail({ eventId }: EventDetailProps) {
     onError: () => toast.error("Failed to delete event"),
   });
 
-  const registrationsQuery = useQuery({
-    queryKey: ["registrations", "event", eventId],
-    queryFn: () => registrationsService.getByEvent(eventId),
-    enabled: activeTab === "registrations" || activeTab === "overview",
-  });
-
   const partnersQuery = useQuery({
     queryKey: ["partners", "event", eventId],
     queryFn: () => partnersService.getByEvent(eventId),
@@ -125,7 +124,6 @@ export function EventDetail({ eventId }: EventDetailProps) {
   });
 
   const event = eventQuery.data;
-  const registrations = registrationsQuery.data ?? [];
   const partners = partnersQuery.data ?? [];
 
   const seminarDays = useMemo(() => {
@@ -147,83 +145,18 @@ export function EventDetail({ eventId }: EventDetailProps) {
     }));
   }, [event]);
 
-  const registrationColumns: ColumnDef<Registration>[] = [
-    {
-      accessorKey: "studentName",
-      header: "Student Name",
-      cell: ({ row }) => (
-        <span className="font-medium whitespace-nowrap">
-          {row.original.studentName}
-        </span>
-      ),
-    },
-    {
-      accessorKey: "college",
-      header: "School/College",
-      cell: ({ row }) => (
-        <span className="line-clamp-2 max-w-[180px] text-sm">
-          {row.original.college}
-        </span>
-      ),
-    },
-    {
-      accessorKey: "classLabel",
-      header: "Class",
-      cell: ({ row }) => (
-        <span className="text-sm">{row.original.classLabel ?? "—"}</span>
-      ),
-    },
-    {
-      accessorKey: "interestedStream",
-      header: "Stream",
-      cell: ({ row }) => (
-        <span className="text-sm">{row.original.interestedStream ?? "—"}</span>
-      ),
-    },
-    {
-      accessorKey: "board",
-      header: "Board",
-      cell: ({ row }) => (
-        <span className="text-sm">{row.original.board ?? "—"}</span>
-      ),
-    },
-    {
-      accessorKey: "city",
-      header: "City",
-    },
-    {
-      accessorKey: "gender",
-      header: "Gender",
-      cell: ({ row }) => (
-        <span className="text-sm">{row.original.gender ?? "—"}</span>
-      ),
-    },
-    {
-      accessorKey: "phone",
-      header: "Student Mobile",
-      cell: ({ row }) => (
-        <span className="whitespace-nowrap text-sm">{row.original.phone}</span>
-      ),
-    },
-    {
-      accessorKey: "parentPhone",
-      header: "Parent Mobile",
-      cell: ({ row }) => (
-        <span className="whitespace-nowrap text-sm">
-          {row.original.parentPhone ?? "—"}
-        </span>
-      ),
-    },
-    {
-      accessorKey: "email",
-      header: "Email Address",
-      cell: ({ row }) => (
-        <span className="max-w-[160px] truncate text-sm">
-          {row.original.email}
-        </span>
-      ),
-    },
-  ];
+  const eventSeminarTitles = useMemo(
+    () => (event?.seminars ?? []).map((seminar) => seminar.title),
+    [event?.seminars]
+  );
+
+  const seminarRegistrationItems = useMemo(() => {
+    if (!event) return [];
+    return buildEventSeminarRegistrationItems(
+      eventSeminarTitles,
+      event.registrationCount
+    );
+  }, [event, eventSeminarTitles]);
 
   if (eventQuery.isLoading) {
     return (
@@ -589,41 +522,27 @@ export function EventDetail({ eventId }: EventDetailProps) {
         </TabsContent>
 
         <TabsContent value="registrations" className="mt-6">
-          <div className={cn(surface.opening, "overflow-hidden p-4 sm:p-5")}>
-            <div className="mb-4 flex items-baseline gap-2 px-1">
-              <h3
-                className={cn(displayClass, "text-xl font-semibold")}
-                style={{ color: INK.primary }}
-              >
-                Registrations
-              </h3>
-              <span className="text-xl font-semibold" style={{ color: INK.muted }}>
-                –
-              </span>
-              <span
-                className="text-xl font-semibold tabular-nums"
-                style={{ color: INK.muted }}
-              >
-                {formatNumber(registrations.length || event.registrationCount)}
-              </span>
-            </div>
-            {registrationsQuery.isLoading ? (
-              <TableSkeleton rows={5} columns={10} />
-            ) : registrations.length === 0 ? (
+          {eventSeminarTitles.length === 0 ? (
+            <div className={cn(surface.opening, "p-6 sm:p-8")}>
               <EmptyState
-                icon={Users}
-                title="No registrations yet"
-                description="Student registrations for this event will appear here."
+                icon={Presentation}
+                title="No seminars scheduled"
+                description="Add seminars to this event to see seminar-wise registration interest."
               />
-            ) : (
-              <DataTable
-                columns={registrationColumns}
-                data={registrations}
-                getRowId={(row) => row.id}
-                emptyMessage="No registrations found."
-              />
-            )}
-          </div>
+            </div>
+          ) : (
+            <SeminarProgram
+              items={seminarRegistrationItems}
+              isAllCities={false}
+              cityLabel={eventOperatingCity(event.city)}
+              seminarTitles={eventSeminarTitles}
+              uniformCards
+              eventId={event.id}
+              eventTitle={event.title}
+              eventSeminars={event.seminars ?? []}
+              subtitle={`${eventSeminarTitles.length} scheduled seminar${eventSeminarTitles.length === 1 ? "" : "s"} · tap for breakdown`}
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="partners" className="mt-6">
