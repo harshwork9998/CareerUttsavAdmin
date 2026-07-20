@@ -12,7 +12,13 @@ export const REQUIRED_PORTAL_DOCUMENTS: Array<{
   { kind: "logo", label: "Primary logo" },
   { kind: "banner", label: "Stall / venue banner" },
   { kind: "writeup", label: "Souvenir write-up" },
-  { kind: "document", label: "Other documents" },
+  { kind: "company_profile", label: "Company / institute profile" },
+  { kind: "brochure", label: "Event brochure" },
+  { kind: "faculty_photo", label: "Speaker / faculty photo" },
+  { kind: "brand_guidelines", label: "Brand guidelines" },
+  { kind: "agreement", label: "Signed agreement" },
+  { kind: "tax_details", label: "GST / tax details" },
+  { kind: "collateral", label: "Marketing collateral" },
 ];
 
 export type PortalDocChecklistItem = {
@@ -115,4 +121,16 @@ export function formatDaysSinceUploadChip(
   }
   const n = status.daysSinceLastUpload;
   return n === 1 ? "1 day since last upload" : `${n} days since last upload`;
+}
+
+export function getPartnerPortalUploadProgress(
+  status: PartnerPortalUploadStatus
+): { uploaded: number; total: number; ratio: number } {
+  const total = status.checklist.length;
+  const uploaded = total - status.missing.length;
+  return {
+    uploaded,
+    total,
+    ratio: total === 0 ? 0 : uploaded / total,
+  };
 }

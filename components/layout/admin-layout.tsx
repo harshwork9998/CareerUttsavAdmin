@@ -13,6 +13,7 @@ import {
 } from "@/components/shared/section-back-button";
 import { Button } from "@/components/ui/button";
 import { Sidebar } from "./sidebar";
+import { PartnerFollowUpDialog } from "@/features/dashboard/partner-follow-up-dialog";
 
 interface AdminLayoutProps {
   children: ReactNode;
@@ -82,6 +83,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           </div>
         </main>
       </div>
+      <PartnerFollowUpDialog />
     </div>
   );
 }

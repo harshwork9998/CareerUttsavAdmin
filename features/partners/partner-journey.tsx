@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
@@ -19,7 +19,6 @@ import {
   SPONSORSHIP_TIERS,
   PARTNER_DELIVERABLE_DEFINITIONS,
   applyTierDefaultsPreservingCustom,
-  buildDeliverablesForTier,
 } from "@/constants";
 import { eventsService, partnersService } from "@/services/api";
 import { DateField } from "@/features/events/event-datetime-fields";
@@ -36,6 +35,9 @@ import type {
   PartnerContact,
   PartnerDeliverable,
   PartnerLifecycleStage,
+  PartnerMeetingLog,
+  PartnerMeetingOutcome,
+  PartnerEventPartnership,
   PartnerSeminarSlotAssignment,
   RelationshipOwner,
   SponsorshipTier,
@@ -46,10 +48,26 @@ import {
   parseAmount,
 } from "@/features/partners/chapter-commercials";
 import { ChapterPartnerInvite } from "@/features/partners/chapter-partner-invite";
+import { ChapterMeetings } from "@/features/partners/chapter-meetings";
+import { ChapterEventDeliverables } from "@/features/partners/chapter-event-deliverables";
+import {
+  allEventsHaveTier,
+  assignedSlotsForEvent,
+  partnerHasEventPackages,
+  removeEventPartnership,
+  resolveEventPartnerships,
+  seminarSlotBudgetByEvent,
+  syncLegacyPartnerFields,
+  upsertEventPartnership,
+} from "@/lib/partner-event-config";
 import {
   generatePartnerLogin,
   generateTempPassword,
 } from "@/lib/partner-invite";
+import {
+  hasLoggedMeeting,
+  syncLegacyMeetingFields,
+} from "@/lib/partner-meetings";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -107,8 +125,15 @@ const emptyOwner = (): RelationshipOwner => ({
 function maxUnlockedChapter(partner: Partner | null): ChapterId {
   if (!partner) return 1;
   if (!partner.contactedAt) return 2;
-  if (!partner.meetingAt) return 3;
-  if (!partner.sponsorshipTier) return 4;
+  if (!hasLoggedMeeting(partner)) return 3;
+  if (
+    partner.stage === "Meeting Scheduled" ||
+    partner.stage === "Contacted" ||
+    partner.stage === "New"
+  ) {
+    return 3;
+  }
+  if (!partnerHasEventPackages(partner)) return 4;
   if (!partner.deliverablesConfirmedAt) return 5;
   if (!partner.seminarSlotsConfirmedAt) return 6;
   if (!partner.commercialsConfirmedAt) return 7;
@@ -118,10 +143,24 @@ function maxUnlockedChapter(partner: Partner | null): ChapterId {
 function startingChapter(partner: Partner | null): ChapterId {
   if (!partner) return 1;
   if (!partner.contactedAt) return 2;
-  if (!partner.meetingAt) return 3;
+  if (!hasLoggedMeeting(partner)) return 3;
+  if (
+    partner.stage === "Meeting Scheduled" ||
+    partner.stage === "Contacted" ||
+    partner.stage === "New"
+  ) {
+    return 3;
+  }
+  const eps = resolveEventPartnerships(partner);
   const ownerReady = Boolean(partner.relationshipOwner?.managerName);
   const eventsReady = partner.eventIds.length > 0;
-  if (!ownerReady || !eventsReady || !partner.sponsorshipTier) return 4;
+  if (
+    !ownerReady ||
+    !eventsReady ||
+    !eps.every((ep) => ep.sponsorshipTier)
+  ) {
+    return 4;
+  }
   if (!partner.deliverablesConfirmedAt) return 5;
   if (!partner.seminarSlotsConfirmedAt) return 6;
   if (!partner.commercialsConfirmedAt) return 7;
@@ -163,7 +202,9 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     isNew,
     partner?.id,
     partner?.contactedAt,
+    partner?.meetings,
     partner?.meetingAt,
+    partner?.stage,
     partner?.deliverablesConfirmedAt,
     partner?.seminarSlotsConfirmedAt,
     partner?.commercialsConfirmedAt,
@@ -190,9 +231,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
   const [contactedAt, setContactedAt] = useState("");
   const [contactedNotes, setContactedNotes] = useState("");
 
-  // Chapter 3
-  const [meetingAt, setMeetingAt] = useState("");
-  const [meetingNotes, setMeetingNotes] = useState("");
+  // Chapter 3 — meetings managed via ChapterMeetings component
 
   // Chapter 4
   const [orgChoice, setOrgChoice] = useState<string>("K2");
@@ -201,9 +240,10 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
   const [managerPhone, setManagerPhone] = useState("");
   const [managerEmail, setManagerEmail] = useState("");
   const [eventIds, setEventIds] = useState<string[]>([]);
-  const [sponsorshipTier, setSponsorshipTier] = useState("");
+  const [eventPartnerships, setEventPartnerships] = useState<
+    PartnerEventPartnership[]
+  >([]);
   const [sponsorshipNotes, setSponsorshipNotes] = useState("");
-  const [deliverables, setDeliverables] = useState<PartnerDeliverable[]>([]);
   const [slotAssignments, setSlotAssignments] = useState<
     PartnerSeminarSlotAssignment[]
   >([]);
@@ -229,8 +269,6 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     setSecondary({ ...partner.secondaryContact });
     setContactedAt(partner.contactedAt ?? "");
     setContactedNotes(partner.contactedNotes ?? "");
-    setMeetingAt(partner.meetingAt ?? "");
-    setMeetingNotes(partner.meetingNotes ?? "");
     const org = partner.relationshipOwner?.organization ?? "";
     if (
       RELATIONSHIP_OWNER_ORGS.includes(
@@ -250,21 +288,8 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     setManagerPhone(partner.relationshipOwner?.managerPhone ?? "");
     setManagerEmail(partner.relationshipOwner?.managerEmail ?? "");
     setEventIds([...partner.eventIds]);
-    setSponsorshipTier(partner.sponsorshipTier ?? "");
+    setEventPartnerships(resolveEventPartnerships(partner, generateId));
     setSponsorshipNotes(partner.sponsorshipNotes ?? "");
-    if (partner.deliverables?.length) {
-      setDeliverables(partner.deliverables.map((d) => ({ ...d })));
-    } else if (partner.sponsorshipTier) {
-      setDeliverables(
-        applyTierDefaultsPreservingCustom(
-          partner.sponsorshipTier,
-          undefined,
-          generateId
-        )
-      );
-    } else {
-      setDeliverables([]);
-    }
     setSlotAssignments(
       (partner.seminarSlotAssignments ?? []).map((a) => ({ ...a }))
     );
@@ -448,28 +473,81 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     });
   };
 
-  const submitChapter3 = () => {
-    if (!partner) return;
-    if (!meetingAt) {
-      setErrors({ meetingAt: "Meeting date is required" });
-      return;
+  const handleMeetingsPersist = (
+    meetings: PartnerMeetingLog[],
+    meta: {
+      outcome?: PartnerMeetingOutcome;
+      lostReason?: string;
     }
-    setErrors({});
+  ) => {
+    if (!partner) return;
+
+    const legacy = syncLegacyMeetingFields(partner, meetings);
+    let stage = partner.stage;
+    let stageRemarks = partner.stageRemarks;
+    let notProceedingAt = partner.notProceedingAt;
+    let notProceedingReason = partner.notProceedingReason;
+
+    if (meta.outcome === "won") {
+      stage = "Negotiation";
+      stageRemarks = pushRemark(
+        partner.stage,
+        "Negotiation",
+        "Deal won from meeting"
+      );
+    } else if (meta.outcome === "lost") {
+      stage = "Not Proceeding";
+      notProceedingAt = new Date().toISOString();
+      notProceedingReason = meta.lostReason;
+      stageRemarks = pushRemark(
+        partner.stage,
+        "Not Proceeding",
+        meta.lostReason || "Deal lost"
+      );
+    } else if (
+      meetings.length > 0 &&
+      (partner.stage === "Contacted" || partner.stage === "New")
+    ) {
+      stage = "Meeting Scheduled";
+      stageRemarks = pushRemark(
+        partner.stage,
+        "Meeting Scheduled",
+        "Meeting logged"
+      );
+    } else if (meta.outcome === "in_discussion") {
+      stage = "Meeting Scheduled";
+    }
+
     saveMutation.mutate({
       create: false,
-      advance: true,
+      advance: meta.outcome === "won",
       data: {
         ...partner,
-        meetingAt,
-        meetingNotes: meetingNotes.trim(),
-        stage: "Meeting Scheduled",
-        stageRemarks: pushRemark(
-          partner.stage,
-          "Meeting Scheduled",
-          meetingNotes.trim() || "Meeting scheduled"
-        ),
+        ...legacy,
+        meetings,
+        stage,
+        stageRemarks,
+        notProceedingAt,
+        notProceedingReason,
       },
     });
+  };
+
+  const submitChapter3 = () => {
+    if (!partner) return;
+    if (
+      partner.stage === "Negotiation" ||
+      partner.stage === "Confirmed"
+    ) {
+      setErrors({});
+      setChapter(4);
+      return;
+    }
+    if (!hasLoggedMeeting(partner)) {
+      toast.error("Log at least one meeting first");
+      return;
+    }
+    toast.message("Mark a meeting as deal won to continue to partnership details");
   };
 
   const submitChapter4 = () => {
@@ -482,41 +560,31 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     if (!managerPhone.trim()) next.mPhone = "Required";
     if (!managerEmail.trim()) next.mEmail = "Required";
     if (eventIds.length === 0) next.events = "Select at least one event";
-    if (!sponsorshipTier) next.tier = "Select a sponsorship tier";
+    if (!allEventsHaveTier(eventPartnerships, eventIds)) {
+      next.tier = "Select a sponsorship tier for each event";
+    }
     setErrors(next);
     if (Object.keys(next).length) return;
 
-    const tier = sponsorshipTier as SponsorshipTier;
-    const tierUnchanged = partner.sponsorshipTier === tier;
-    const nextDeliverables =
-      tierUnchanged && deliverables.length > 0
-        ? deliverables
-        : applyTierDefaultsPreservingCustom(
-            tier,
-            deliverables.length ? deliverables : partner.deliverables,
-            generateId
-          );
-
-    setDeliverables(nextDeliverables);
+    const activePartnerships = eventPartnerships.filter((ep) =>
+      eventIds.includes(ep.eventId)
+    );
+    const legacy = syncLegacyPartnerFields(activePartnerships);
 
     saveMutation.mutate({
       create: false,
       advance: true,
       data: {
         ...partner,
+        ...legacy,
+        eventPartnerships: activePartnerships,
         relationshipOwner: {
           organization,
           managerName: managerName.trim(),
           managerPhone: managerPhone.trim(),
           managerEmail: managerEmail.trim(),
         },
-        eventIds,
-        sponsorshipTier: tier,
         sponsorshipNotes: sponsorshipNotes.trim(),
-        deliverables: nextDeliverables,
-        deliverablesConfirmedAt: tierUnchanged
-          ? partner.deliverablesConfirmedAt
-          : undefined,
         stage: "Negotiation",
         stageRemarks: pushRemark(
           partner.stage,
@@ -530,28 +598,40 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
   const submitChapter5 = () => {
     if (!partner) return;
     const next: Record<string, string> = {};
-    for (const item of deliverables) {
-      if (!item.included) continue;
-      const def = PARTNER_DELIVERABLE_DEFINITIONS.find((d) => d.key === item.key);
-      if (def?.options?.length && !item.option) {
-        next[item.id] = "Select an option";
+    const activePartnerships = eventPartnerships.filter((ep) =>
+      eventIds.includes(ep.eventId)
+    );
+
+    for (const ep of activePartnerships) {
+      for (const item of ep.deliverables) {
+        if (!item.included) continue;
+        const def = PARTNER_DELIVERABLE_DEFINITIONS.find(
+          (d) => d.key === item.key
+        );
+        if (def?.options?.length && !item.option) {
+          next[`${ep.eventId}-${item.id}`] = "Select an option";
+        }
+        if (item.isCustom && !item.label.trim()) {
+          next[`${ep.eventId}-${item.id}`] = "Label required";
+        }
       }
-      if (item.isCustom && !item.label.trim()) {
-        next[item.id] = "Label required";
+      if (ep.seminarSlotCount < 0) {
+        next[`seminar-slots-${ep.eventId}`] = "Invalid slot count";
       }
     }
+
     setErrors(next);
     if (Object.keys(next).length) return;
+
+    const legacy = syncLegacyPartnerFields(activePartnerships);
 
     saveMutation.mutate({
       create: false,
       advance: true,
       data: {
         ...partner,
-        deliverables: deliverables.map((d) => ({
-          ...d,
-          label: d.label.trim(),
-        })),
+        ...legacy,
+        eventPartnerships: activePartnerships,
         deliverablesConfirmedAt: new Date().toISOString(),
       },
     });
@@ -559,7 +639,21 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
 
   const submitChapter6 = () => {
     if (!partner) return;
-    setErrors({});
+    const next: Record<string, string> = {};
+    const activePartnerships = eventPartnerships.filter((ep) =>
+      eventIds.includes(ep.eventId)
+    );
+
+    for (const ep of activePartnerships) {
+      const assigned = assignedSlotsForEvent(slotAssignments, ep.eventId);
+      if (assigned > ep.seminarSlotCount) {
+        next[`event-${ep.eventId}`] =
+          `Pick at most ${ep.seminarSlotCount} seminar seat${ep.seminarSlotCount === 1 ? "" : "s"}`;
+      }
+    }
+
+    setErrors(next);
+    if (Object.keys(next).length) return;
 
     saveMutation.mutate({
       create: false,
@@ -671,8 +765,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       setContactedAt(partner.contactedAt ?? "");
       setContactedNotes(partner.contactedNotes ?? "");
     } else if (chapter === 3) {
-      setMeetingAt(partner.meetingAt ?? "");
-      setMeetingNotes(partner.meetingNotes ?? "");
+      // Meetings reset handled in ChapterMeetings composer
     } else if (chapter === 4) {
       const org = partner.relationshipOwner?.organization ?? "";
       if (
@@ -693,16 +786,10 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       setManagerPhone(partner.relationshipOwner?.managerPhone ?? "");
       setManagerEmail(partner.relationshipOwner?.managerEmail ?? "");
       setEventIds([...partner.eventIds]);
-      setSponsorshipTier(partner.sponsorshipTier ?? "");
+      setEventPartnerships(resolveEventPartnerships(partner, generateId));
       setSponsorshipNotes(partner.sponsorshipNotes ?? "");
     } else if (chapter === 5) {
-      if (partner.sponsorshipTier) {
-        setDeliverables(
-          buildDeliverablesForTier(partner.sponsorshipTier, generateId)
-        );
-      } else {
-        setDeliverables([]);
-      }
+      setEventPartnerships(resolveEventPartnerships(partner, generateId));
     } else if (chapter === 6) {
       setSlotAssignments([]);
       setSeminarSlotsUiKey((key) => key + 1);
@@ -882,13 +969,11 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
                   />
                 )}
 
-                {chapter === 3 && (
-                  <ChapterMeeting
-                    meetingAt={meetingAt}
-                    setMeetingAt={setMeetingAt}
-                    meetingNotes={meetingNotes}
-                    setMeetingNotes={setMeetingNotes}
-                    errors={errors}
+                {chapter === 3 && partner && (
+                  <ChapterMeetings
+                    partner={partner}
+                    onPersist={handleMeetingsPersist}
+                    saving={saveMutation.isPending}
                   />
                 )}
 
@@ -906,9 +991,9 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
                     setManagerEmail={setManagerEmail}
                     eventIds={eventIds}
                     setEventIds={setEventIds}
+                    eventPartnerships={eventPartnerships}
+                    setEventPartnerships={setEventPartnerships}
                     events={events}
-                    sponsorshipTier={sponsorshipTier}
-                    setSponsorshipTier={setSponsorshipTier}
                     sponsorshipNotes={sponsorshipNotes}
                     setSponsorshipNotes={setSponsorshipNotes}
                     errors={errors}
@@ -916,9 +1001,12 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
                 )}
 
                 {chapter === 5 && (
-                  <ChapterDeliverables
-                    deliverables={deliverables}
-                    setDeliverables={setDeliverables}
+                  <ChapterEventDeliverables
+                    events={eventsQuery.data ?? []}
+                    eventPartnerships={eventPartnerships.filter((ep) =>
+                      eventIds.includes(ep.eventId)
+                    )}
+                    setEventPartnerships={setEventPartnerships}
                     errors={errors}
                   />
                 )}
@@ -932,6 +1020,12 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
                     allPartners={allPartners}
                     assignments={slotAssignments}
                     setAssignments={setSlotAssignments}
+                    slotBudgetByEvent={seminarSlotBudgetByEvent(
+                      eventPartnerships.filter((ep) =>
+                        eventIds.includes(ep.eventId)
+                      )
+                    )}
+                    seatPickMode
                     errors={errors}
                   />
                 )}
@@ -942,7 +1036,9 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
                     setTotalAmount={setTotalAmount}
                     discountAmount={discountAmount}
                     setDiscountAmount={setDiscountAmount}
-                    deliverables={deliverables}
+                    eventPartnerships={eventPartnerships.filter((ep) =>
+                      eventIds.includes(ep.eventId)
+                    )}
                     slotAssignments={slotAssignments}
                     events={eventsQuery.data ?? []}
                     errors={errors}
@@ -960,6 +1056,11 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
                       setTempPassword(generateTempPassword())
                     }
                     hasSeminarSlots={slotAssignments.some((a) => a.slots > 0)}
+                    eventPartnerships={eventPartnerships.filter((ep) =>
+                      eventIds.includes(ep.eventId)
+                    )}
+                    slotAssignments={slotAssignments}
+                    events={eventsQuery.data ?? []}
                     errors={errors}
                   />
                 )}
@@ -1026,7 +1127,12 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
                     {saveMutation.isPending ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : null}
-                    {chapter === 8 ? "Send email & finish" : "Save & next"}
+                    {chapter === 8 ? "Send email & finish" : chapter === 3 &&
+                        partner &&
+                        (partner.stage === "Negotiation" ||
+                          partner.stage === "Confirmed")
+                      ? "Continue to partnership details"
+                      : "Save & next"}
                     {!saveMutation.isPending && chapter < 8 ? (
                       <ArrowRight className="h-4 w-4" />
                     ) : null}
@@ -1258,35 +1364,6 @@ function ChapterContacted(props: {
   );
 }
 
-function ChapterMeeting(props: {
-  meetingAt: string;
-  setMeetingAt: (v: string) => void;
-  meetingNotes: string;
-  setMeetingNotes: (v: string) => void;
-  errors: Record<string, string>;
-}) {
-  return (
-    <div className="mx-auto max-w-lg space-y-5">
-      <div className="space-y-1.5">
-        <Label>Meeting date</Label>
-        <DateField value={props.meetingAt} onChange={props.setMeetingAt} />
-        <FieldError message={props.errors.meetingAt} />
-      </div>
-      <div className="space-y-1.5">
-        <Label>
-          Notes{" "}
-          <span className="font-normal text-muted-foreground">(optional)</span>
-        </Label>
-        <Textarea
-          rows={4}
-          value={props.meetingNotes}
-          onChange={(e) => props.setMeetingNotes(e.target.value)}
-        />
-      </div>
-    </div>
-  );
-}
-
 function ChapterPartnership(props: {
   orgChoice: string;
   setOrgChoice: (v: string) => void;
@@ -1300,17 +1377,66 @@ function ChapterPartnership(props: {
   setManagerEmail: (v: string) => void;
   eventIds: string[];
   setEventIds: (v: string[] | ((p: string[]) => string[])) => void;
+  eventPartnerships: PartnerEventPartnership[];
+  setEventPartnerships: (
+    v:
+      | PartnerEventPartnership[]
+      | ((p: PartnerEventPartnership[]) => PartnerEventPartnership[])
+  ) => void;
   events: Array<{ id: string; title: string; city: string; venue?: string }>;
-  sponsorshipTier: string;
-  setSponsorshipTier: (v: string) => void;
   sponsorshipNotes: string;
   setSponsorshipNotes: (v: string) => void;
   errors: Record<string, string>;
 }) {
+  const tierForEvent = (eventId: string) =>
+    props.eventPartnerships.find((ep) => ep.eventId === eventId)?.sponsorshipTier ??
+    "";
+
+  const setTierForEvent = (eventId: string, tier: string) => {
+    props.setEventPartnerships((prev) => {
+      const existing = prev.find((ep) => ep.eventId === eventId);
+      const nextTier = tier as SponsorshipTier;
+      const nextDeliverables = applyTierDefaultsPreservingCustom(
+        nextTier,
+        existing?.deliverables,
+        generateId
+      );
+      return upsertEventPartnership(
+        prev,
+        eventId,
+        {
+          sponsorshipTier: nextTier,
+          deliverables: nextDeliverables,
+          seminarSlotCount: existing?.seminarSlotCount ?? 0,
+        },
+        generateId
+      );
+    });
+  };
+
   const toggleEvent = (id: string, checked: boolean) => {
-    props.setEventIds((prev) =>
-      checked ? [...prev, id] : prev.filter((x) => x !== id)
-    );
+    props.setEventIds((prev) => {
+      const nextIds = checked
+        ? [...prev, id]
+        : prev.filter((x) => x !== id);
+      if (!checked) {
+        props.setEventPartnerships((eps) => removeEventPartnership(eps, id));
+      } else if (!props.eventPartnerships.some((ep) => ep.eventId === id)) {
+        props.setEventPartnerships((eps) =>
+          upsertEventPartnership(
+            eps,
+            id,
+            {
+              sponsorshipTier: "" as SponsorshipTier,
+              deliverables: [],
+              seminarSlotCount: 0,
+            },
+            generateId
+          )
+        );
+      }
+      return nextIds;
+    });
   };
 
   return (
@@ -1385,56 +1511,64 @@ function ChapterPartnership(props: {
           {props.events.length === 0 ? (
             <p className="px-2 py-3 text-sm text-muted-foreground">No events yet.</p>
           ) : (
-            props.events.map((event) => (
-              <label
-                key={event.id}
-                className="flex cursor-pointer items-start gap-3 rounded-lg px-2 py-2 hover:bg-white/70"
-              >
-                <Checkbox
-                  checked={props.eventIds.includes(event.id)}
-                  onCheckedChange={(v) => toggleEvent(event.id, v === true)}
-                  className="mt-0.5"
-                />
-                <span>
-                  <span className="block text-sm font-medium">{event.title}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {event.city}
-                    {event.venue ? ` · ${event.venue}` : ""}
-                  </span>
-                </span>
-              </label>
-            ))
+            props.events.map((event) => {
+              const selected = props.eventIds.includes(event.id);
+              return (
+                <div
+                  key={event.id}
+                  className="flex flex-wrap items-center gap-3 rounded-lg px-2 py-2 hover:bg-white/70 sm:flex-nowrap"
+                >
+                  <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-3">
+                    <Checkbox
+                      checked={selected}
+                      onCheckedChange={(v) => toggleEvent(event.id, v === true)}
+                      className="mt-0.5"
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium">
+                        {event.title}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {event.city}
+                        {event.venue ? ` · ${event.venue}` : ""}
+                      </span>
+                    </span>
+                  </label>
+                  {selected ? (
+                    <div className="w-full sm:w-[220px] sm:shrink-0">
+                      <Select
+                        value={tierForEvent(event.id) || undefined}
+                        onValueChange={(v) => setTierForEvent(event.id, v)}
+                      >
+                        <SelectTrigger className="h-9">
+                          <SelectValue placeholder="Sponsorship tier" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {SPONSORSHIP_TIERS.map((tier) => (
+                            <SelectItem key={tier} value={tier}>
+                              {tier}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })
           )}
         </div>
         <FieldError message={props.errors.events} />
+        <FieldError message={props.errors.tier} />
       </section>
 
       <section className="space-y-4">
         <h3 className="text-sm font-semibold tracking-wide uppercase" style={{ color: BRAND[700] }}>
-          Sponsorship details
+          Discussion notes
         </h3>
-        <div className="space-y-1.5 max-w-md">
-          <Label>Sponsorship tier</Label>
-          <Select
-            value={props.sponsorshipTier || undefined}
-            onValueChange={props.setSponsorshipTier}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {SPONSORSHIP_TIERS.map((tier) => (
-                <SelectItem key={tier} value={tier}>
-                  {tier}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <FieldError message={props.errors.tier} />
-        </div>
         <div className="space-y-1.5">
           <Label>
-            Discussion notes{" "}
+            Notes{" "}
             <span className="font-normal text-muted-foreground">(optional)</span>
           </Label>
           <Textarea
@@ -1444,227 +1578,6 @@ function ChapterPartnership(props: {
           />
         </div>
       </section>
-    </div>
-  );
-}
-
-function ChapterDeliverables(props: {
-  deliverables: PartnerDeliverable[];
-  setDeliverables: (
-    v: PartnerDeliverable[] | ((p: PartnerDeliverable[]) => PartnerDeliverable[])
-  ) => void;
-  errors: Record<string, string>;
-}) {
-  const [composerOpen, setComposerOpen] = useState(false);
-  const [customLabel, setCustomLabel] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (!composerOpen) return;
-    const id = window.setTimeout(() => inputRef.current?.focus(), 180);
-    return () => window.clearTimeout(id);
-  }, [composerOpen]);
-
-  const updateItem = (id: string, patch: Partial<PartnerDeliverable>) => {
-    props.setDeliverables((prev) =>
-      prev.map((d) => (d.id === id ? { ...d, ...patch } : d))
-    );
-  };
-
-  const addCustom = () => {
-    const label = customLabel.trim();
-    if (!label) return;
-    props.setDeliverables((prev) => [
-      ...prev,
-      {
-        id: generateId(),
-        key: "custom",
-        label,
-        included: true,
-        isCustom: true,
-      },
-    ]);
-    setCustomLabel("");
-    setComposerOpen(false);
-  };
-
-  const cancelComposer = () => {
-    setCustomLabel("");
-    setComposerOpen(false);
-  };
-
-  const removeCustom = (id: string) => {
-    props.setDeliverables((prev) => prev.filter((d) => d.id !== id));
-  };
-
-  const standard = props.deliverables.filter((d) => !d.isCustom);
-  const customs = props.deliverables.filter((d) => d.isCustom);
-
-  return (
-    <div className="space-y-6">
-      <ul className="space-y-2">
-        {standard.map((item) => {
-          const def = PARTNER_DELIVERABLE_DEFINITIONS.find(
-            (d) => d.key === item.key
-          );
-          const options = def?.options;
-          return (
-            <li
-              key={item.id}
-              className="flex flex-col gap-2 rounded-xl border px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
-              style={{
-                borderColor: LINE.subtle,
-                background: item.included ? BRAND[50] : PAPER.muted,
-              }}
-            >
-              <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-3">
-                <Checkbox
-                  checked={item.included}
-                  onCheckedChange={(v) =>
-                    updateItem(item.id, { included: v === true })
-                  }
-                  className="mt-0.5"
-                />
-                <span
-                  className="text-sm font-medium leading-snug"
-                  style={{ color: INK.primary }}
-                >
-                  {item.label}
-                </span>
-              </label>
-              {options ? (
-                <div className="w-full sm:w-56 sm:shrink-0">
-                  <Select
-                    value={item.option || undefined}
-                    onValueChange={(v) => updateItem(item.id, { option: v })}
-                    disabled={!item.included}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {options.map((opt) => (
-                        <SelectItem key={opt} value={opt}>
-                          {opt}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FieldError message={props.errors[item.id]} />
-                </div>
-              ) : null}
-            </li>
-          );
-        })}
-      </ul>
-
-      {customs.length > 0 ? (
-        <div className="space-y-2 border-t pt-6" style={{ borderColor: LINE.subtle }}>
-          <p
-            className="text-sm font-semibold tracking-wide uppercase"
-            style={{ color: BRAND[700] }}
-          >
-            Custom deliverables
-          </p>
-          <ul className="space-y-2">
-            {customs.map((item) => (
-              <li
-                key={item.id}
-                className="flex items-center gap-3 rounded-xl border px-3 py-3"
-                style={{ borderColor: LINE.subtle, background: BRAND[50] }}
-              >
-                <Checkbox
-                  checked={item.included}
-                  onCheckedChange={(v) =>
-                    updateItem(item.id, { included: v === true })
-                  }
-                />
-                <Input
-                  className="flex-1"
-                  value={item.label}
-                  onChange={(e) => updateItem(item.id, { label: e.target.value })}
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="shrink-0"
-                  onClick={() => removeCustom(item.id)}
-                  aria-label="Remove custom deliverable"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      <div className="space-y-3">
-        {!composerOpen ? (
-          <Button
-            type="button"
-            variant="outline"
-            className="gap-2"
-            onClick={() => setComposerOpen(true)}
-          >
-            <Plus className="h-4 w-4" />
-            Create & add
-          </Button>
-        ) : null}
-
-        <AnimatePresence initial={false}>
-          {composerOpen ? (
-            <motion.div
-              key="custom-composer"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-              className="overflow-hidden"
-            >
-              <div
-                className="flex flex-col gap-3 rounded-xl border border-dashed p-4 sm:flex-row sm:items-end"
-                style={{ borderColor: LINE.strong }}
-              >
-                <div className="min-w-0 flex-1 space-y-1.5">
-                  <Label>Custom deliverable</Label>
-                  <Input
-                    ref={inputRef}
-                    value={customLabel}
-                    onChange={(e) => setCustomLabel(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        addCustom();
-                      }
-                      if (e.key === "Escape") {
-                        e.preventDefault();
-                        cancelComposer();
-                      }
-                    }}
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <Button type="button" variant="ghost" onClick={cancelComposer}>
-                    Cancel
-                  </Button>
-                  <Button
-                    type="button"
-                    className="gap-2 text-white"
-                    style={{ backgroundColor: BRAND[700] }}
-                    onClick={addCustom}
-                    disabled={!customLabel.trim()}
-                  >
-                    <Plus className="h-4 w-4" />
-                    Add
-                  </Button>
-                </div>
-              </div>
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
-      </div>
     </div>
   );
 }

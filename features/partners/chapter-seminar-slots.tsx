@@ -30,6 +30,7 @@ import type {
   Partner,
   PartnerSeminarSlotAssignment,
 } from "@/types";
+import { Button } from "@/components/ui/button";
 
 type Occupant = { partnerId: string; name: string; slots: number };
 
@@ -91,8 +92,13 @@ export function ChapterSeminarSlots(props: {
       | PartnerSeminarSlotAssignment[]
       | ((p: PartnerSeminarSlotAssignment[]) => PartnerSeminarSlotAssignment[])
   ) => void;
+  /** Per-event slot budget from deliverables step */
+  slotBudgetByEvent?: Record<string, number>;
+  /** When true, pick individual seminar seats (0 or 1 each) up to budget */
+  seatPickMode?: boolean;
   errors: Record<string, string>;
 }) {
+  const seatPickMode = props.seatPickMode ?? true;
   const eventBlocks = useMemo(() => {
     return props.eventIds
       .map((id) => props.events.find((e) => e.id === id))
@@ -107,8 +113,9 @@ export function ChapterSeminarSlots(props: {
   const setSlots = (eventId: string, seminarId: string, slots: number) => {
     props.setAssignments((prev) => {
       const others = prev.filter((a) => a.seminarId !== seminarId);
-      if (slots <= 0) return others;
-      return [...others, { eventId, seminarId, slots }];
+      const nextSlots = seatPickMode ? (slots > 0 ? 1 : 0) : slots;
+      if (nextSlots <= 0) return others;
+      return [...others, { eventId, seminarId, slots: nextSlots }];
     });
   };
 
@@ -154,8 +161,9 @@ export function ChapterSeminarSlots(props: {
               Allot panelist seats
             </h3>
             <p className="text-sm leading-relaxed" style={{ color: INK.secondary }}>
-              Optional — leave at zero if this partner isn’t speaking. Seats
-              already taken by other partners stay locked.
+              {seatPickMode
+                ? "Choose which seminars get a panelist seat. Slot count was set in deliverables."
+                : "Optional — leave at zero if this partner isn’t speaking. Seats already taken by other partners stay locked."}
             </p>
           </div>
           <div
@@ -185,6 +193,7 @@ export function ChapterSeminarSlots(props: {
         const mineOnEvent = props.assignments
           .filter((a) => a.eventId === event.id)
           .reduce((s, a) => s + a.slots, 0);
+        const eventBudget = props.slotBudgetByEvent?.[event.id] ?? 0;
         const eventError = props.errors[`event-${event.id}`];
         const seminarCount = event.seminars?.length ?? 0;
 
@@ -246,9 +255,11 @@ export function ChapterSeminarSlots(props: {
                 }}
               >
                 <Users className="h-3.5 w-3.5" />
-                {mineOnEvent === 0
-                  ? "No seats yet"
-                  : `${mineOnEvent} seat${mineOnEvent === 1 ? "" : "s"}`}
+                {seatPickMode
+                  ? `${mineOnEvent} / ${eventBudget} seat${eventBudget === 1 ? "" : "s"} picked`
+                  : mineOnEvent === 0
+                    ? "No seats yet"
+                    : `${mineOnEvent} seat${mineOnEvent === 1 ? "" : "s"}`}
               </div>
             </div>
 
@@ -263,7 +274,15 @@ export function ChapterSeminarSlots(props: {
                 );
                 const taken = others.reduce((s, o) => s + o.slots, 0);
                 const open = Math.max(0, total - taken - mine);
-                const maxMine = Math.max(0, total - taken);
+                const maxMine = seatPickMode
+                  ? mine > 0
+                    ? 1
+                    : Math.min(1, Math.max(0, total - taken))
+                  : Math.max(0, total - taken);
+                const canPickMore =
+                  !seatPickMode ||
+                  mineOnEvent < eventBudget ||
+                  mine > 0;
 
                 return (
                   <SeminarCard
@@ -275,11 +294,13 @@ export function ChapterSeminarSlots(props: {
                     endTime={seminar.endTime}
                     hall={seminar.hall}
                     total={total}
-                    mine={mine}
+                    mine={seatPickMode ? (mine > 0 ? 1 : 0) : mine}
                     taken={taken}
                     open={open}
                     maxMine={maxMine}
                     others={others}
+                    seatPickMode={seatPickMode}
+                    canPickSeat={canPickMore && maxMine > 0}
                     onAssign={(next) => setSlots(event.id, seminar.id, next)}
                   />
                 );
@@ -309,6 +330,8 @@ function SeminarCard({
   open,
   maxMine,
   others,
+  seatPickMode = false,
+  canPickSeat = true,
   onAssign,
 }: {
   index: number;
@@ -323,6 +346,8 @@ function SeminarCard({
   open: number;
   maxMine: number;
   others: Occupant[];
+  seatPickMode?: boolean;
+  canPickSeat?: boolean;
   onAssign: (slots: number) => void;
 }) {
   const [showPartners, setShowPartners] = useState(false);
@@ -331,6 +356,14 @@ function SeminarCard({
   const bump = (delta: number) => {
     const next = Math.min(maxMine, Math.max(0, mine + delta));
     onAssign(next);
+  };
+
+  const toggleSeat = () => {
+    if (mine > 0) {
+      onAssign(0);
+      return;
+    }
+    if (canPickSeat && maxMine > 0) onAssign(1);
   };
 
   return (
@@ -406,7 +439,7 @@ function SeminarCard({
               total={total}
               mine={mine}
               taken={taken}
-              onAssign={onAssign}
+              onAssign={seatPickMode ? undefined : onAssign}
             />
 
             {taken > 0 ? (
@@ -507,7 +540,21 @@ function SeminarCard({
             )}
           </div>
 
-          {!fullyBooked ? (
+          {seatPickMode ? (
+            <Button
+              type="button"
+              variant={mine > 0 ? "default" : "outline"}
+              disabled={!canPickSeat && mine === 0}
+              onClick={toggleSeat}
+              className={cn(
+                "w-full rounded-full",
+                mine > 0 && "text-white hover:opacity-90"
+              )}
+              style={mine > 0 ? { backgroundColor: BRAND[700] } : undefined}
+            >
+              {mine > 0 ? "Seat selected" : "Select this seat"}
+            </Button>
+          ) : !fullyBooked ? (
             <div className="flex items-center gap-2">
               <StepperButton
                 label="Decrease seats"
@@ -536,7 +583,7 @@ function SeminarCard({
             </div>
           ) : null}
 
-          {!fullyBooked ? (
+          {!seatPickMode && !fullyBooked ? (
             <div className="flex flex-wrap gap-1.5">
               {Array.from({ length: maxMine + 1 }, (_, n) => n).map((n) => {
                 const selected = mine === n;
@@ -567,13 +614,25 @@ function SeminarCard({
             </div>
           ) : null}
 
-          <p className="text-xs leading-snug" style={{ color: INK.muted }}>
-            {fullyBooked
-              ? "No seats left on this panel."
-              : mine > 0
-                ? `${mine} reserved for this partner`
-                : `Up to ${maxMine} still open`}
-          </p>
+          {seatPickMode ? (
+            <p className="text-xs leading-snug" style={{ color: INK.muted }}>
+              {fullyBooked
+                ? "No seats left on this panel."
+                : mine > 0
+                  ? "1 seat reserved on this seminar"
+                  : canPickSeat
+                    ? "Tap to reserve one seat"
+                    : "Slot budget reached for this event"}
+            </p>
+          ) : (
+            <p className="text-xs leading-snug" style={{ color: INK.muted }}>
+              {fullyBooked
+                ? "No seats left on this panel."
+                : mine > 0
+                  ? `${mine} reserved for this partner`
+                  : `Up to ${maxMine} still open`}
+            </p>
+          )}
         </div>
       </div>
     </motion.article>
@@ -642,7 +701,7 @@ function SeatMap({
   total: number;
   mine: number;
   taken: number;
-  onAssign: (slots: number) => void;
+  onAssign?: (slots: number) => void;
 }) {
   if (total <= 0) return null;
 
@@ -662,11 +721,11 @@ function SeatMap({
             <motion.button
               key={i}
               type="button"
-              disabled={isBlocked}
-              whileHover={isBlocked ? undefined : { scale: 1.05 }}
-              whileTap={isBlocked ? undefined : { scale: 0.94 }}
+              disabled={isBlocked || !onAssign}
+              whileHover={isBlocked || !onAssign ? undefined : { scale: 1.05 }}
+              whileTap={isBlocked || !onAssign ? undefined : { scale: 0.94 }}
               onClick={() => {
-                if (isBlocked) return;
+                if (isBlocked || !onAssign) return;
                 const desired = availableIndex + 1;
                 onAssign(mine === desired ? availableIndex : desired);
               }}

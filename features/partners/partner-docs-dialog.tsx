@@ -24,6 +24,7 @@ import {
 import {
   formatDaysSinceUploadChip,
   getPartnerPortalUploadStatus,
+  REQUIRED_PORTAL_DOCUMENTS,
 } from "@/lib/partner-portal-docs";
 import { cn } from "@/lib/utils";
 import type { Partner, PartnerPortalDocument } from "@/types";
@@ -58,18 +59,10 @@ function isImageDoc(doc: PartnerPortalDocument) {
 }
 
 function kindLabel(kind: PartnerPortalDocument["kind"]) {
-  switch (kind) {
-    case "logo":
-      return "Logo";
-    case "banner":
-      return "Banner";
-    case "writeup":
-      return "Write-up";
-    case "document":
-      return "Document";
-    default:
-      return "Other";
-  }
+  const required = REQUIRED_PORTAL_DOCUMENTS.find((doc) => doc.kind === kind);
+  if (required) return required.label;
+  if (kind === "other") return "Other";
+  return "Document";
 }
 
 async function downloadDoc(doc: PartnerPortalDocument) {

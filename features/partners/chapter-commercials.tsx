@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Check, Mic2 } from "lucide-react";
+import { Check, MapPin, Mic2, Package } from "lucide-react";
 
 import {
   BRAND,
@@ -11,10 +11,14 @@ import {
   PAPER,
   displayClass,
 } from "@/features/dashboard/dashboard-ui";
+import {
+  buildEventPackageSummaries,
+  type EventPackageSummary,
+} from "@/lib/partner-event-config";
 import { cn } from "@/lib/utils";
 import type {
   Event,
-  PartnerDeliverable,
+  PartnerEventPartnership,
   PartnerSeminarSlotAssignment,
 } from "@/types";
 import { Label } from "@/components/ui/label";
@@ -37,7 +41,7 @@ export function ChapterCommercials(props: {
   setTotalAmount: (v: string) => void;
   discountAmount: string;
   setDiscountAmount: (v: string) => void;
-  deliverables: PartnerDeliverable[];
+  eventPartnerships: PartnerEventPartnership[];
   slotAssignments: PartnerSeminarSlotAssignment[];
   events: Event[];
   errors: Record<string, string>;
@@ -61,28 +65,21 @@ export function ChapterCommercials(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- sync discount from % only
   }, [percentMode, discountPercent, props.totalAmount, total]);
 
-  const includedDeliverables = useMemo(
-    () => props.deliverables.filter((d) => d.included),
-    [props.deliverables]
+  const eventSummaries = useMemo(
+    () =>
+      buildEventPackageSummaries(
+        props.eventPartnerships,
+        props.slotAssignments,
+        props.events
+      ),
+    [props.eventPartnerships, props.slotAssignments, props.events]
   );
 
-  const slotSummary = useMemo(() => {
-    return props.slotAssignments
-      .filter((a) => a.slots > 0)
-      .map((a) => {
-        const event = props.events.find((e) => e.id === a.eventId);
-        const seminar = event?.seminars.find((s) => s.id === a.seminarId);
-        return {
-          id: `${a.eventId}-${a.seminarId}`,
-          eventTitle: event?.title ?? a.eventId,
-          city: event?.city ?? "",
-          seminarTitle: seminar?.title ?? a.seminarId,
-          slots: a.slots,
-        };
-      });
-  }, [props.slotAssignments, props.events]);
-
-  const totalSeats = slotSummary.reduce((s, row) => s + row.slots, 0);
+  const totalDeliverables = eventSummaries.reduce(
+    (s, e) => s + e.deliverables.length,
+    0
+  );
+  const totalSeats = eventSummaries.reduce((s, e) => s + e.seatsAssigned, 0);
 
   const togglePercentMode = () => {
     setPercentMode((on) => {
@@ -169,7 +166,12 @@ export function ChapterCommercials(props: {
             <p className="text-[11px] font-semibold tracking-[0.16em] uppercase opacity-80">
               Net total amount
             </p>
-            <p className={cn(displayClass, "mt-1 text-3xl font-bold tabular-nums sm:text-4xl")}>
+            <p
+              className={cn(
+                displayClass,
+                "mt-1 text-3xl font-bold tabular-nums sm:text-4xl"
+              )}
+            >
               <span className="mr-1 text-2xl opacity-90">₹</span>
               {formatInr(net)}
             </p>
@@ -180,160 +182,214 @@ export function ChapterCommercials(props: {
         ) : null}
       </motion.section>
 
-      <div className="grid gap-5 lg:grid-cols-2">
-        <motion.section
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.05, duration: 0.3 }}
-          className="rounded-[28px] border p-5 sm:p-6"
-          style={{ borderColor: LINE.subtle, background: PAPER.surface }}
-        >
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p
-                className="text-[11px] font-semibold tracking-[0.16em] uppercase"
-                style={{ color: BRAND[700] }}
-              >
-                Deliverables
-              </p>
-              <h3
-                className={cn(displayClass, "mt-1 text-xl font-bold")}
-                style={{ color: INK.primary }}
-              >
-                In the package
-              </h3>
-            </div>
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p
+              className="text-[11px] font-semibold tracking-[0.18em] uppercase"
+              style={{ color: BRAND[700] }}
+            >
+              Package summary
+            </p>
+            <h3
+              className={cn(displayClass, "mt-1 text-xl font-bold sm:text-2xl")}
+              style={{ color: INK.primary }}
+            >
+              By event
+            </h3>
+          </div>
+          <div className="flex flex-wrap gap-2 text-xs font-semibold">
             <span
-              className="rounded-full px-3 py-1 text-xs font-bold tabular-nums"
+              className="rounded-full px-3 py-1 tabular-nums"
               style={{ background: BRAND[50], color: BRAND[700] }}
             >
-              {includedDeliverables.length}
+              {eventSummaries.length} event{eventSummaries.length === 1 ? "" : "s"}
             </span>
-          </div>
-
-          {includedDeliverables.length === 0 ? (
-            <p className="mt-5 text-sm" style={{ color: INK.muted }}>
-              No deliverables selected.
-            </p>
-          ) : (
-            <ul className="mt-5 space-y-2">
-              {includedDeliverables.map((item, index) => (
-                <motion.li
-                  key={item.id}
-                  initial={{ opacity: 0, x: -6 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.03 * index }}
-                  className="flex items-start gap-3 rounded-2xl px-3 py-2.5"
-                  style={{
-                    background: index % 2 === 0 ? PAPER.muted : "transparent",
-                  }}
-                >
-                  <span
-                    className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
-                    style={{ background: BRAND[700], color: "#fff" }}
-                  >
-                    <Check className="h-3 w-3" strokeWidth={3} />
-                  </span>
-                  <span className="min-w-0">
-                    <span
-                      className="block text-sm font-medium leading-snug"
-                      style={{ color: INK.primary }}
-                    >
-                      {item.label}
-                    </span>
-                    {item.option ? (
-                      <span
-                        className="mt-0.5 block text-xs"
-                        style={{ color: INK.muted }}
-                      >
-                        {item.option}
-                      </span>
-                    ) : null}
-                  </span>
-                </motion.li>
-              ))}
-            </ul>
-          )}
-        </motion.section>
-
-        <motion.section
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1, duration: 0.3 }}
-          className="rounded-[28px] border p-5 sm:p-6"
-          style={{ borderColor: LINE.subtle, background: PAPER.surface }}
-        >
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p
-                className="text-[11px] font-semibold tracking-[0.16em] uppercase"
-                style={{ color: BRAND[700] }}
-              >
-                Seminar slots
-              </p>
-              <h3
-                className={cn(displayClass, "mt-1 text-xl font-bold")}
-                style={{ color: INK.primary }}
-              >
-                Seat allotment
-              </h3>
-            </div>
             <span
-              className="rounded-full px-3 py-1 text-xs font-bold tabular-nums"
+              className="rounded-full px-3 py-1 tabular-nums"
+              style={{ background: BRAND[50], color: BRAND[700] }}
+            >
+              {totalDeliverables} deliverable{totalDeliverables === 1 ? "" : "s"}
+            </span>
+            <span
+              className="rounded-full px-3 py-1 tabular-nums"
               style={{ background: BRAND[50], color: BRAND[700] }}
             >
               {totalSeats} seat{totalSeats === 1 ? "" : "s"}
             </span>
           </div>
+        </div>
 
-          {slotSummary.length === 0 ? (
-            <p className="mt-5 text-sm" style={{ color: INK.muted }}>
-              No seminar seats allotted.
+        {eventSummaries.length === 0 ? (
+          <p className="text-sm" style={{ color: INK.muted }}>
+            No event packages configured yet.
+          </p>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2">
+            {eventSummaries.map((summary, index) => (
+              <EventPackageCard
+                key={summary.eventId}
+                summary={summary}
+                index={index}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function EventPackageCard({
+  summary,
+  index,
+}: {
+  summary: EventPackageSummary;
+  index: number;
+}) {
+  return (
+    <motion.article
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.05, duration: 0.32 }}
+      className="flex flex-col overflow-hidden rounded-[22px] border shadow-sm"
+      style={{
+        borderColor: LINE.subtle,
+        background: PAPER.surface,
+      }}
+    >
+      <div
+        className="border-b px-4 py-3.5 sm:px-5"
+        style={{
+          borderColor: LINE.subtle,
+          background: `linear-gradient(135deg, ${BRAND[50]} 0%, ${PAPER.muted} 100%)`,
+        }}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p
+              className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide"
+              style={{ color: BRAND[700] }}
+            >
+              <MapPin className="h-3 w-3 shrink-0" />
+              {summary.city}
+            </p>
+            <h4
+              className={cn(
+                displayClass,
+                "mt-1 truncate text-lg font-bold leading-snug"
+              )}
+              style={{ color: INK.primary }}
+            >
+              {summary.title}
+            </h4>
+          </div>
+          <span
+            className="max-w-[48%] shrink-0 rounded-full px-2.5 py-1 text-right text-[10px] font-semibold leading-tight"
+            style={{ background: "rgba(31,56,100,0.12)", color: INK.primary }}
+          >
+            {summary.tier}
+          </span>
+        </div>
+      </div>
+
+      <div className="grid flex-1 gap-0 sm:grid-cols-2">
+        <div className="border-b p-4 sm:border-b-0 sm:border-r" style={{ borderColor: LINE.subtle }}>
+          <div className="mb-2.5 flex items-center gap-2">
+            <span
+              className="flex h-7 w-7 items-center justify-center rounded-lg"
+              style={{ background: BRAND[50], color: BRAND[700] }}
+            >
+              <Package className="h-3.5 w-3.5" />
+            </span>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Deliverables
+            </p>
+            <span
+              className="ml-auto rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums"
+              style={{ background: BRAND[50], color: BRAND[700] }}
+            >
+              {summary.deliverables.length}
+            </span>
+          </div>
+          {summary.deliverables.length === 0 ? (
+            <p className="text-xs" style={{ color: INK.muted }}>
+              None selected
             </p>
           ) : (
-            <ul className="mt-5 space-y-3">
-              {slotSummary.map((row, index) => (
-                <motion.li
-                  key={row.id}
-                  initial={{ opacity: 0, x: 6 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.03 * index }}
-                  className="rounded-2xl border px-3 py-3"
-                  style={{ borderColor: LINE.subtle, background: PAPER.muted }}
-                >
-                  <div className="flex items-start gap-3">
-                    <span
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
-                      style={{ background: BRAND[50], color: BRAND[700] }}
-                    >
-                      <Mic2 className="h-4 w-4" />
+            <ul
+              className="max-h-[148px] space-y-1.5 overflow-y-auto overscroll-contain pr-1"
+              style={{ scrollbarWidth: "thin" }}
+            >
+              {summary.deliverables.map((item) => (
+                <li key={item.id} className="flex items-start gap-2">
+                  <Check
+                    className="mt-0.5 h-3 w-3 shrink-0"
+                    style={{ color: BRAND[700] }}
+                    strokeWidth={3}
+                  />
+                  <span className="min-w-0 text-xs leading-snug" style={{ color: INK.secondary }}>
+                    <span className="font-medium" style={{ color: INK.primary }}>
+                      {item.label}
                     </span>
-                    <div className="min-w-0 flex-1">
-                      <p
-                        className="text-sm font-semibold leading-snug"
-                        style={{ color: INK.primary }}
-                      >
-                        {row.seminarTitle}
-                      </p>
-                      <p className="mt-0.5 text-xs" style={{ color: INK.muted }}>
-                        {row.eventTitle}
-                        {row.city ? ` · ${row.city}` : ""}
-                      </p>
-                    </div>
-                    <span
-                      className="shrink-0 rounded-full px-2.5 py-1 text-xs font-bold tabular-nums"
-                      style={{ background: BRAND[700], color: "#fff" }}
-                    >
-                      {row.slots}
-                    </span>
-                  </div>
-                </motion.li>
+                    {item.option ? (
+                      <span style={{ color: INK.muted }}> · {item.option}</span>
+                    ) : null}
+                  </span>
+                </li>
               ))}
             </ul>
           )}
-        </motion.section>
+        </div>
+
+        <div className="p-4">
+          <div className="mb-2.5 flex items-center gap-2">
+            <span
+              className="flex h-7 w-7 items-center justify-center rounded-lg"
+              style={{ background: BRAND[50], color: BRAND[700] }}
+            >
+              <Mic2 className="h-3.5 w-3.5" />
+            </span>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Seminar seats
+            </p>
+            <span
+              className="ml-auto rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums"
+              style={{ background: BRAND[50], color: BRAND[700] }}
+            >
+              {summary.seatsAssigned}/{summary.slotBudget}
+            </span>
+          </div>
+          {summary.seminars.length === 0 ? (
+            <p className="text-xs" style={{ color: INK.muted }}>
+              {summary.slotBudget > 0
+                ? "No seminars picked yet"
+                : "No panelist slots"}
+            </p>
+          ) : (
+            <ul
+              className="max-h-[148px] space-y-1.5 overflow-y-auto overscroll-contain pr-1"
+              style={{ scrollbarWidth: "thin" }}
+            >
+              {summary.seminars.map((seminar) => (
+                <li
+                  key={seminar.id}
+                  className="rounded-lg px-2 py-1.5 text-xs"
+                  style={{ background: PAPER.muted }}
+                >
+                  <span className="font-medium" style={{ color: INK.primary }}>
+                    {seminar.title}
+                  </span>
+                  <span className="ml-1 tabular-nums" style={{ color: INK.muted }}>
+                    · {seminar.slots} seat{seminar.slots === 1 ? "" : "s"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
-    </div>
+    </motion.article>
   );
 }
 

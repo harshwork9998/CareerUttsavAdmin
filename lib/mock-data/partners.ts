@@ -70,6 +70,18 @@ export const mockPartners: Partner[] = [
     contactedNotes: "WhatsApp intro to Dean — admissions.",
     meetingAt: "2026-06-18",
     meetingNotes: "Walked through Gold vs University Partner packages.",
+    meetings: [
+      {
+        id: "mtg-001-1",
+        meetingAt: "2026-06-18T15:00:00",
+        notes: "Walked through Gold vs University Partner packages.",
+        outcome: "in_discussion",
+        followUpNotes: "Share panel slot options for Day 1 seminars.",
+        followUpAt: "2026-07-20T14:00:00",
+        createdAt: "2026-06-18T16:00:00+05:30",
+        updatedAt: "2026-06-18T16:00:00+05:30",
+      },
+    ],
     sponsorshipNotes: "Leaning Knowledge Partner (Gold); want panel slot on Day 1.",
     stageRemarks: [
       {
@@ -81,6 +93,17 @@ export const mockPartners: Partner[] = [
       },
     ],
     sponsorshipTier: "Knowledge Partner (Gold)",
+    eventPartnerships: [
+      {
+        eventId: "evt-001",
+        sponsorshipTier: "Knowledge Partner (Gold)",
+        deliverables: buildDeliverablesForTier(
+          "Knowledge Partner (Gold)",
+          mockDeliverableId
+        ),
+        seminarSlotCount: 2,
+      },
+    ],
     deliverables: buildDeliverablesForTier(
       "Knowledge Partner (Gold)",
       mockDeliverableId
@@ -193,12 +216,28 @@ export const mockPartners: Partner[] = [
         uploadedAt: "2026-07-02T09:15:00+05:30",
       },
       {
-        kind: "document",
+        kind: "brand_guidelines",
         label: "Brand guidelines",
         fileName: "pes-brand-guidelines.pdf",
         mimeType: "application/pdf",
         fileSizeBytes: 512000,
         uploadedAt: "2026-07-02T09:18:00+05:30",
+      },
+      {
+        kind: "company_profile",
+        label: "Company / institute profile",
+        fileName: "pes-profile.pdf",
+        mimeType: "application/pdf",
+        fileSizeBytes: 320000,
+        uploadedAt: "2026-07-02T09:20:00+05:30",
+      },
+      {
+        kind: "brochure",
+        label: "Event brochure",
+        fileName: "pes-brochure.pdf",
+        mimeType: "application/pdf",
+        fileSizeBytes: 410000,
+        uploadedAt: "2026-07-02T09:22:00+05:30",
       },
     ]),
     createdAt: "2026-05-20T09:00:00+05:30",
@@ -345,6 +384,19 @@ export const mockPartners: Partner[] = [
     contactedNotes: "Reached VC office — interested in exploring.",
     meetingAt: "2026-07-01",
     meetingNotes: "Campus walkthrough scheduled; proposal pending.",
+    meetings: [
+      {
+        id: "mtg-006-1",
+        meetingAt: "2026-07-01T11:00:00",
+        notes: "Campus walkthrough scheduled; proposal pending.",
+        outcome: "in_discussion",
+        followUpNotes:
+          "Send revised Knowledge Partner (Gold) deck and confirm VC join on call.",
+        followUpAt: "2026-07-20T10:30:00",
+        createdAt: "2026-07-01T11:30:00+05:30",
+        updatedAt: "2026-07-01T11:30:00+05:30",
+      },
+    ],
     stageRemarks: [],
     createdAt: "2026-06-18T09:30:00+05:30",
     updatedAt: "2026-07-01T09:30:00+05:30",

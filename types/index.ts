@@ -250,6 +250,23 @@ export interface PartnerStageRemark {
   createdAt: string;
 }
 
+export type PartnerMeetingOutcome = "won" | "lost" | "in_discussion";
+
+/** A logged meeting or follow-up touchpoint during Meeting Scheduled stage */
+export interface PartnerMeetingLog {
+  id: string;
+  /** ISO local datetime e.g. 2026-07-20T14:30:00 */
+  meetingAt: string;
+  notes?: string;
+  outcome?: PartnerMeetingOutcome;
+  followUpNotes?: string;
+  /** ISO datetime for the next scheduled follow-up */
+  followUpAt?: string;
+  lostReason?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /** Checklist item for a partner's package — custom rows are unique to that partner. */
 export interface PartnerDeliverable {
   id: string;
@@ -260,6 +277,15 @@ export interface PartnerDeliverable {
   /** Selected option when the deliverable has a dropdown */
   option?: string;
   isCustom?: boolean;
+}
+
+/** Per-event sponsorship package — tier, deliverables, and seminar slot budget */
+export interface PartnerEventPartnership {
+  eventId: string;
+  sponsorshipTier: SponsorshipTier;
+  deliverables: PartnerDeliverable[];
+  /** Total panelist slots allotted for this event (set in deliverables step) */
+  seminarSlotCount: number;
 }
 
 export interface Partner {
@@ -277,7 +303,9 @@ export interface Partner {
   sponsorshipTier?: SponsorshipTier;
   /** Notes from the meeting on sponsorship interest */
   sponsorshipNotes?: string;
-  /** Package deliverables checklist (standard + per-partner customs) */
+  /** Per-event sponsorship tiers, deliverables, and slot budgets */
+  eventPartnerships?: PartnerEventPartnership[];
+  /** Package deliverables checklist — legacy flat list; prefer eventPartnerships */
   deliverables?: PartnerDeliverable[];
   /** Set when the deliverables step is submitted */
   deliverablesConfirmedAt?: string;
@@ -306,9 +334,11 @@ export interface Partner {
   /** First outreach */
   contactedAt?: string;
   contactedNotes?: string;
-  /** Meeting fixed */
+  /** Meeting fixed — legacy; synced from latest meeting log */
   meetingAt?: string;
   meetingNotes?: string;
+  /** Multiple meetings logged while in Meeting Scheduled stage */
+  meetings?: PartnerMeetingLog[];
   /** When marked Not Proceeding */
   notProceedingAt?: string;
   /** Mandatory reason when marked Not Proceeding */
@@ -316,6 +346,11 @@ export interface Partner {
   createdAt: string;
   updatedAt: string;
 }
+
+export type PartnerFollowUpItem = {
+  partner: Partner;
+  meeting: PartnerMeetingLog;
+};
 
 /** How many panelist seats a partner holds on a seminar */
 export interface PartnerSeminarSlotAssignment {
@@ -352,7 +387,13 @@ export type PartnerPortalDocumentKind =
   | "logo"
   | "banner"
   | "writeup"
-  | "document"
+  | "company_profile"
+  | "brochure"
+  | "faculty_photo"
+  | "brand_guidelines"
+  | "agreement"
+  | "tax_details"
+  | "collateral"
   | "other";
 
 export interface PartnerPortalDocument {

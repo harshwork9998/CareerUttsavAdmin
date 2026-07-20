@@ -13,7 +13,13 @@ import {
   displayClass,
 } from "@/features/dashboard/dashboard-ui";
 import { cn } from "@/lib/utils";
+import { buildEventPackageSummaries } from "@/lib/partner-event-config";
 import { buildPartnerWelcomeEmail } from "@/lib/partner-invite";
+import type {
+  Event,
+  PartnerEventPartnership,
+  PartnerSeminarSlotAssignment,
+} from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,8 +33,21 @@ export function ChapterPartnerInvite(props: {
   temporaryPassword: string;
   onRegeneratePassword: () => void;
   hasSeminarSlots?: boolean;
+  eventPartnerships?: PartnerEventPartnership[];
+  slotAssignments?: PartnerSeminarSlotAssignment[];
+  events?: Event[];
   errors: Record<string, string>;
 }) {
+  const eventPackages = useMemo(
+    () =>
+      buildEventPackageSummaries(
+        props.eventPartnerships ?? [],
+        props.slotAssignments ?? [],
+        props.events ?? []
+      ),
+    [props.eventPartnerships, props.slotAssignments, props.events]
+  );
+
   const emailPreview = useMemo(
     () =>
       buildPartnerWelcomeEmail({
@@ -36,12 +55,22 @@ export function ChapterPartnerInvite(props: {
         login: props.login,
         temporaryPassword: props.temporaryPassword,
         hasSeminarSlots: props.hasSeminarSlots,
+        eventPackages: eventPackages.map((pkg) => ({
+          title: pkg.title,
+          city: pkg.city,
+          tier: pkg.tier,
+          deliverables: pkg.deliverables,
+          seminars: pkg.seminars,
+          seatsAssigned: pkg.seatsAssigned,
+          slotBudget: pkg.slotBudget,
+        })),
       }),
     [
       props.partnerName,
       props.login,
       props.temporaryPassword,
       props.hasSeminarSlots,
+      eventPackages,
     ]
   );
 

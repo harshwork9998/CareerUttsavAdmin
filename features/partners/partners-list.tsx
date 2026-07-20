@@ -14,10 +14,10 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { PARTNER_LIFECYCLE_STAGES, SPONSORSHIP_TIERS } from "@/constants";
+import { SPONSORSHIP_TIERS } from "@/constants";
 import { partnersService } from "@/services/api";
 import { cn } from "@/lib/utils";
-import type { Partner, PartnerLifecycleStage } from "@/types";
+import type { Partner } from "@/types";
 import {
   BRAND,
   ELEVATION,
@@ -27,11 +27,17 @@ import {
   surface,
 } from "@/features/dashboard/dashboard-ui";
 import { PartnerDocsDialog } from "@/features/partners/partner-docs-dialog";
+import { PartnerStageBoard } from "@/features/partners/partner-stage-board";
 import { PartnerSummaryDialog } from "@/features/partners/partner-summary-dialog";
 import {
   formatDaysSinceUploadChip,
+  getPartnerPortalUploadProgress,
   getPartnerPortalUploadStatus,
 } from "@/lib/partner-portal-docs";
+import {
+  getPartnerDisplayTier,
+  partnerMatchesTierFilter,
+} from "@/lib/partner-event-config";
 import {
   ConfirmDialog,
   ErrorState,
@@ -48,24 +54,48 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-function stageTone(stage: PartnerLifecycleStage): {
-  bg: string;
-  color: string;
-} {
-  switch (stage) {
-    case "Confirmed":
-      return { bg: "rgba(47,107,79,0.22)", color: "#247A52" };
-    case "Not Proceeding":
-      return { bg: "rgba(163,59,59,0.22)", color: "#C23D3D" };
-    case "Negotiation":
-      return { bg: "rgba(176,125,42,0.24)", color: "#C9901F" };
-    case "Meeting Scheduled":
-      return { bg: "rgba(31,56,100,0.2)", color: "#2A4F8C" };
-    case "Contacted":
-      return { bg: "rgba(31,56,100,0.18)", color: "#355A99" };
-    default:
-      return { bg: "rgba(31,56,100,0.16)", color: "#1F3864" };
-  }
+function PartnerDocUploadBar({
+  uploadStatus,
+}: {
+  uploadStatus: ReturnType<typeof getPartnerPortalUploadStatus>;
+}) {
+  const { uploaded, total, ratio } = getPartnerPortalUploadProgress(uploadStatus);
+  const labelColor = ratio >= 1 ? "#247A52" : "#64748B";
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between gap-2 text-[11px]">
+        <span className="font-medium text-muted-foreground">Documents</span>
+        <span className="font-semibold tabular-nums" style={{ color: labelColor }}>
+          {uploaded}/{total} uploaded
+        </span>
+      </div>
+      <div
+        className="flex gap-1"
+        role="progressbar"
+        aria-valuenow={uploaded}
+        aria-valuemin={0}
+        aria-valuemax={total}
+        aria-label={`${uploaded} of ${total} documents uploaded`}
+      >
+        {uploadStatus.checklist.map((item) => (
+          <div
+            key={item.kind}
+            title={item.label}
+            className="h-2.5 min-w-0 flex-1 rounded-[3px] transition-colors duration-300"
+            style={
+              item.uploaded
+                ? { backgroundColor: "#247A52" }
+                : {
+                    backgroundColor: "#FFFFFF",
+                    border: "1px solid rgba(31, 56, 100, 0.14)",
+                  }
+            }
+          />
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function PartnerCard({
@@ -79,12 +109,13 @@ function PartnerCard({
   onViewDocs: (p: Partner) => void;
   onDelete: (p: Partner) => void;
 }) {
-  const tone = stageTone(partner.stage);
   const uploadStatus = getPartnerPortalUploadStatus(partner);
   const reminderChip = formatDaysSinceUploadChip(uploadStatus);
 
   return (
     <motion.article
+      layout
+      layoutId={`partner-${partner.id}`}
       {...sectionMotion}
       role="button"
       tabIndex={0}
@@ -97,7 +128,7 @@ function PartnerCard({
       }}
       className={cn(
         surface.opening,
-        "flex cursor-pointer flex-col overflow-hidden p-5 outline-none transition-shadow hover:shadow-md focus-visible:ring-2 focus-visible:ring-brand-700/30"
+        "flex w-[min(100%,340px)] shrink-0 cursor-pointer flex-col overflow-hidden p-5 outline-none transition-shadow hover:shadow-md focus-visible:ring-2 focus-visible:ring-brand-700/30 sm:w-[360px]"
       )}
     >
       <div className="flex items-start gap-3">
@@ -148,12 +179,17 @@ function PartnerCard({
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <span
-          className="rounded-full px-2.5 py-1 text-xs font-semibold tracking-wide"
-          style={{ background: tone.bg, color: tone.color }}
-        >
-          {partner.stage}
-        </span>
+        {getPartnerDisplayTier(partner) ? (
+          <span
+            className="rounded-full px-2.5 py-1 text-xs font-semibold tracking-wide"
+            style={{
+              background: "rgba(31,56,100,0.16)",
+              color: "#1F3864",
+            }}
+          >
+            {getPartnerDisplayTier(partner)}
+          </span>
+        ) : null}
         {reminderChip ? (
           <span
             className="rounded-full px-2.5 py-1 text-xs font-semibold tracking-wide"
@@ -165,6 +201,10 @@ function PartnerCard({
             {reminderChip}
           </span>
         ) : null}
+      </div>
+
+      <div className="mt-4">
+        <PartnerDocUploadBar uploadStatus={uploadStatus} />
       </div>
 
       <div className="mt-4 flex items-center justify-between gap-3">
@@ -200,7 +240,6 @@ export function PartnersList() {
   const [pendingDelete, setPendingDelete] = useState<Partner | null>(null);
   const [summaryPartner, setSummaryPartner] = useState<Partner | null>(null);
   const [docsPartner, setDocsPartner] = useState<Partner | null>(null);
-  const [stageFilter, setStageFilter] = useState("all");
   const [tierFilter, setTierFilter] = useState("all");
   const [cityFilter, setCityFilter] = useState<string[]>([]);
 
@@ -228,20 +267,19 @@ export function PartnersList() {
 
   const filtered = useMemo(() => {
     return partners.filter((p) => {
-      if (stageFilter !== "all" && p.stage !== stageFilter) return false;
-      if (tierFilter !== "all" && (p.sponsorshipTier ?? "") !== tierFilter) {
+      if (tierFilter !== "all" && !partnerMatchesTierFilter(p, tierFilter)) {
         return false;
       }
       if (cityFilter.length > 0 && !cityFilter.includes(p.city)) return false;
       return true;
     });
-  }, [partners, stageFilter, tierFilter, cityFilter]);
+  }, [partners, tierFilter, cityFilter]);
 
   return (
     <div className="space-y-8">
       <PageHeader
         title="Partners"
-        description="Walk each university through the sponsorship partnership — one step at a time."
+        description="Universities grouped by partnership stage — cards move when you advance the journey."
         actions={
           <Button
             onClick={() => router.push("/partners/new")}
@@ -256,16 +294,6 @@ export function PartnersList() {
 
       <FiltersBar
         filters={[
-          {
-            id: "stage",
-            label: "Stage",
-            value: stageFilter,
-            onChange: setStageFilter,
-            options: PARTNER_LIFECYCLE_STAGES.map((s) => ({
-              label: s,
-              value: s,
-            })),
-          },
           {
             id: "tier",
             label: "Sponsorship tier",
@@ -287,7 +315,6 @@ export function PartnersList() {
           },
         ]}
         onClearAll={() => {
-          setStageFilter("all");
           setTierFilter("all");
           setCityFilter([]);
         }}
@@ -302,9 +329,19 @@ export function PartnersList() {
       )}
 
       {isLoading && (
-        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-56 rounded-[24px]" />
+        <div className="space-y-5">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="space-y-2.5">
+              <Skeleton className="h-10 w-full rounded-lg" />
+              <div className="flex gap-3 overflow-x-auto pb-1">
+                {Array.from({ length: 3 }).map((_, j) => (
+                  <Skeleton
+                    key={j}
+                    className="h-56 w-[360px] shrink-0 rounded-[24px]"
+                  />
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       )}
@@ -346,8 +383,9 @@ export function PartnersList() {
       )}
 
       {!isLoading && !isError && filtered.length > 0 && (
-        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((partner) => (
+        <PartnerStageBoard
+          partners={filtered}
+          renderCard={(partner) => (
             <PartnerCard
               key={partner.id}
               partner={partner}
@@ -355,8 +393,8 @@ export function PartnersList() {
               onViewDocs={setDocsPartner}
               onDelete={setPendingDelete}
             />
-          ))}
-        </div>
+          )}
+        />
       )}
 
       <PartnerSummaryDialog

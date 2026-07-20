@@ -1,18 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 
 import { cn, formatCurrency, formatNumber } from "@/lib/utils";
 import type {
-  PartnerJourneyStage,
+  PartnerLifecycleStage,
   PartnerSalesAnalytics,
   PartnerSalesDeal,
   PartnerSalesStatus,
   SponsorshipTier,
 } from "@/types";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Dialog,
   DialogContent,
@@ -21,13 +20,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
-import {
   BRAND,
   INK,
   LINE,
@@ -35,7 +27,6 @@ import {
   displayClass,
   surface,
 } from "@/features/dashboard/dashboard-ui";
-import { PartnerJourneyFlow } from "@/features/dashboard/visualizations";
 
 const LOGO_WASHES = [
   { bg: "rgba(31, 56, 100, 0.12)", fg: BRAND[700] },
@@ -58,11 +49,32 @@ function tierRank(tier: string): number {
   return index === -1 ? TIER_ORDER.length : index;
 }
 
-type DrillFilter =
-  | { type: "all" }
-  | { type: "status"; value: PartnerSalesStatus }
-  | { type: "stage"; value: PartnerJourneyStage }
-  | { type: "tier"; value: SponsorshipTier };
+const PIPELINE_STAGE_ORDER: PartnerLifecycleStage[] = [
+  "New",
+  "Contacted",
+  "Meeting Scheduled",
+  "Negotiation",
+  "Confirmed",
+  "Not Proceeding",
+];
+
+const STAGE_SHORT_LABEL: Record<PartnerLifecycleStage, string> = {
+  New: "New",
+  Contacted: "Contacted",
+  "Meeting Scheduled": "Meeting",
+  Negotiation: "Negotiation",
+  Confirmed: "Confirmed",
+  "Not Proceeding": "Not proceeding",
+};
+
+const STAGE_ACCENT: Record<PartnerLifecycleStage, string> = {
+  New: BRAND[700],
+  Contacted: "#0B5F5E",
+  "Meeting Scheduled": "#5C6B8A",
+  Negotiation: "#8A6A2F",
+  Confirmed: "#2F6B4F",
+  "Not Proceeding": "#9A4A4A",
+};
 
 function normalizeStatus(status: string): PartnerSalesStatus {
   if (status === "In Process") return "In Discussion";
@@ -77,48 +89,11 @@ function normalizeStatus(status: string): PartnerSalesStatus {
   return "In Discussion";
 }
 
-function normalizeStage(stage: string): PartnerJourneyStage {
+function normalizeStage(stage: string): PartnerLifecycleStage {
   if (stage === "Discussion" || stage === "Proposal Sent") return "Negotiation";
   if (stage === "Won") return "Confirmed";
   if (stage === "Lost") return "Not Proceeding";
-  return stage as PartnerJourneyStage;
-}
-
-function filterDeals(
-  deals: PartnerSalesDeal[],
-  filter: DrillFilter | null
-): PartnerSalesDeal[] {
-  if (!filter || filter.type === "all") return deals;
-  switch (filter.type) {
-    case "status":
-      return deals.filter((d) => normalizeStatus(d.status) === filter.value);
-    case "stage":
-      return deals.filter((d) => normalizeStage(d.stage) === filter.value);
-    case "tier":
-      return deals.filter((d) => d.tier === filter.value);
-    default:
-      return deals;
-  }
-}
-
-function filterTitle(filter: DrillFilter | null): string {
-  if (!filter || filter.type === "all") return "University partners";
-  return String(filter.value);
-}
-
-function filterDescription(filter: DrillFilter | null): string {
-  if (!filter || filter.type === "all") {
-    return "Universities connected to Career Utsav in this view";
-  }
-  if (filter.type === "stage") {
-    return `Universities currently at “${filter.value}”`;
-  }
-  if (filter.type === "status") {
-    if (filter.value === "Confirmed") return "Universities joining the fair";
-    if (filter.value === "In Discussion") return "Universities in conversation";
-    return "Universities not continuing";
-  }
-  return `Universities as ${filter.value}`;
+  return stage as PartnerLifecycleStage;
 }
 
 function statusBadge(
@@ -152,61 +127,146 @@ function PartnerLogo({ name, index = 0 }: { name: string; index?: number }) {
   );
 }
 
-function PartnerList({ deals }: { deals: PartnerSalesDeal[] }) {
-  if (deals.length === 0) {
-    return (
-      <div className="flex h-28 items-center justify-center border border-dashed text-[13px] text-muted-foreground">
-        No universities in this view
-      </div>
-    );
-  }
+function PartnerDealCard({
+  deal,
+  index,
+  isAllCities,
+}: {
+  deal: PartnerSalesDeal;
+  index: number;
+  isAllCities?: boolean;
+}) {
+  const status = normalizeStatus(deal.status);
 
   return (
-    <div className="space-y-3">
-      <p className="text-[12px] text-muted-foreground">
-        <span className="text-[14px] font-semibold tabular-nums text-foreground">
-          {formatNumber(deals.length)}
-        </span>{" "}
-        universities
-      </p>
-      <ScrollArea className="h-[calc(100vh-200px)] pr-3">
-        <div className="space-y-2 pb-6">
-          {deals.map((deal) => {
-            const status = normalizeStatus(deal.status);
-            const stage = normalizeStage(deal.stage);
-            return (
-              <div
-                key={deal.id}
-                className="border border-border/50 p-3"
-              >
-                <p className="text-[13px] font-semibold leading-snug">
-                  {deal.universityName}
-                </p>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  {deal.city}
-                  {deal.owner ? ` · ${deal.owner}` : ""}
-                </p>
-                <div className="mt-2 flex flex-wrap gap-1">
-                  <Badge variant="outline" className="text-[10px]">
-                    {deal.tier}
-                  </Badge>
-                  <Badge variant="muted" className="text-[10px]">
-                    {stage}
-                  </Badge>
-                  <Badge variant={statusBadge(status)} className="text-[10px]">
-                    {status}
-                  </Badge>
-                </div>
-                {deal.notes && (
-                  <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
-                    {deal.notes}
-                  </p>
-                )}
-              </div>
-            );
-          })}
+    <motion.div
+      layout
+      layoutId={`partner-deal-${deal.id}`}
+      initial={{ opacity: 0, scale: 0.96 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.96 }}
+      transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+      className="rounded-xl border border-brand-900/10 bg-white p-2.5 shadow-sm"
+    >
+      <div className="flex items-start gap-2">
+        <PartnerLogo name={deal.universityName} index={index} />
+        <div className="min-w-0 flex-1">
+          <p className="text-[13px] font-semibold leading-snug tracking-tight text-foreground">
+            {deal.universityName}
+          </p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
+            {isAllCities ? `${deal.city} · ` : ""}
+            {deal.owner || "Unassigned"}
+          </p>
+          <div className="mt-2 flex flex-wrap gap-1">
+            <Badge variant="outline" className="text-[10px]">
+              {deal.tier}
+            </Badge>
+            <Badge variant={statusBadge(status)} className="text-[10px]">
+              {status}
+            </Badge>
+          </div>
         </div>
-      </ScrollArea>
+      </div>
+    </motion.div>
+  );
+}
+
+function PartnerStageBoard({
+  deals,
+  isAllCities,
+}: {
+  deals: PartnerSalesDeal[];
+  isAllCities?: boolean;
+}) {
+  const columns = useMemo(() => {
+    const byStage = new Map<PartnerLifecycleStage, PartnerSalesDeal[]>();
+    for (const stage of PIPELINE_STAGE_ORDER) {
+      byStage.set(stage, []);
+    }
+
+    for (const deal of deals) {
+      const stage = normalizeStage(deal.stage);
+      const bucket = byStage.get(stage) ?? [];
+      bucket.push(deal);
+      byStage.set(stage, bucket);
+    }
+
+    return PIPELINE_STAGE_ORDER.map((stage) => ({
+      stage,
+      deals: (byStage.get(stage) ?? []).sort((a, b) =>
+        a.universityName.localeCompare(b.universityName)
+      ),
+    }));
+  }, [deals]);
+
+  const total = deals.length;
+
+  return (
+    <div className={cn(surface.mint, "p-3.5 sm:p-4")}>
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h3 className="text-[15px] font-bold tracking-tight text-foreground">
+            University pipeline
+          </h3>
+          <p className="mt-0.5 text-[12px] text-muted-foreground">
+            Universities grouped by stage — cards move when stage updates
+          </p>
+        </div>
+        <p className="text-[12px] tabular-nums text-muted-foreground">
+          <span className="font-semibold text-foreground">
+            {formatNumber(total)}
+          </span>{" "}
+          universities
+        </p>
+      </div>
+
+      <div className="flex gap-3 overflow-x-auto pb-1">
+        {columns.map((column) => (
+          <div
+            key={column.stage}
+            className="flex w-[min(100%,240px)] shrink-0 flex-col sm:w-[220px]"
+          >
+            <div
+              className="mb-2 flex items-center gap-2 rounded-lg px-2.5 py-2"
+              style={{ background: PAPER.muted, border: `1px solid ${LINE.subtle}` }}
+            >
+              <span
+                className="h-2 w-2 shrink-0 rounded-full"
+                style={{ backgroundColor: STAGE_ACCENT[column.stage] }}
+              />
+              <p className="min-w-0 flex-1 truncate text-[12px] font-semibold text-foreground">
+                {STAGE_SHORT_LABEL[column.stage]}
+              </p>
+              <span className="text-[12px] font-semibold tabular-nums text-brand-800">
+                {formatNumber(column.deals.length)}
+              </span>
+            </div>
+
+            <div
+              className="min-h-[120px] flex-1 space-y-2 overflow-y-auto rounded-xl border border-dashed border-brand-900/12 bg-white/60 p-2"
+              style={{ maxHeight: "min(420px, 52vh)" }}
+            >
+              <AnimatePresence mode="popLayout" initial={false}>
+                {column.deals.length === 0 ? (
+                  <p className="px-1 py-6 text-center text-[11px] text-muted-foreground">
+                    No universities
+                  </p>
+                ) : (
+                  column.deals.map((deal, index) => (
+                    <PartnerDealCard
+                      key={deal.id}
+                      deal={deal}
+                      index={index}
+                      isAllCities={isAllCities}
+                    />
+                  ))
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -518,10 +578,8 @@ export function PartnerSalesSection({
   /** Increment to open the all-universities popup from the parent. */
   seeAllTick?: number;
 }) {
-  const [filter, setFilter] = useState<DrillFilter | null>(null);
   const [allOpen, setAllOpen] = useState(false);
   const [tierPopup, setTierPopup] = useState<SponsorshipTier | null>(null);
-  const sheetOpen = filter !== null && filter.type !== "all";
   const lastSeeAllTick = useRef(seeAllTick);
 
   useEffect(() => {
@@ -530,18 +588,6 @@ export function PartnerSalesSection({
     }
     lastSeeAllTick.current = seeAllTick;
   }, [seeAllTick]);
-
-  const stages = useMemo(() => {
-    const merged = new Map<string, number>();
-    for (const stage of data.byStage) {
-      const name = normalizeStage(stage.name);
-      merged.set(name, (merged.get(name) ?? 0) + stage.count);
-    }
-    return Array.from(merged.entries()).map(([name, count]) => ({
-      name,
-      count,
-    }));
-  }, [data.byStage]);
 
   const confirmedPartners = useMemo(
     () =>
@@ -574,11 +620,6 @@ export function PartnerSalesSection({
     [confirmedPartners, tierPopup]
   );
 
-  const filteredDeals = useMemo(
-    () => filterDeals(data.deals, filter),
-    [data.deals, filter]
-  );
-
   const totalRevenue = useMemo(
     () =>
       confirmedPartners.reduce((sum, deal) => sum + (deal.value || 0), 0),
@@ -599,35 +640,23 @@ export function PartnerSalesSection({
     })).filter((r) => r.amount > 0);
   }, [confirmedPartners]);
 
-  const openFilter = (next: DrillFilter) => setFilter(next);
-
   return (
-    <section>
-      {/* Left column sets height; right fills it and never grows the row */}
+    <section className="space-y-3">
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.08, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <PartnerStageBoard deals={data.deals} isAllCities={isAllCities} />
+      </motion.div>
+
       <div className="grid gap-3 lg:grid-cols-2 lg:items-stretch">
         <div className="flex flex-col gap-3">
-          <motion.div
-            className={cn(surface.mint, "p-3.5 sm:p-4")}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.12, ease: [0.22, 1, 0.36, 1] }}
-          >
-            <PartnerJourneyFlow
-              stages={stages}
-              onSelect={(name) =>
-                openFilter({
-                  type: "stage",
-                  value: name as PartnerJourneyStage,
-                })
-              }
-            />
-          </motion.div>
-
           <motion.div
             className={cn(surface.opening, "flex flex-col bg-brand-50/50 p-3.5 sm:p-4")}
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.4, delay: 0.14, ease: [0.22, 1, 0.36, 1] }}
           >
             <h3 className="mb-2.5 text-[16px] font-bold tracking-tight text-foreground">
               Sponsorship tiers
@@ -707,21 +736,6 @@ export function PartnerSalesSection({
         onOpenChange={setAllOpen}
         deals={data.deals}
       />
-
-      <Sheet
-        open={sheetOpen}
-        onOpenChange={(next) => !next && setFilter(null)}
-      >
-        <SheetContent side="right" className="flex w-full flex-col sm:max-w-lg">
-          <SheetHeader className="pr-8">
-            <SheetTitle>{filterTitle(filter)}</SheetTitle>
-            <SheetDescription>{filterDescription(filter)}</SheetDescription>
-          </SheetHeader>
-          <div className="mt-5 flex-1 overflow-hidden">
-            <PartnerList deals={filteredDeals} />
-          </div>
-        </SheetContent>
-      </Sheet>
     </section>
   );
 }
