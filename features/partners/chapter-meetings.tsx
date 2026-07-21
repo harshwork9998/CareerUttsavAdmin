@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState, type Ref } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CalendarClock,
   CheckCircle2,
   MessageSquare,
+  Pencil,
   Plus,
   Sparkles,
   XCircle,
@@ -26,6 +27,7 @@ import {
   STATUS,
   displayClass,
 } from "@/features/dashboard/dashboard-ui";
+import { useTimelineSpine } from "@/lib/use-timeline-spine";
 import {
   MEETING_OUTCOME_LABELS,
   combineDateAndTime,
@@ -100,10 +102,12 @@ function MeetingOutcomeBadge({
 
 function MeetingTimelineCard({
   meeting,
-  onEditOutcome,
+  onEdit,
+  dotRef,
 }: {
   meeting: PartnerMeetingLog;
-  onEditOutcome: () => void;
+  onEdit: () => void;
+  dotRef?: Ref<HTMLSpanElement>;
 }) {
   const { date, time } = splitDateTime(meeting.meetingAt);
 
@@ -112,15 +116,11 @@ function MeetingTimelineCard({
       layout
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="relative pl-8"
+      className="relative z-0 pl-8 pb-4 last:pb-0"
     >
       <span
-        className="absolute left-[11px] top-5 h-[calc(100%-12px)] w-px"
-        style={{ background: LINE.subtle }}
-        aria-hidden
-      />
-      <span
-        className="absolute left-0 top-3 flex h-6 w-6 items-center justify-center rounded-full border-2 bg-white"
+        ref={dotRef}
+        className="absolute left-0 top-0 z-[1] flex h-6 w-6 items-center justify-center rounded-full border-2 bg-white"
         style={{ borderColor: meeting.outcome ? BRAND[700] : LINE.strong }}
       >
         <span
@@ -220,17 +220,16 @@ function MeetingTimelineCard({
           </div>
         ) : null}
 
-        {!meeting.outcome ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="mt-3 rounded-full"
-            onClick={onEditOutcome}
-          >
-            Record outcome
-          </Button>
-        ) : null}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="mt-3 gap-1.5 rounded-full"
+          onClick={onEdit}
+        >
+          <Pencil className="h-3.5 w-3.5" />
+          {meeting.outcome ? "Edit meeting" : "Edit / record outcome"}
+        </Button>
       </div>
     </motion.li>
   );
@@ -269,11 +268,19 @@ export function ChapterMeetings({
     meta: {
       outcome?: PartnerMeetingOutcome;
       lostReason?: string;
+      editingMeetingId?: string | null;
     }
   ) => void;
   saving: boolean;
 }) {
   const meetings = useMemo(() => getPartnerMeetings(partner), [partner]);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const firstDotRef = useRef<HTMLSpanElement>(null);
+  const lastDotRef = useRef<HTMLSpanElement>(null);
+  const spineStyle = useTimelineSpine(containerRef, firstDotRef, lastDotRef, [
+    meetings.length,
+    meetings.map((meeting) => meeting.id).join(","),
+  ]);
   const [composerOpen, setComposerOpen] = useState(meetings.length === 0);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<MeetingFormState>(emptyForm);
@@ -290,13 +297,13 @@ export function ChapterMeetings({
     setComposerOpen(true);
   };
 
-  const openOutcomeForMeeting = (meeting: PartnerMeetingLog) => {
+  const openEditMeeting = (meeting: PartnerMeetingLog) => {
     const { date, time } = splitDateTime(meeting.meetingAt);
     const follow = splitDateTime(meeting.followUpAt ?? "");
     setEditingId(meeting.id);
     setForm({
       meetingDate: date,
-      meetingTime: time,
+      meetingTime: time || "10:00",
       notes: meeting.notes ?? "",
       outcome: meeting.outcome ?? "",
       followUpNotes: meeting.followUpNotes ?? "",
@@ -363,6 +370,7 @@ export function ChapterMeetings({
     onPersist(nextMeetings, {
       outcome: form.outcome || undefined,
       lostReason: form.outcome === "lost" ? form.lostReason.trim() : undefined,
+      editingMeetingId: editingId,
     });
 
     resetForm();
@@ -407,15 +415,35 @@ export function ChapterMeetings({
       </div>
 
       {meetings.length > 0 ? (
-        <ol className="space-y-4">
-          {meetings.map((meeting) => (
-            <MeetingTimelineCard
-              key={meeting.id}
-              meeting={meeting}
-              onEditOutcome={() => openOutcomeForMeeting(meeting)}
+        <div ref={containerRef} className="relative isolate">
+          {spineStyle && meetings.length > 1 ? (
+            <span
+              className="pointer-events-none absolute left-3 -z-10 w-px -translate-x-1/2"
+              style={{
+                top: spineStyle.top,
+                height: spineStyle.height,
+                background: LINE.subtle,
+              }}
+              aria-hidden
             />
-          ))}
-        </ol>
+          ) : null}
+          <ol>
+            {meetings.map((meeting, index) => (
+              <MeetingTimelineCard
+                key={meeting.id}
+                meeting={meeting}
+                dotRef={
+                  index === 0
+                    ? firstDotRef
+                    : index === meetings.length - 1
+                      ? lastDotRef
+                      : undefined
+                }
+                onEdit={() => openEditMeeting(meeting)}
+              />
+            ))}
+          </ol>
+        </div>
       ) : (
         <div
           className="rounded-2xl border border-dashed px-6 py-10 text-center"
@@ -452,7 +480,7 @@ export function ChapterMeetings({
                   className={cn(displayClass, "text-lg font-bold")}
                   style={{ color: INK.primary }}
                 >
-                  {editingId ? "Update meeting" : "Log a meeting"}
+                  {editingId ? "Edit meeting" : "Log a meeting"}
                 </h3>
                 <Button
                   type="button"

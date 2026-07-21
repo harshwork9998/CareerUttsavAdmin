@@ -1,4 +1,5 @@
 import { buildDeliverablesForTier } from "@/constants";
+import { getPartnershipTierLabel } from "@/lib/partner-tier";
 import type {
   Event,
   Partner,
@@ -12,7 +13,7 @@ export type EventPackageSummary = {
   eventId: string;
   title: string;
   city: string;
-  tier: SponsorshipTier | undefined;
+  tier: string | undefined;
   deliverables: Array<{ id: string; label: string; option?: string }>;
   seminars: Array<{ id: string; title: string; slots: number }>;
   slotBudget: number;
@@ -20,9 +21,9 @@ export type EventPackageSummary = {
 };
 
 export function hasPartnershipTier(
-  ep: Pick<PartnerEventPartnership, "sponsorshipTier">
-): ep is PartnerEventPartnership & { sponsorshipTier: SponsorshipTier } {
-  return Boolean(ep.sponsorshipTier);
+  ep: Pick<PartnerEventPartnership, "sponsorshipTier" | "customTierLabel">
+): boolean {
+  return Boolean(ep.sponsorshipTier) || Boolean(ep.customTierLabel?.trim());
 }
 
 export function partnershipsForEventIds(
@@ -60,7 +61,7 @@ export function buildEventPackageSummaries(
       eventId: ep.eventId,
       title: event.title,
       city: event.city,
-      tier: ep.sponsorshipTier,
+      tier: getPartnershipTierLabel(ep),
       deliverables: ep.deliverables
         .filter((d) => d.included)
         .map((d) => ({
@@ -169,8 +170,10 @@ export function getPartnerDisplayTier(partner: Partner): string | undefined {
   );
   if (eps.length === 0) return partner.sponsorshipTier;
   const unique = [
-    ...new Set(eps.map((ep) => ep.sponsorshipTier).filter(Boolean)),
-  ] as SponsorshipTier[];
+    ...new Set(
+      eps.map((ep) => getPartnershipTierLabel(ep)).filter(Boolean)
+    ),
+  ] as string[];
   if (unique.length === 0) return partner.sponsorshipTier;
   if (unique.length === 1) return unique[0];
   return `${unique[0]} +${unique.length - 1}`;
@@ -181,7 +184,7 @@ export function partnerMatchesTierFilter(
   tier: string
 ): boolean {
   const eps = resolveEventPartnerships(partner);
-  if (eps.some((ep) => ep.sponsorshipTier === tier)) return true;
+  if (eps.some((ep) => getPartnershipTierLabel(ep) === tier)) return true;
   return partner.sponsorshipTier === tier;
 }
 

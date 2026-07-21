@@ -20,7 +20,8 @@ import {
   PARTNER_DELIVERABLE_DEFINITIONS,
   applyTierDefaultsPreservingCustom,
 } from "@/constants";
-import { isOperatingCity, OPERATING_CITIES } from "@/lib/operating-cities";
+import { isIndianStateOrUt } from "@/lib/indian-states-uts";
+import { isOperatingCity } from "@/lib/operating-cities";
 import { eventsService, partnersService } from "@/services/api";
 import { DateField } from "@/features/events/event-datetime-fields";
 import {
@@ -52,8 +53,16 @@ import { ChapterPartnerInvite } from "@/features/partners/chapter-partner-invite
 import { ChapterMeetings } from "@/features/partners/chapter-meetings";
 import { ChapterEventDeliverables } from "@/features/partners/chapter-event-deliverables";
 import {
+  CUSTOM_TIER_OPTION,
+  isCustomPartnership,
+  isStandardSponsorshipTier,
+  tierSelectValue,
+} from "@/lib/partner-tier";
+import {
   allEventsHaveTier,
   assignedSlotsForEvent,
+  buildEventPackageSummaries,
+  hasPartnershipTier,
   partnerHasEventPackages,
   removeEventPartnership,
   resolveEventPartnerships,
@@ -64,13 +73,17 @@ import {
 import {
   generatePartnerLogin,
   generateTempPassword,
+  buildPartnerWelcomeEmail,
+  openGmailCompose,
 } from "@/lib/partner-invite";
 import {
+  getPartnerMeetings,
   hasLoggedMeeting,
   hasWonMeeting,
   syncLegacyMeetingFields,
 } from "@/lib/partner-meetings";
 import { Button } from "@/components/ui/button";
+import { StateUtCombobox } from "@/components/shared/state-ut-combobox";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -102,7 +115,7 @@ const CHAPTERS: Array<{
   id: ChapterId;
   title: string;
 }> = [
-  { id: 1, title: "University details" },
+  { id: 1, title: "Partner details" },
   { id: 2, title: "First contact" },
   { id: 3, title: "Meeting scheduled" },
   { id: 4, title: "Partnership details" },
@@ -129,13 +142,28 @@ const emptyOwner = (): RelationshipOwner => ({
 function canPersistNewPartner(name: string, city: string, state: string) {
   return (
     name.trim().length >= 2 &&
-    isOperatingCity(city.trim()) &&
-    state.trim().length > 0
+    city.trim().length >= 2 &&
+    isIndianStateOrUt(state.trim())
+  );
+}
+
+function isChapter1Complete(partner: Partner): boolean {
+  return Boolean(
+    partner.name?.trim() &&
+      partner.city?.trim() &&
+      partner.state?.trim() &&
+      partner.primaryContact?.name?.trim() &&
+      partner.primaryContact?.phone?.trim() &&
+      partner.primaryContact?.email?.trim() &&
+      partner.secondaryContact?.name?.trim() &&
+      partner.secondaryContact?.phone?.trim() &&
+      partner.secondaryContact?.email?.trim()
   );
 }
 
 function maxUnlockedChapter(partner: Partner | null): ChapterId {
   if (!partner) return 1;
+  if (!isChapter1Complete(partner)) return 1;
   if (!partner.contactedAt) return 2;
   if (!hasLoggedMeeting(partner)) return 3;
   if (
@@ -154,6 +182,7 @@ function maxUnlockedChapter(partner: Partner | null): ChapterId {
 
 function startingChapter(partner: Partner | null): ChapterId {
   if (!partner) return 1;
+  if (!isChapter1Complete(partner)) return 1;
   if (!partner.contactedAt) return 2;
   if (!hasLoggedMeeting(partner)) return 3;
   if (
@@ -169,7 +198,7 @@ function startingChapter(partner: Partner | null): ChapterId {
   if (
     !ownerReady ||
     !eventsReady ||
-    !eps.every((ep) => ep.sponsorshipTier)
+    !eps.every((ep) => hasPartnershipTier(ep))
   ) {
     return 4;
   }
@@ -204,23 +233,24 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
   const unlocked = maxUnlockedChapter(isNew ? null : partner);
   const [chapter, setChapter] = useState<ChapterId>(1);
 
+  const formHydratedForRef = useRef<string | null>(null);
+  const chapterBootstrappedForRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (isNew) {
+    formHydratedForRef.current = null;
+    chapterBootstrappedForRef.current = null;
+  }, [partnerId]);
+
+  useEffect(() => {
+    if (isNew && !partnerId) {
       setChapter(1);
       return;
     }
-    if (partner) setChapter(startingChapter(partner));
-  }, [
-    isNew,
-    partner?.id,
-    partner?.contactedAt,
-    partner?.meetings,
-    partner?.meetingAt,
-    partner?.stage,
-    partner?.deliverablesConfirmedAt,
-    partner?.seminarSlotsConfirmedAt,
-    partner?.commercialsConfirmedAt,
-  ]);
+    if (!partner) return;
+    if (chapterBootstrappedForRef.current === partner.id) return;
+    chapterBootstrappedForRef.current = partner.id;
+    setChapter(startingChapter(partner));
+  }, [isNew, partnerId, partner?.id]);
 
   const events = useMemo(
     () => (eventsQuery.data ?? []).filter((e) => isOperatingCity(e.city)),
@@ -293,6 +323,8 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
 
   useEffect(() => {
     if (!partner) return;
+    if (formHydratedForRef.current === partner.id) return;
+    formHydratedForRef.current = partner.id;
     setName(partner.name);
     setCity(partner.city);
     setState(partner.state);
@@ -339,7 +371,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     );
     setPortalLogin(partner.portalLogin || generatePartnerLogin(partner));
     setTempPassword((prev) => partner.portalTempPassword || prev || generateTempPassword());
-  }, [partner]);
+  }, [partner?.id, partnerQuery.isSuccess]);
 
   const persistCache = (saved: Partner) => {
     queryClient.setQueryData(["partners", saved.id], saved);
@@ -350,7 +382,6 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
         ? old.map((p) => (p.id === saved.id ? saved : p))
         : [saved, ...old];
     });
-    void queryClient.invalidateQueries({ queryKey: ["partners"] });
   };
 
   const saveMutation = useMutation({
@@ -568,6 +599,10 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       const saved = await partnersService.create(data);
       if (saved) {
         persistCache(saved);
+        // Auto-save create: keep local form state and current chapter
+        formHydratedForRef.current = saved.id;
+        chapterBootstrappedForRef.current = saved.id;
+        lastSavedSnapshotRef.current = JSON.stringify(data);
         router.replace(`/partners/${saved.id}`);
       }
       return saved;
@@ -797,10 +832,10 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
   const submitChapter1 = () => {
     const next: Record<string, string> = {};
     if (!name.trim()) next.name = "Required";
-    if (!city.trim() || !isOperatingCity(city.trim())) {
-      next.city = "Select Bangalore, Mysore, or Hubli";
-    }
+    if (!city.trim()) next.city = "Required";
+    else if (city.trim().length < 2) next.city = "Enter at least 2 characters";
     if (!state.trim()) next.state = "Required";
+    else if (!isIndianStateOrUt(state.trim())) next.state = "Select a state or UT";
     if (!primary.name.trim() || !primary.phone.trim() || !primary.email.trim()) {
       next.primary = "Primary contact needs name, phone & email";
     }
@@ -876,6 +911,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     meta: {
       outcome?: PartnerMeetingOutcome;
       lostReason?: string;
+      editingMeetingId?: string | null;
     }
   ) => {
     if (!partner) return;
@@ -886,14 +922,24 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     let notProceedingAt = partner.notProceedingAt;
     let notProceedingReason = partner.notProceedingReason;
 
-    if (meta.outcome === "won") {
+    const previousMeeting = meta.editingMeetingId
+      ? getPartnerMeetings(partner).find((m) => m.id === meta.editingMeetingId)
+      : undefined;
+    const previousOutcome = previousMeeting?.outcome;
+    const isNewMeeting = !meta.editingMeetingId;
+    const outcomeChanged = Boolean(
+      meta.outcome && meta.outcome !== previousOutcome
+    );
+    const shouldApplyOutcome = isNewMeeting || outcomeChanged;
+
+    if (meta.outcome === "won" && shouldApplyOutcome) {
       stage = "Negotiation";
       stageRemarks = pushRemark(
         partner.stage,
         "Negotiation",
         "Deal won from meeting"
       );
-    } else if (meta.outcome === "lost") {
+    } else if (meta.outcome === "lost" && shouldApplyOutcome) {
       stage = "Not Proceeding";
       notProceedingAt = new Date().toISOString();
       notProceedingReason = meta.lostReason;
@@ -903,6 +949,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
         meta.lostReason || "Deal lost"
       );
     } else if (
+      isNewMeeting &&
       meetings.length > 0 &&
       (partner.stage === "Contacted" || partner.stage === "New")
     ) {
@@ -912,13 +959,13 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
         "Meeting Scheduled",
         "Meeting logged"
       );
-    } else if (meta.outcome === "in_discussion") {
+    } else if (meta.outcome === "in_discussion" && shouldApplyOutcome) {
       stage = "Meeting Scheduled";
     }
 
     saveMutation.mutate({
       create: false,
-      advance: meta.outcome === "won",
+      advance: meta.outcome === "won" && shouldApplyOutcome,
       data: {
         ...partner,
         ...legacy,
@@ -957,6 +1004,12 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     if (eventIds.length === 0) next.events = "Select at least one event";
     if (!allEventsHaveTier(eventPartnerships, eventIds)) {
       next.tier = "Select a tier for each selected event";
+    }
+    for (const eventId of eventIds) {
+      const ep = eventPartnerships.find((p) => p.eventId === eventId);
+      if (ep && isCustomPartnership(ep) && !ep.customTierLabel?.trim()) {
+        next[`tierName-${eventId}`] = "Enter the custom tier name";
+      }
     }
     setErrors(next);
     if (Object.keys(next).length) return;
@@ -1001,8 +1054,22 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     );
 
     for (const ep of activePartnerships) {
+      const customPackage = isCustomPartnership(ep);
       for (const item of ep.deliverables) {
         if (!item.included) continue;
+        if (customPackage) {
+          if (item.isCustom && !item.label.trim()) {
+            next[`${ep.eventId}-${item.id}`] = "Label required";
+          } else if (!item.isCustom) {
+            const def = PARTNER_DELIVERABLE_DEFINITIONS.find(
+              (d) => d.key === item.key
+            );
+            if (def?.options?.length && !item.option) {
+              next[`${ep.eventId}-${item.id}`] = "Select an option";
+            }
+          }
+          continue;
+        }
         const def = PARTNER_DELIVERABLE_DEFINITIONS.find(
           (d) => d.key === item.key
         );
@@ -1011,6 +1078,15 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
         }
         if (item.isCustom && !item.label.trim()) {
           next[`${ep.eventId}-${item.id}`] = "Label required";
+        }
+      }
+      if (customPackage) {
+        const hasDeliverable = ep.deliverables.some(
+          (d) => d.included && d.label.trim()
+        );
+        if (!hasDeliverable && (ep.seminarSlotCount ?? 0) <= 0) {
+          next[`custom-package-${ep.eventId}`] =
+            "Add at least one deliverable or seminar slot";
         }
       }
       if (ep.seminarSlotCount < 0) {
@@ -1105,7 +1181,36 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     setErrors(next);
     if (Object.keys(next).length) return;
 
-    // Mock send — credentials are persisted for the partner portal.
+    const activePartnerships = eventPartnerships.filter((ep) =>
+      eventIds.includes(ep.eventId)
+    );
+    const eventPackages = buildEventPackageSummaries(
+      activePartnerships,
+      slotAssignments,
+      eventsQuery.data ?? []
+    );
+    const welcomeEmail = buildPartnerWelcomeEmail({
+      partnerName: partner.name,
+      login: portalLogin.trim(),
+      temporaryPassword: tempPassword,
+      hasSeminarSlots: slotAssignments.some((a) => a.slots > 0),
+      eventPackages: eventPackages.map((pkg) => ({
+        title: pkg.title,
+        city: pkg.city,
+        tier: pkg.tier ?? "Not set",
+        deliverables: pkg.deliverables,
+        seminars: pkg.seminars,
+        seatsAssigned: pkg.seatsAssigned,
+        slotBudget: pkg.slotBudget,
+      })),
+    });
+
+    openGmailCompose({
+      to: email,
+      subject: welcomeEmail.subject,
+      body: welcomeEmail.body,
+    });
+
     saveMutation.mutate({
       create: false,
       advance: false,
@@ -1120,7 +1225,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
         stageRemarks: pushRemark(
           partner.stage,
           partner.stage === "Not Proceeding" ? "Not Proceeding" : "Confirmed",
-          `Partner access emailed to ${email}`
+          `Partner access email prepared for ${email}`
         ),
       },
     });
@@ -1273,19 +1378,22 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
 
       <div className="grid gap-8 lg:grid-cols-[220px_minmax(0,1fr)]">
         <nav
-          className="relative h-fit rounded-2xl border p-5 lg:sticky lg:top-6"
+          className="h-fit rounded-2xl border p-5 lg:sticky lg:top-6"
           style={{
             borderColor: LINE.subtle,
             background: `linear-gradient(180deg, ${PAPER.surface} 0%, ${PAPER.muted} 100%)`,
           }}
           aria-label="Journey steps"
         >
-          <div
-            className="absolute bottom-8 left-[34px] top-8 w-px"
-            style={{ background: LINE.strong }}
-            aria-hidden
-          />
-          <ol className="relative space-y-5">
+          <div className="relative isolate">
+            {CHAPTERS.length > 1 ? (
+              <span
+                className="pointer-events-none absolute bottom-4 left-4 top-4 -z-10 w-px -translate-x-1/2"
+                style={{ background: LINE.strong }}
+                aria-hidden
+              />
+            ) : null}
+            <ol className="space-y-5">
             {CHAPTERS.map((c) => {
               const isLocked = c.id > unlocked;
               const isDone =
@@ -1293,7 +1401,13 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
                 (c.id === 8 && Boolean(partner?.portalInviteSentAt));
               const isActive = c.id === chapter;
               return (
-                <li key={c.id}>
+                <li
+                  key={c.id}
+                  className={cn(
+                    "grid grid-cols-[2rem_minmax(0,1fr)] items-start gap-x-3",
+                    isLocked && "cursor-not-allowed"
+                  )}
+                >
                   <button
                     type="button"
                     onClick={() => goChapter(c.id)}
@@ -1305,13 +1419,10 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
                           : "Complete earlier steps to unlock"
                         : undefined
                     }
-                    className={cn(
-                      "flex w-full items-center gap-3 text-left transition-opacity",
-                      isLocked && "cursor-not-allowed opacity-45"
-                    )}
+                    className="contents"
                   >
                     <span
-                      className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold"
+                      className="relative z-[1] flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold"
                       style={{
                         background: isActive || isDone ? BRAND[700] : PAPER.surface,
                         color: isActive || isDone ? "#fff" : INK.muted,
@@ -1330,7 +1441,10 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
                       )}
                     </span>
                     <span
-                      className="text-sm font-semibold leading-tight"
+                      className={cn(
+                        "flex min-h-8 items-center text-sm font-semibold leading-tight",
+                        isLocked && "opacity-45"
+                      )}
                       style={{ color: isActive ? INK.primary : INK.secondary }}
                     >
                       {c.title}
@@ -1339,7 +1453,8 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
                 </li>
               );
             })}
-          </ol>
+            </ol>
+          </div>
         </nav>
 
         <div
@@ -1380,7 +1495,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
                 </div>
 
                 {chapter === 1 && (
-                  <ChapterUniversity
+                  <ChapterPartnerDetails
                     name={name}
                     setName={setName}
                     city={city}
@@ -1497,7 +1612,6 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
 
                 {chapter === 8 && partner && (
                   <ChapterPartnerInvite
-                    partnerName={partner.name}
                     inviteEmail={inviteEmail}
                     setInviteEmail={setInviteEmail}
                     login={portalLogin}
@@ -1505,12 +1619,6 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
                     onRegeneratePassword={() =>
                       setTempPassword(generateTempPassword())
                     }
-                    hasSeminarSlots={slotAssignments.some((a) => a.slots > 0)}
-                    eventPartnerships={eventPartnerships.filter((ep) =>
-                      eventIds.includes(ep.eventId)
-                    )}
-                    slotAssignments={slotAssignments}
-                    events={eventsQuery.data ?? []}
                     errors={errors}
                   />
                 )}
@@ -1740,7 +1848,7 @@ function ContactFields({
   );
 }
 
-function ChapterUniversity(props: {
+function ChapterPartnerDetails(props: {
   name: string;
   setName: (v: string) => void;
   city: string;
@@ -1757,34 +1865,24 @@ function ChapterUniversity(props: {
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5 sm:col-span-2">
-          <Label>University name</Label>
+          <Label>Partner name</Label>
           <Input value={props.name} onChange={(e) => props.setName(e.target.value)} />
           <FieldError message={props.errors.name} />
         </div>
         <div className="space-y-1.5">
           <Label>City</Label>
-          <Select
-            value={props.city || undefined}
-            onValueChange={props.setCity}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select city" />
-            </SelectTrigger>
-            <SelectContent>
-              {OPERATING_CITIES.map((c) => (
-                <SelectItem key={c} value={c}>
-                  {c}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Input
+            value={props.city}
+            onChange={(e) => props.setCity(e.target.value)}
+            placeholder="e.g. Bengaluru"
+          />
           <FieldError message={props.errors.city} />
         </div>
         <div className="space-y-1.5">
-          <Label>State</Label>
-          <Input
+          <Label>State / UT</Label>
+          <StateUtCombobox
             value={props.state}
-            onChange={(e) => props.setState(e.target.value)}
+            onChange={props.setState}
           />
           <FieldError message={props.errors.state} />
         </div>
@@ -1858,16 +1956,28 @@ function ChapterPartnership(props: {
   setSponsorshipNotes: (v: string) => void;
   errors: Record<string, string>;
 }) {
-  const tierForEvent = (eventId: string) =>
-    props.eventPartnerships.find((ep) => ep.eventId === eventId)?.sponsorshipTier ??
-    "";
+  const partnershipForEvent = (eventId: string) =>
+    props.eventPartnerships.find((ep) => ep.eventId === eventId);
 
-  const setTierForEvent = (eventId: string, tier: string) => {
+  const setTierForEvent = (eventId: string, value: string) => {
     props.setEventPartnerships((prev) => {
-      const existing = prev.find((ep) => ep.eventId === eventId);
-      const nextTier = tier as SponsorshipTier;
+      const existing = partnershipForEvent(eventId);
+      if (value === CUSTOM_TIER_OPTION) {
+        return upsertEventPartnership(
+          prev,
+          eventId,
+          {
+            sponsorshipTier: undefined,
+            customTierLabel: existing?.customTierLabel ?? "",
+            deliverables: (existing?.deliverables ?? []).filter((d) => d.isCustom),
+            seminarSlotCount: existing?.seminarSlotCount ?? 0,
+          },
+          generateId
+        );
+      }
+      if (!isStandardSponsorshipTier(value)) return prev;
       const nextDeliverables = applyTierDefaultsPreservingCustom(
-        nextTier,
+        value,
         existing?.deliverables,
         generateId
       );
@@ -1875,7 +1985,8 @@ function ChapterPartnership(props: {
         prev,
         eventId,
         {
-          sponsorshipTier: nextTier,
+          sponsorshipTier: value,
+          customTierLabel: undefined,
           deliverables: nextDeliverables,
           seminarSlotCount: existing?.seminarSlotCount ?? 0,
         },
@@ -1884,28 +1995,44 @@ function ChapterPartnership(props: {
     });
   };
 
+  const setCustomTierLabel = (eventId: string, label: string) => {
+    props.setEventPartnerships((prev) =>
+      upsertEventPartnership(
+        prev,
+        eventId,
+        {
+          sponsorshipTier: undefined,
+          customTierLabel: label,
+          deliverables: (prev.find((ep) => ep.eventId === eventId)?.deliverables ?? []).filter(
+            (d) => d.isCustom
+          ),
+          seminarSlotCount:
+            prev.find((ep) => ep.eventId === eventId)?.seminarSlotCount ?? 0,
+        },
+        generateId
+      )
+    );
+  };
+
   const toggleEvent = (id: string, checked: boolean) => {
-    props.setEventIds((prev) => {
-      const nextIds = checked
-        ? [...prev, id]
-        : prev.filter((x) => x !== id);
-      if (!checked) {
-        props.setEventPartnerships((eps) => removeEventPartnership(eps, id));
-      } else if (!props.eventPartnerships.some((ep) => ep.eventId === id)) {
-        props.setEventPartnerships((eps) =>
-          upsertEventPartnership(
-            eps,
-            id,
-            {
-              deliverables: [],
-              seminarSlotCount: 0,
-            },
-            generateId
-          )
+    if (checked) {
+      props.setEventIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+      props.setEventPartnerships((eps) => {
+        if (eps.some((ep) => ep.eventId === id)) return eps;
+        return upsertEventPartnership(
+          eps,
+          id,
+          {
+            deliverables: [],
+            seminarSlotCount: 0,
+          },
+          generateId
         );
-      }
-      return nextIds;
-    });
+      });
+      return;
+    }
+    props.setEventIds((prev) => prev.filter((x) => x !== id));
+    props.setEventPartnerships((eps) => removeEventPartnership(eps, id));
   };
 
   return (
@@ -2004,9 +2131,9 @@ function ChapterPartnership(props: {
                     </span>
                   </label>
                   {selected ? (
-                    <div className="w-full sm:w-[220px] sm:shrink-0">
+                    <div className="w-full space-y-2 sm:w-[min(100%,280px)] sm:shrink-0">
                       <Select
-                        value={tierForEvent(event.id) || undefined}
+                        value={tierSelectValue(partnershipForEvent(event.id)) || undefined}
                         onValueChange={(v) => setTierForEvent(event.id, v)}
                       >
                         <SelectTrigger className="h-9">
@@ -2018,8 +2145,25 @@ function ChapterPartnership(props: {
                               {tier}
                             </SelectItem>
                           ))}
+                          <SelectItem value={CUSTOM_TIER_OPTION}>
+                            Custom / other partnership…
+                          </SelectItem>
                         </SelectContent>
                       </Select>
+                      {partnershipForEvent(event.id) &&
+                      isCustomPartnership(partnershipForEvent(event.id)!) ? (
+                        <Input
+                          className="h-9"
+                          placeholder="e.g. Title Sponsor, Bronze Partner"
+                          value={
+                            partnershipForEvent(event.id)?.customTierLabel ?? ""
+                          }
+                          onChange={(e) =>
+                            setCustomTierLabel(event.id, e.target.value)
+                          }
+                        />
+                      ) : null}
+                      <FieldError message={props.errors[`tierName-${event.id}`]} />
                     </div>
                   ) : null}
                 </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -32,6 +32,7 @@ import {
   getPartnerPortalUploadProgress,
   getPartnerPortalUploadStatus,
 } from "@/lib/partner-portal-docs";
+import { useTimelineSpine } from "@/lib/use-timeline-spine";
 import { cn } from "@/lib/utils";
 import type { Partner, PartnerLifecycleStage } from "@/types";
 import { Button } from "@/components/ui/button";
@@ -102,36 +103,52 @@ function partnerInitials(name: string) {
 }
 
 function JourneyTimeline({ steps }: { steps: TimelineStep[] }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const firstDotRef = useRef<HTMLSpanElement>(null);
+  const lastDotRef = useRef<HTMLSpanElement>(null);
+  const spineStyle = useTimelineSpine(containerRef, firstDotRef, lastDotRef, [
+    steps.length,
+    steps.map((step) => step.state).join(","),
+  ]);
+
   return (
-    <ol className="relative space-y-0">
-      {steps.map((step, index) => {
-        const isLast = index === steps.length - 1;
-        const lineColor =
-          step.state === "done" ? STAGE_ACCENT.Confirmed : LINE.subtle;
-
-        return (
-          <li key={step.label} className="relative flex gap-4 pb-5 last:pb-0">
-            {!isLast ? (
-              <span
-                className="absolute left-[11px] top-6 h-[calc(100%-12px)] w-px"
-                style={{ backgroundColor: lineColor }}
-                aria-hidden
-              />
-            ) : null}
-
-            <span
-              className={cn(
-                "relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
+    <div ref={containerRef} className="relative isolate">
+      {spineStyle && steps.length > 1 ? (
+        <span
+          className="pointer-events-none absolute left-3 -z-10 w-px -translate-x-1/2"
+          style={{
+            top: spineStyle.top,
+            height: spineStyle.height,
+            backgroundColor: LINE.subtle,
+          }}
+          aria-hidden
+        />
+      ) : null}
+      <ol>
+        {steps.map((step, index) => {
+          return (
+            <li key={step.label} className="relative flex gap-4 pb-5 last:pb-0">
+              <div className="relative w-6 shrink-0 self-start">
+                <span
+                  ref={
+                    index === 0
+                      ? firstDotRef
+                      : index === steps.length - 1
+                        ? lastDotRef
+                        : undefined
+                  }
+                  className={cn(
+                    "relative z-[1] flex h-6 w-6 items-center justify-center rounded-full border-2 transition-colors",
                 step.state === "done" && "border-transparent text-white",
-                step.state === "current" && "bg-white",
+                step.state === "current" && "border-[#D4D1C8] bg-white",
                 step.state === "pending" && "border-[#D4D1C8] bg-white"
               )}
               style={
                 step.state === "done"
                   ? { backgroundColor: BRAND[700] }
                   : step.state === "current"
-                    ? { borderColor: BRAND[700], color: BRAND[700] }
-                    : undefined
+                    ? { borderColor: BRAND[700], color: BRAND[700], backgroundColor: "#fff" }
+                    : { backgroundColor: "#fff" }
               }
             >
               {step.state === "done" ? (
@@ -142,7 +159,8 @@ function JourneyTimeline({ steps }: { steps: TimelineStep[] }) {
                   style={{ backgroundColor: BRAND[700] }}
                 />
               ) : null}
-            </span>
+              </span>
+            </div>
 
             <div className="min-w-0 flex-1 pt-0.5">
               <p
@@ -172,7 +190,8 @@ function JourneyTimeline({ steps }: { steps: TimelineStep[] }) {
           </li>
         );
       })}
-    </ol>
+      </ol>
+    </div>
   );
 }
 
@@ -260,7 +279,7 @@ export function PartnerSummaryDialog({
 
     return withTimelineState([
       {
-        label: "University details",
+        label: "Partner details",
         detail: [partner.city, partner.state].filter(Boolean).join(", ") || "—",
         date: partner.createdAt,
         done: true,

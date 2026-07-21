@@ -197,7 +197,12 @@ export function FilterMultiSelect({
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-1" align="start">
-          <div className="max-h-60 space-y-0.5 overflow-y-auto">
+          <div
+            className="max-h-60 space-y-0.5 overflow-y-auto"
+            role="listbox"
+            aria-multiselectable="true"
+            aria-label={label}
+          >
             {options.length === 0 ? (
               <p className="px-2 py-1.5 text-sm text-muted-foreground">
                 No options
@@ -206,12 +211,20 @@ export function FilterMultiSelect({
               options.map((option) => {
                 const checked = selected.has(option.value);
                 return (
-                  <button
+                  <div
                     key={option.value}
-                    type="button"
+                    role="option"
+                    aria-selected={checked}
+                    tabIndex={0}
                     onClick={() => toggle(option.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        toggle(option.value);
+                      }
+                    }}
                     className={cn(
-                      "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-none hover:bg-accent",
+                      "flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
                       checked && "bg-accent/60"
                     )}
                   >
@@ -225,7 +238,7 @@ export function FilterMultiSelect({
                     {checked && (
                       <Check className="h-3.5 w-3.5 shrink-0 text-primary" />
                     )}
-                  </button>
+                  </div>
                 );
               })
             )}

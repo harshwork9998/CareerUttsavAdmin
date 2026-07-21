@@ -1,6 +1,5 @@
 "use client";
 
-import { useMemo } from "react";
 import { motion } from "framer-motion";
 import { Copy, KeyRound, Mail, RefreshCw, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
@@ -13,67 +12,18 @@ import {
   displayClass,
 } from "@/features/dashboard/dashboard-ui";
 import { cn } from "@/lib/utils";
-import { buildEventPackageSummaries } from "@/lib/partner-event-config";
-import { buildPartnerWelcomeEmail } from "@/lib/partner-invite";
-import type {
-  Event,
-  PartnerEventPartnership,
-  PartnerSeminarSlotAssignment,
-} from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 
 export function ChapterPartnerInvite(props: {
-  partnerName: string;
   inviteEmail: string;
   setInviteEmail: (v: string) => void;
   login: string;
   temporaryPassword: string;
   onRegeneratePassword: () => void;
-  hasSeminarSlots?: boolean;
-  eventPartnerships?: PartnerEventPartnership[];
-  slotAssignments?: PartnerSeminarSlotAssignment[];
-  events?: Event[];
   errors: Record<string, string>;
 }) {
-  const eventPackages = useMemo(
-    () =>
-      buildEventPackageSummaries(
-        props.eventPartnerships ?? [],
-        props.slotAssignments ?? [],
-        props.events ?? []
-      ),
-    [props.eventPartnerships, props.slotAssignments, props.events]
-  );
-
-  const emailPreview = useMemo(
-    () =>
-      buildPartnerWelcomeEmail({
-        partnerName: props.partnerName,
-        login: props.login,
-        temporaryPassword: props.temporaryPassword,
-        hasSeminarSlots: props.hasSeminarSlots,
-        eventPackages: eventPackages.map((pkg) => ({
-          title: pkg.title,
-          city: pkg.city,
-          tier: pkg.tier ?? "Not set",
-          deliverables: pkg.deliverables,
-          seminars: pkg.seminars,
-          seatsAssigned: pkg.seatsAssigned,
-          slotBudget: pkg.slotBudget,
-        })),
-      }),
-    [
-      props.partnerName,
-      props.login,
-      props.temporaryPassword,
-      props.hasSeminarSlots,
-      eventPackages,
-    ]
-  );
-
   const copyText = async (label: string, value: string) => {
     try {
       await navigator.clipboard.writeText(value);
@@ -106,6 +56,11 @@ export function ChapterPartnerInvite(props: {
         >
           Send them in with a smile
         </h3>
+        <p className="mt-2 text-sm leading-relaxed" style={{ color: INK.secondary }}>
+          Use <strong>Send email &amp; finish</strong> below to open Gmail with the
+          welcome message pre-filled — send from the Google account you use for
+          partner outreach.
+        </p>
 
         <div className="mt-6 grid gap-4 lg:grid-cols-2">
           <div
@@ -204,27 +159,6 @@ export function ChapterPartnerInvite(props: {
             </div>
           </div>
         </div>
-      </motion.section>
-
-      <motion.section
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.05 }}
-        className="rounded-[28px] border p-5 sm:p-6"
-        style={{ borderColor: LINE.subtle, background: PAPER.surface }}
-      >
-        <p
-          className="text-[11px] font-semibold tracking-[0.16em] uppercase"
-          style={{ color: BRAND[700] }}
-        >
-          Email preview
-        </p>
-        <Textarea
-          readOnly
-          rows={28}
-          value={emailPreview.body}
-          className="mt-4 min-h-[32rem] resize-none bg-[color:var(--muted,#F8FAFC)] font-mono text-sm leading-relaxed"
-        />
       </motion.section>
     </div>
   );

@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import { format } from "date-fns";
 import { motion } from "framer-motion";
 import {
   ArrowRight,
@@ -25,8 +26,8 @@ import {
 import {
   formatFollowUpDateTime,
   getFollowUpsDue,
-  hasSeenFollowUpDialogToday,
-  markFollowUpDialogSeen,
+  hasSeenFollowUpDialogThisHour,
+  markFollowUpDialogSeenThisHour,
   toDateOnly,
 } from "@/lib/partner-meetings";
 import { partnersService } from "@/services/api";
@@ -187,7 +188,7 @@ function FollowUpCard({ item }: { item: PartnerFollowUpItem }) {
 export function PartnerFollowUpDialog() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const today = useMemo(() => new Date(), []);
+  const [now, setNow] = useState(() => new Date());
 
   const { data: partners } = useQuery({
     queryKey: ["partners"],
@@ -195,28 +196,44 @@ export function PartnerFollowUpDialog() {
   });
 
   const dueFollowUps = useMemo(
-    () => getFollowUpsDue(partners ?? [], today),
-    [partners, today]
+    () => getFollowUpsDue(partners ?? [], now),
+    [partners, now]
   );
 
   const dueTodayCount = useMemo(
     () =>
       dueFollowUps.filter(
         (item) =>
-          toDateOnly(item.meeting.followUpAt!) === toDateOnly(today.toISOString())
+          toDateOnly(item.meeting.followUpAt!) === toDateOnly(now.toISOString())
       ).length,
-    [dueFollowUps, today]
+    [dueFollowUps, now]
   );
+
+  const hourKeyRef = useRef(format(new Date(), "yyyy-MM-dd-HH"));
+
+  useEffect(() => {
+    const tick = () => {
+      const next = new Date();
+      const nextKey = format(next, "yyyy-MM-dd-HH");
+      if (nextKey !== hourKeyRef.current) {
+        hourKeyRef.current = nextKey;
+        setNow(next);
+      }
+    };
+    tick();
+    const interval = window.setInterval(tick, 30 * 1000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (!partners?.length) return;
     if (dueFollowUps.length === 0) return;
-    if (hasSeenFollowUpDialogToday(today)) return;
+    if (hasSeenFollowUpDialogThisHour(now)) return;
     setOpen(true);
-  }, [pathname, partners, dueFollowUps.length, today]);
+  }, [pathname, partners, dueFollowUps.length, now]);
 
   const dismiss = () => {
-    markFollowUpDialogSeen(today);
+    markFollowUpDialogSeenThisHour(now);
     setOpen(false);
   };
 
@@ -272,7 +289,7 @@ export function PartnerFollowUpDialog() {
             onClick={dismiss}
             className="rounded-full"
           >
-            Remind me later today
+            Remind me in an hour
           </Button>
           <Button
             type="button"

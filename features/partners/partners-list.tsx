@@ -15,7 +15,10 @@ import {
 import { toast } from "sonner";
 
 import { SPONSORSHIP_TIERS } from "@/constants";
-import { OPERATING_CITIES } from "@/lib/operating-cities";
+import {
+  getPartnerDisplayTier,
+  partnerMatchesTierFilter,
+} from "@/lib/partner-event-config";
 import { partnersService } from "@/services/api";
 import { cn } from "@/lib/utils";
 import type { Partner, PartnerLifecycleStage } from "@/types";
@@ -37,10 +40,6 @@ import {
   getPartnerPortalUploadProgress,
   getPartnerPortalUploadStatus,
 } from "@/lib/partner-portal-docs";
-import {
-  getPartnerDisplayTier,
-  partnerMatchesTierFilter,
-} from "@/lib/partner-event-config";
 import {
   ConfirmDialog,
   ErrorState,
@@ -305,12 +304,17 @@ export function PartnersList() {
   const partners = useMemo(() => data ?? [], [data]);
 
   const cityOptions = useMemo(() => {
-    const fromData = [...new Set(partners.map((p) => p.city))].filter((city) =>
-      OPERATING_CITIES.includes(city as (typeof OPERATING_CITIES)[number])
-    );
-    const cities =
-      fromData.length > 0 ? fromData.sort() : [...OPERATING_CITIES];
+    const cities = [...new Set(partners.map((p) => p.city).filter(Boolean))].sort();
     return cities.map((c) => ({ label: c, value: c }));
+  }, [partners]);
+
+  const tierOptions = useMemo(() => {
+    const tiers = new Set<string>(SPONSORSHIP_TIERS);
+    for (const p of partners) {
+      const label = getPartnerDisplayTier(p);
+      if (label && !label.includes("+")) tiers.add(label);
+    }
+    return [...tiers].sort().map((tier) => ({ label: tier, value: tier }));
   }, [partners]);
 
   const filtered = useMemo(() => {
@@ -327,7 +331,7 @@ export function PartnersList() {
     <div className="space-y-8">
       <PageHeader
         title="Partners"
-        description="Track each university from first contact through confirmed partnership."
+        description="Track each partner from first contact through confirmed partnership."
         actions={
           <Button
             onClick={() => router.push("/partners/new")}
@@ -347,14 +351,11 @@ export function PartnersList() {
             label: "Sponsorship tier",
             value: tierFilter,
             onChange: setTierFilter,
-            options: SPONSORSHIP_TIERS.map((tier) => ({
-              label: tier,
-              value: tier,
-            })),
+            options: tierOptions,
           },
           {
             id: "city",
-            label: "University city",
+            label: "Partner city",
             mode: "multi",
             values: cityFilter,
             onChange: setCityFilter,
@@ -424,7 +425,7 @@ export function PartnersList() {
               Add a partner
             </p>
             <p className="text-sm" style={{ color: INK.muted }}>
-              Start with university details — the rest unlocks as you go.
+              Start with partner details — the rest unlocks as you go.
             </p>
           </div>
         </motion.button>

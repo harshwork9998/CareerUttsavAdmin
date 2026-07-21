@@ -282,8 +282,10 @@ export interface PartnerDeliverable {
 /** Per-event sponsorship package — tier, deliverables, and seminar slot budget */
 export interface PartnerEventPartnership {
   eventId: string;
-  /** Set when the user picks a tier for this event */
+  /** One of the 7 standard tiers — mutually exclusive with customTierLabel */
   sponsorshipTier?: SponsorshipTier;
+  /** Free-text tier for bespoke packages (no preset deliverable checklist) */
+  customTierLabel?: string;
   deliverables: PartnerDeliverable[];
   /** Total panelist slots allotted for this event (set in deliverables step) */
   seminarSlotCount: number;
@@ -291,7 +293,7 @@ export interface PartnerEventPartnership {
 
 export interface Partner {
   id: string;
-  /** University / institution name */
+  /** Partner / institution name */
   name: string;
   city: string;
   state: string;

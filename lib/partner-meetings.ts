@@ -148,16 +148,27 @@ function collectFollowUps(
   );
 }
 
+/** Storage key for the current clock hour — popup can show again each hour. */
 export function followUpDialogStorageKey(date: Date = new Date()): string {
-  return `cu-partner-followups-seen-${format(date, "yyyy-MM-dd")}`;
+  return `cu-partner-followups-seen-${format(date, "yyyy-MM-dd-HH")}`;
 }
 
-export function hasSeenFollowUpDialogToday(date: Date = new Date()): boolean {
+export function hasSeenFollowUpDialogThisHour(date: Date = new Date()): boolean {
   if (typeof window === "undefined") return true;
   return localStorage.getItem(followUpDialogStorageKey(date)) === "1";
 }
 
-export function markFollowUpDialogSeen(date: Date = new Date()): void {
+export function markFollowUpDialogSeenThisHour(date: Date = new Date()): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(followUpDialogStorageKey(date), "1");
+}
+
+/** @deprecated Use hasSeenFollowUpDialogThisHour */
+export function hasSeenFollowUpDialogToday(date: Date = new Date()): boolean {
+  return hasSeenFollowUpDialogThisHour(date);
+}
+
+/** @deprecated Use markFollowUpDialogSeenThisHour */
+export function markFollowUpDialogSeen(date: Date = new Date()): void {
+  markFollowUpDialogSeenThisHour(date);
 }

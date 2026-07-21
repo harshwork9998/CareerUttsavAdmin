@@ -351,7 +351,7 @@ export function DashboardView() {
               "text-[28px] font-bold leading-none text-foreground sm:text-[34px]"
             )}
           >
-            University details
+            Partner details
           </h2>
           <p className="mt-2 text-[13px] text-muted-foreground">
             {partnerView.isAllCities

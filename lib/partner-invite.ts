@@ -114,3 +114,27 @@ K2 Learning Resources India Pvt. Ltd.
 📧 info@careeruttsav.in | 🌐 www.careeruttsav.in`,
   };
 }
+
+/** Opens Gmail compose with pre-filled to, subject, and body (from = signed-in Gmail account). */
+export function buildGmailComposeUrl(input: {
+  to: string;
+  subject: string;
+  body: string;
+}) {
+  const params = new URLSearchParams({
+    view: "cm",
+    fs: "1",
+    to: input.to.trim(),
+    su: input.subject,
+    body: input.body,
+  });
+  return `https://mail.google.com/mail/?${params.toString()}`;
+}
+
+export function openGmailCompose(input: {
+  to: string;
+  subject: string;
+  body: string;
+}) {
+  window.open(buildGmailComposeUrl(input), "_blank", "noopener,noreferrer");
+}

@@ -9,7 +9,7 @@ import { z } from "zod";
 import { Eye, EyeOff, Loader2, Lock, Mail } from "lucide-react";
 import { toast } from "sonner";
 
-import { BRAND, MOCK_ADMIN } from "@/constants";
+import { MOCK_ADMIN } from "@/constants";
 import { useAuthStore } from "@/store/auth-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -64,9 +64,6 @@ export function LoginForm() {
     const result = await login(values.email, values.password, values.rememberMe);
 
     if (result.success) {
-      toast.success("Welcome back!", {
-        description: `Signed in to ${BRAND.name} Admin`,
-      });
       router.push("/dashboard");
       return;
     }
