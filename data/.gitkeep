@@ -1,0 +1,5 @@
+# Local data directory
+#
+# `partners-store.json` is created on first run and holds all partner records
+# (including in-progress partnerships). It is gitignored so your local work persists
+# across dev server restarts.

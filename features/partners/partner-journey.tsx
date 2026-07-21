@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
@@ -91,6 +91,9 @@ import {
 
 const EVENT_CITIES = ["Bangalore", "Mysore", "Hubli"] as const;
 const CUSTOM_ORG = "__custom__";
+const AUTO_SAVE_DELAY_MS = 1500;
+
+type DraftSaveStatus = "idle" | "pending" | "saved" | "error";
 
 type ChapterId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
@@ -259,6 +262,12 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
   const [seminarSlotsUiKey, setSeminarSlotsUiKey] = useState(0);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [draftStatus, setDraftStatus] = useState<DraftSaveStatus>("idle");
+
+  const lastSavedSnapshotRef = useRef<string | null>(null);
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draftStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isExplicitSaveRef = useRef(false);
 
   useEffect(() => {
     if (!partner) return;
@@ -347,6 +356,13 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       }
       return partnersService.update(partnerId!, payload.data);
     },
+    onMutate: () => {
+      isExplicitSaveRef.current = true;
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = null;
+      }
+    },
     onSuccess: (saved, vars) => {
       if (!saved) {
         toast.error("Could not save this step");
@@ -372,12 +388,353 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       }
     },
     onError: () => toast.error("Could not save this step"),
+    onSettled: () => {
+      isExplicitSaveRef.current = false;
+      const data = buildDraftData();
+      if (data) lastSavedSnapshotRef.current = JSON.stringify(data);
+    },
   });
+
+  const buildDraftData = ():
+    | (Partial<Partner> &
+        Pick<
+          Partner,
+          | "name"
+          | "city"
+          | "state"
+          | "primaryContact"
+          | "secondaryContact"
+          | "eventIds"
+          | "relationshipOwner"
+          | "stage"
+          | "stageRemarks"
+        >)
+    | null => {
+    if (chapter === 1) {
+      if (isNew && !name.trim()) return null;
+      return {
+        name: name.trim() || partner?.name || "Untitled partner",
+        city: city.trim(),
+        state: state.trim(),
+        primaryContact: { ...primary },
+        secondaryContact: { ...secondary },
+        eventIds: partner?.eventIds ?? [],
+        relationshipOwner: partner?.relationshipOwner ?? emptyOwner(),
+        stage: partner?.stage ?? "New",
+        stageRemarks: partner?.stageRemarks ?? [],
+        contactedAt: partner?.contactedAt,
+        contactedNotes: partner?.contactedNotes,
+        meetingAt: partner?.meetingAt,
+        meetingNotes: partner?.meetingNotes,
+        meetings: partner?.meetings,
+        sponsorshipTier: partner?.sponsorshipTier,
+        sponsorshipNotes: partner?.sponsorshipNotes,
+        deliverables: partner?.deliverables,
+        deliverablesConfirmedAt: partner?.deliverablesConfirmedAt,
+        eventPartnerships: partner?.eventPartnerships,
+        seminarSlotAssignments: partner?.seminarSlotAssignments,
+        seminarSlotsConfirmedAt: partner?.seminarSlotsConfirmedAt,
+        totalAmount: partner?.totalAmount,
+        discountAmount: partner?.discountAmount,
+        netAmount: partner?.netAmount,
+        commercialsConfirmedAt: partner?.commercialsConfirmedAt,
+        portalLogin: partner?.portalLogin,
+        portalTempPassword: partner?.portalTempPassword,
+        portalInviteEmail: partner?.portalInviteEmail,
+        portalInviteSentAt: partner?.portalInviteSentAt,
+      };
+    }
+    if (!partner) return null;
+
+    if (chapter === 2) {
+      return {
+        ...partner,
+        contactedAt: contactedAt || partner.contactedAt,
+        contactedNotes: contactedNotes.trim(),
+      };
+    }
+    if (chapter === 4) {
+      const organization =
+        orgChoice === CUSTOM_ORG ? customOrg.trim() : orgChoice;
+      const activePartnerships = eventPartnerships.filter((ep) =>
+        eventIds.includes(ep.eventId)
+      );
+      const legacy = syncLegacyPartnerFields(activePartnerships);
+      return {
+        ...partner,
+        ...legacy,
+        eventPartnerships: activePartnerships,
+        relationshipOwner: {
+          organization,
+          managerName: managerName.trim(),
+          managerPhone: managerPhone.trim(),
+          managerEmail: managerEmail.trim(),
+        },
+        sponsorshipNotes: sponsorshipNotes.trim(),
+      };
+    }
+    if (chapter === 5) {
+      const activePartnerships = eventPartnerships.filter((ep) =>
+        eventIds.includes(ep.eventId)
+      );
+      const legacy = syncLegacyPartnerFields(activePartnerships);
+      return {
+        ...partner,
+        ...legacy,
+        eventPartnerships: activePartnerships,
+      };
+    }
+    if (chapter === 6) {
+      return {
+        ...partner,
+        seminarSlotAssignments: slotAssignments.map((a) => ({
+          eventId: a.eventId,
+          seminarId: a.seminarId,
+          slots: a.slots,
+        })),
+      };
+    }
+    if (chapter === 7) {
+      const total = parseAmount(totalAmount);
+      const discount = parseAmount(discountAmount);
+      const net =
+        total > 0 ? Math.max(0, total - discount) : partner.netAmount;
+      return {
+        ...partner,
+        totalAmount: total > 0 ? total : partner.totalAmount,
+        discountAmount: discountAmount.trim() ? discount : partner.discountAmount,
+        netAmount: net,
+      };
+    }
+    if (chapter === 8) {
+      return {
+        ...partner,
+        portalLogin: portalLogin.trim() || partner.portalLogin,
+        portalTempPassword: tempPassword || partner.portalTempPassword,
+        portalInviteEmail: inviteEmail.trim() || partner.portalInviteEmail,
+      };
+    }
+    return null;
+  };
+
+  type DraftPayload = NonNullable<ReturnType<typeof buildDraftData>>;
+
+  const setDraftStatusBrief = (status: DraftSaveStatus) => {
+    if (draftStatusTimerRef.current) clearTimeout(draftStatusTimerRef.current);
+    setDraftStatus(status);
+    if (status === "saved") {
+      draftStatusTimerRef.current = setTimeout(() => {
+        setDraftStatus((current) => (current === "saved" ? "idle" : current));
+      }, 2000);
+    }
+  };
+
+  const persistDraft = async (
+    data: DraftPayload,
+    options?: { create?: boolean }
+  ): Promise<Partner | null> => {
+    const shouldCreate =
+      options?.create ?? (isNew && chapter === 1 && !partnerId);
+    if (shouldCreate) {
+      const saved = await partnersService.create(data);
+      if (saved) {
+        persistCache(saved);
+        router.replace(`/partners/${saved.id}`);
+      }
+      return saved;
+    }
+    if (!partnerId) return null;
+    const saved = await partnersService.update(partnerId, data);
+    if (saved) persistCache(saved);
+    return saved;
+  };
+
+  const flushDraft = async (then?: () => void) => {
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+
+    const data = buildDraftData();
+    if (!data) {
+      then?.();
+      return;
+    }
+
+    const snapshot = JSON.stringify(data);
+    if (snapshot === lastSavedSnapshotRef.current) {
+      then?.();
+      return;
+    }
+
+    try {
+      setDraftStatusBrief("pending");
+      const saved = await persistDraft(data, {
+        create: isNew && chapter === 1 && !partnerId,
+      });
+      if (saved) {
+        lastSavedSnapshotRef.current = snapshot;
+        setDraftStatusBrief("saved");
+      } else {
+        setDraftStatus("error");
+      }
+    } catch {
+      setDraftStatus("error");
+    } finally {
+      then?.();
+    }
+  };
+
+  const draftFormSnapshot = useMemo(
+    () =>
+      JSON.stringify({
+        chapter,
+        name,
+        city,
+        state,
+        primary,
+        secondary,
+        contactedAt,
+        contactedNotes,
+        orgChoice,
+        customOrg,
+        managerName,
+        managerPhone,
+        managerEmail,
+        eventIds,
+        eventPartnerships,
+        sponsorshipNotes,
+        slotAssignments,
+        totalAmount,
+        discountAmount,
+        inviteEmail,
+        portalLogin,
+        tempPassword,
+      }),
+    [
+      chapter,
+      name,
+      city,
+      state,
+      primary,
+      secondary,
+      contactedAt,
+      contactedNotes,
+      orgChoice,
+      customOrg,
+      managerName,
+      managerPhone,
+      managerEmail,
+      eventIds,
+      eventPartnerships,
+      sponsorshipNotes,
+      slotAssignments,
+      totalAmount,
+      discountAmount,
+      inviteEmail,
+      portalLogin,
+      tempPassword,
+    ]
+  );
+
+  useEffect(() => {
+    if (isExplicitSaveRef.current) return;
+
+    const data = buildDraftData();
+    if (!data) {
+      setDraftStatus("idle");
+      return;
+    }
+
+    const snapshot = JSON.stringify(data);
+    if (snapshot === lastSavedSnapshotRef.current) return;
+
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    setDraftStatus("pending");
+
+    autoSaveTimerRef.current = setTimeout(() => {
+      void (async () => {
+        try {
+          const saved = await persistDraft(data, {
+            create: isNew && chapter === 1 && !partnerId,
+          });
+          if (saved) {
+            lastSavedSnapshotRef.current = snapshot;
+            setDraftStatusBrief("saved");
+          } else {
+            setDraftStatus("error");
+          }
+        } catch {
+          setDraftStatus("error");
+        }
+      })();
+    }, AUTO_SAVE_DELAY_MS);
+
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
+  }, [draftFormSnapshot, partnerId, isNew, partner?.id]);
+
+  useEffect(() => {
+    const baselineTimer = setTimeout(() => {
+      const data = buildDraftData();
+      if (data) lastSavedSnapshotRef.current = JSON.stringify(data);
+    }, 0);
+    return () => clearTimeout(baselineTimer);
+  }, [partner?.id, chapter]);
+
+  useEffect(() => {
+    const canPersist = Boolean(partnerId) || (isNew && name.trim());
+    if (!canPersist) return;
+
+    const flushOnLeave = () => {
+      const data = buildDraftData();
+      if (!data) return;
+      const snapshot = JSON.stringify(data);
+      if (snapshot === lastSavedSnapshotRef.current) return;
+
+      const url = partnerId ? `/api/partners/${partnerId}` : "/api/partners";
+      const body = JSON.stringify(data);
+      if (partnerId) {
+        void fetch(url, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body,
+          keepalive: true,
+        });
+      } else if (isNew && chapter === 1 && name.trim()) {
+        void fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body,
+          keepalive: true,
+        });
+      }
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") flushOnLeave();
+    };
+
+    window.addEventListener("pagehide", flushOnLeave);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("pagehide", flushOnLeave);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [
+    partnerId,
+    isNew,
+    chapter,
+    draftFormSnapshot,
+    name,
+  ]);
 
   const goChapter = (id: ChapterId) => {
     if (id > unlocked) return;
+    if (id === chapter) return;
     setErrors({});
-    setChapter(id);
+    void flushDraft(() => setChapter(id));
   };
 
   const pushRemark = (
@@ -833,13 +1190,33 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
 
   return (
     <div className="pb-12">
-      <header className="mb-8">
+      <header className="mb-8 flex flex-wrap items-start justify-between gap-3">
         <h1
           className={cn(displayClass, "text-3xl font-bold tracking-tight sm:text-4xl")}
           style={{ color: INK.primary }}
         >
-          {partner?.name || "New partner"}
+          {partner?.name || name.trim() || "New partner"}
         </h1>
+        {draftStatus !== "idle" ? (
+          <p
+            className="text-sm tabular-nums"
+            style={{
+              color:
+                draftStatus === "error"
+                  ? "#b91c1c"
+                  : draftStatus === "saved"
+                    ? INK.muted
+                    : INK.secondary,
+            }}
+            aria-live="polite"
+          >
+            {draftStatus === "pending"
+              ? "Saving…"
+              : draftStatus === "saved"
+                ? "Draft saved"
+                : "Couldn't save draft"}
+          </p>
+        ) : null}
       </header>
 
       <div className="grid gap-8 lg:grid-cols-[220px_minmax(0,1fr)]">
@@ -1073,13 +1450,20 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
                     <Button
                       type="button"
                       variant="outline"
+                      disabled={saveMutation.isPending}
                       onClick={() => {
                         if (chapter === 1) {
+                          if (isNew && name.trim()) {
+                            void flushDraft(() => router.push("/partners"));
+                            return;
+                          }
                           router.push("/partners");
                           return;
                         }
                         setErrors({});
-                        setChapter((chapter - 1) as ChapterId);
+                        void flushDraft(() =>
+                          setChapter((chapter - 1) as ChapterId)
+                        );
                       }}
                     >
                       {chapter === 1 ? "University overview" : "Back"}

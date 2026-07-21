@@ -1,9 +1,15 @@
-import { delay } from "@/lib/utils";
+import { delay, generateId } from "@/lib/utils";
+import {
+  createPartnerApi,
+  deletePartnerApi,
+  fetchAllPartners,
+  fetchPartnerById,
+  updatePartnerApi,
+} from "@/lib/partners-api-client";
 import {
   mockEvents,
   mockRegistrations,
   mockUniversities,
-  mockPartners,
   mockSeminarRosters,
   mockUsers,
   mockRoles,
@@ -28,7 +34,6 @@ import type {
   SeminarBroadcastRequest,
   SeminarBroadcastResult,
 } from "@/types";
-import { generateId } from "@/lib/utils";
 
 const SIMULATED_DELAY = 400;
 
@@ -111,36 +116,16 @@ export const universitiesService = {
     simulate({ ...mockUniversities.find((u) => u.id === id)!, ...data }),
 };
 
-let partnersStore: Partner[] = [...mockPartners];
-
 export const partnersService = {
-  getAll: () => simulate([...partnersStore]),
-  getById: (id: string) =>
-    simulate(partnersStore.find((p) => p.id === id) ?? null),
-  getByEvent: (eventId: string) =>
-    simulate(partnersStore.filter((p) => p.eventIds.includes(eventId))),
-  create: (partner: Omit<Partner, "id" | "createdAt" | "updatedAt">) => {
-    const now = new Date().toISOString();
-    const created: Partner = {
-      ...partner,
-      id: generateId(),
-      createdAt: now,
-      updatedAt: now,
-    };
-    partnersStore = [created, ...partnersStore];
-    return simulate(created);
-  },
-  update: (id: string, data: Partial<Partner>) => {
-    const now = new Date().toISOString();
-    partnersStore = partnersStore.map((p) =>
-      p.id === id ? { ...p, ...data, updatedAt: now } : p
-    );
-    return simulate(partnersStore.find((p) => p.id === id) ?? null);
-  },
-  delete: (id: string) => {
-    partnersStore = partnersStore.filter((p) => p.id !== id);
-    return simulate([...partnersStore]);
-  },
+  getAll: async () => simulate(await fetchAllPartners()),
+  getById: async (id: string) => simulate(await fetchPartnerById(id)),
+  getByEvent: async (eventId: string) =>
+    simulate((await fetchAllPartners()).filter((p) => p.eventIds.includes(eventId))),
+  create: async (partner: Omit<Partner, "id" | "createdAt" | "updatedAt">) =>
+    simulate(await createPartnerApi(partner)),
+  update: async (id: string, data: Partial<Partner>) =>
+    simulate(await updatePartnerApi(id, data)),
+  delete: async (id: string) => simulate(await deletePartnerApi(id)),
 };
 
 let seminarRostersStore: SeminarSessionRoster[] = [...mockSeminarRosters];

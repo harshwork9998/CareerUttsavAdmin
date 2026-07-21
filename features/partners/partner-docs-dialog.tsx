@@ -200,7 +200,7 @@ export function PartnerDocsDialog({
                     item.uploaded &&
                     selected?.id === item.file?.id;
                   return (
-                    <li key={item.kind}>
+                    <li key={item.key}>
                       <button
                         type="button"
                         disabled={!item.uploaded}

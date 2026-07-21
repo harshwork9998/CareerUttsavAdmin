@@ -1,48 +1,71 @@
 import type {
   Partner,
   PartnerPortalDocument,
-  PartnerPortalDocumentKind,
+  PartnerSeminarSlotAssignment,
 } from "@/types";
 
-/** Required uploads from the Career Uttsav partner portal */
-export const REQUIRED_PORTAL_DOCUMENTS: Array<{
-  kind: PartnerPortalDocumentKind;
-  label: string;
-}> = [
-  { kind: "logo", label: "Primary logo" },
-  { kind: "banner", label: "Stall / venue banner" },
-  { kind: "writeup", label: "Souvenir write-up" },
-  { kind: "company_profile", label: "Company / institute profile" },
-  { kind: "brochure", label: "Event brochure" },
-  { kind: "faculty_photo", label: "Speaker / faculty photo" },
-  { kind: "brand_guidelines", label: "Brand guidelines" },
-  { kind: "agreement", label: "Signed agreement" },
-  { kind: "tax_details", label: "GST / tax details" },
-  { kind: "collateral", label: "Marketing collateral" },
-];
+/** Seven items partners must complete — logo lives in dashboard hero, not this list */
+export const PORTAL_SUBMISSION_ITEMS = [
+  {
+    key: "fascia_name" as const,
+    label: "Fascia Name (Name on the Stall Board)",
+    type: "text" as const,
+  },
+  {
+    key: "website_link" as const,
+    label: "University Website link",
+    type: "url" as const,
+  },
+  {
+    key: "souvenir_writeup" as const,
+    label: "Full page write up in event souvenir",
+    type: "file" as const,
+    docKind: "souvenir_writeup" as const,
+    accept: ".pdf,.doc,.docx",
+  },
+  {
+    key: "ad_creative" as const,
+    label: "Advertisement creative",
+    type: "file" as const,
+    docKind: "ad_creative" as const,
+    accept: "image/*,.pdf",
+  },
+  {
+    key: "sms_content" as const,
+    label: "SMS content (for mailer campaigns to all participants)",
+    type: "textarea" as const,
+  },
+  {
+    key: "speaker_details" as const,
+    label: "Speaker details for each seminar",
+    type: "speakers" as const,
+  },
+] as const;
 
-export type PortalDocChecklistItem = {
-  kind: PartnerPortalDocumentKind;
+export type PortalSubmissionKey = (typeof PORTAL_SUBMISSION_ITEMS)[number]["key"];
+
+export type PortalSubmissionChecklistItem = {
+  key: PortalSubmissionKey | "logo";
   label: string;
+  complete: boolean;
+  /** @deprecated use complete */
   uploaded: boolean;
+  kind: "text" | "url" | "file" | "textarea" | "speakers" | "logo";
   file?: PartnerPortalDocument;
 };
 
 export type PartnerPortalUploadStatus = {
-  checklist: PortalDocChecklistItem[];
+  checklist: PortalSubmissionChecklistItem[];
+  allComplete: boolean;
+  /** @deprecated use allComplete */
   allUploaded: boolean;
-  missing: PortalDocChecklistItem[];
-  /** Most recent upload timestamp, if any */
+  missing: PortalSubmissionChecklistItem[];
+  lastUpdatedAt: string | null;
+  /** @deprecated use lastUpdatedAt */
   lastUploadedAt: string | null;
-  /**
-   * Days since last upload (or since invite if nothing uploaded yet).
-   * Null when we have no reference date.
-   */
+  daysSinceLastUpdate: number | null;
+  /** @deprecated use daysSinceLastUpdate */
   daysSinceLastUpload: number | null;
-  /**
-   * Overview chip: incomplete uploads AND at least 3 days since last
-   * upload (or invite if none yet).
-   */
   showReminderChip: boolean;
 };
 
@@ -59,73 +82,150 @@ export function daysBetween(fromIso: string, to: Date = new Date()): number {
 
 const REMINDER_CHIP_AFTER_DAYS = 3;
 
+function findDoc(
+  docs: PartnerPortalDocument[],
+  kind: PartnerPortalDocument["kind"]
+) {
+  return docs.find((d) => d.kind === kind || (kind === "souvenir_writeup" && d.kind === "writeup"));
+}
+
+function allottedSeminars(
+  assignments: PartnerSeminarSlotAssignment[] | undefined
+) {
+  return (assignments ?? []).filter((a) => a.slots > 0);
+}
+
 export function getPartnerPortalUploadStatus(
   partner: Pick<
     Partner,
-    "portalDocuments" | "portalInviteSentAt" | "portalInviteEmail"
+    | "portalDocuments"
+    | "portalInviteSentAt"
+    | "portalFasciaName"
+    | "portalWebsiteUrl"
+    | "portalSmsContent"
+    | "portalSeminarSpeakers"
+    | "seminarSlotAssignments"
   >
 ): PartnerPortalUploadStatus {
   const docs = partner.portalDocuments ?? [];
+  const logoDoc = findDoc(docs, "logo");
+  const writeupDoc = findDoc(docs, "souvenir_writeup");
+  const adDoc = findDoc(docs, "ad_creative");
 
-  const checklist: PortalDocChecklistItem[] = REQUIRED_PORTAL_DOCUMENTS.map(
-    (req) => {
-      const file = docs.find((d) => d.kind === req.kind);
-      return {
-        kind: req.kind,
-        label: req.label,
-        uploaded: Boolean(file),
-        file,
-      };
-    }
-  );
+  const seminars = allottedSeminars(partner.seminarSlotAssignments);
+  const speakersComplete =
+    seminars.length === 0 ||
+    seminars.every((slot) =>
+      (partner.portalSeminarSpeakers ?? []).some(
+        (row) =>
+          row.eventId === slot.eventId &&
+          row.seminarId === slot.seminarId &&
+          row.speakers.some((s) => s.name.trim())
+      )
+    );
 
-  const missing = checklist.filter((c) => !c.uploaded);
-  const allUploaded = missing.length === 0;
+  const checklist: PortalSubmissionChecklistItem[] = [
+    {
+      key: "logo",
+      label: "University Logo",
+      complete: Boolean(logoDoc),
+      uploaded: Boolean(logoDoc),
+      kind: "logo",
+      file: logoDoc,
+    },
+    {
+      key: "fascia_name",
+      label: "Fascia Name (Name on the Stall Board)",
+      complete: Boolean(partner.portalFasciaName?.trim()),
+      uploaded: Boolean(partner.portalFasciaName?.trim()),
+      kind: "text",
+    },
+    {
+      key: "website_link",
+      label: "University Website link",
+      complete: Boolean(partner.portalWebsiteUrl?.trim()),
+      uploaded: Boolean(partner.portalWebsiteUrl?.trim()),
+      kind: "url",
+    },
+    {
+      key: "souvenir_writeup",
+      label: "Full page write up in event souvenir",
+      complete: Boolean(writeupDoc),
+      uploaded: Boolean(writeupDoc),
+      kind: "file",
+      file: writeupDoc,
+    },
+    {
+      key: "ad_creative",
+      label: "Advertisement creative",
+      complete: Boolean(adDoc),
+      uploaded: Boolean(adDoc),
+      kind: "file",
+      file: adDoc,
+    },
+    {
+      key: "sms_content",
+      label: "SMS content (for mailer campaigns to all participants)",
+      complete: Boolean(partner.portalSmsContent?.trim()),
+      uploaded: Boolean(partner.portalSmsContent?.trim()),
+      kind: "textarea",
+    },
+    {
+      key: "speaker_details",
+      label: "Speaker details for each seminar",
+      complete: speakersComplete,
+      uploaded: speakersComplete,
+      kind: "speakers",
+    },
+  ];
 
-  let lastUploadedAt: string | null = null;
-  for (const doc of docs) {
+  const missing = checklist.filter((c) => !c.complete);
+
+  const timestamps: string[] = [];
+  for (const doc of docs) timestamps.push(doc.uploadedAt);
+  if (partner.portalFasciaName) timestamps.push(partner.portalInviteSentAt ?? "");
+  for (const row of partner.portalSeminarSpeakers ?? []) {
+    if (row.updatedAt) timestamps.push(row.updatedAt);
+  }
+
+  let lastUpdatedAt: string | null = null;
+  for (const iso of timestamps) {
+    if (!iso) continue;
     if (
-      !lastUploadedAt ||
-      new Date(doc.uploadedAt).getTime() > new Date(lastUploadedAt).getTime()
+      !lastUpdatedAt ||
+      new Date(iso).getTime() > new Date(lastUpdatedAt).getTime()
     ) {
-      lastUploadedAt = doc.uploadedAt;
+      lastUpdatedAt = iso;
     }
   }
 
-  const referenceDate = lastUploadedAt ?? partner.portalInviteSentAt ?? null;
-  const daysSinceLastUpload = referenceDate
+  const referenceDate = lastUpdatedAt ?? partner.portalInviteSentAt ?? null;
+  const daysSinceLastUpdate = referenceDate
     ? daysBetween(referenceDate)
     : null;
 
   const showReminderChip =
-    !allUploaded &&
-    daysSinceLastUpload != null &&
-    daysSinceLastUpload >= REMINDER_CHIP_AFTER_DAYS;
+    missing.length > 0 &&
+    daysSinceLastUpdate != null &&
+    daysSinceLastUpdate >= REMINDER_CHIP_AFTER_DAYS;
 
   return {
     checklist,
-    allUploaded,
+    allComplete: missing.length === 0,
+    allUploaded: missing.length === 0,
     missing,
-    lastUploadedAt,
-    daysSinceLastUpload,
+    lastUpdatedAt,
+    lastUploadedAt: lastUpdatedAt,
+    daysSinceLastUpdate,
+    daysSinceLastUpload: daysSinceLastUpdate,
     showReminderChip,
   };
 }
 
-/** Partner overview chip label — only when showReminderChip is true. */
-export function formatDaysSinceUploadChip(
+/** @deprecated use allComplete */
+export const getPartnerPortalUploadProgress = (
   status: PartnerPortalUploadStatus
-): string | null {
-  if (!status.showReminderChip || status.daysSinceLastUpload == null) {
-    return null;
-  }
-  const n = status.daysSinceLastUpload;
-  return n === 1 ? "1 day since last upload" : `${n} days since last upload`;
-}
-
-export function getPartnerPortalUploadProgress(
-  status: PartnerPortalUploadStatus
-): { uploaded: number; total: number; ratio: number } {
+) => {
   const total = status.checklist.length;
   const uploaded = total - status.missing.length;
   return {
@@ -133,4 +233,29 @@ export function getPartnerPortalUploadProgress(
     total,
     ratio: total === 0 ? 0 : uploaded / total,
   };
+};
+
+export function formatDaysSinceUploadChip(
+  status: PartnerPortalUploadStatus
+): string | null {
+  if (!status.showReminderChip || status.daysSinceLastUpdate == null) {
+    return null;
+  }
+  const n = status.daysSinceLastUpdate;
+  return n === 1 ? "1 day since last update" : `${n} days since last update`;
 }
+
+/** Legacy alias for admin components still importing REQUIRED_PORTAL_DOCUMENTS */
+export const REQUIRED_PORTAL_DOCUMENTS = PORTAL_SUBMISSION_ITEMS.filter(
+  (item) => item.type === "file"
+).map((item) => ({
+  kind: item.docKind!,
+  label: item.label,
+}));
+
+export type PortalDocChecklistItem = {
+  kind: PartnerPortalDocument["kind"];
+  label: string;
+  uploaded: boolean;
+  file?: PartnerPortalDocument;
+};

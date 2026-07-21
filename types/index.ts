@@ -331,6 +331,16 @@ export interface Partner {
   portalInviteSentAt?: string;
   /** Brand assets & documents uploaded from the partner portal */
   portalDocuments?: PartnerPortalDocument[];
+  /** Stall fascia name for venue board */
+  portalFasciaName?: string;
+  /** University / institute website */
+  portalWebsiteUrl?: string;
+  /** SMS copy for participant mailers */
+  portalSmsContent?: string;
+  /** Panelist / speaker details per allotted seminar */
+  portalSeminarSpeakers?: PartnerSeminarSpeakerSubmission[];
+  /** Set after partner changes temp password */
+  portalPasswordChangedAt?: string;
   /** First outreach */
   contactedAt?: string;
   contactedNotes?: string;
@@ -385,8 +395,11 @@ export interface SeminarSessionRoster {
 /** Files uploaded by the partner via the Career Uttsav partner portal */
 export type PartnerPortalDocumentKind =
   | "logo"
-  | "banner"
+  | "souvenir_writeup"
+  | "ad_creative"
+  /** @deprecated legacy mock kind */
   | "writeup"
+  | "banner"
   | "company_profile"
   | "brochure"
   | "faculty_photo"
@@ -395,6 +408,27 @@ export type PartnerPortalDocumentKind =
   | "tax_details"
   | "collateral"
   | "other";
+
+export interface PartnerSeminarSpeakerDetail {
+  name: string;
+  designation?: string;
+  /** Phone or email */
+  contact?: string;
+  /** Speaker bio / intro for seminar programme (max 1000 chars) */
+  introduction?: string;
+  /** @deprecated use contact */
+  phone?: string;
+  /** @deprecated use contact */
+  email?: string;
+}
+
+/** Speaker lineup submitted per allotted seminar */
+export interface PartnerSeminarSpeakerSubmission {
+  eventId: string;
+  seminarId: string;
+  speakers: PartnerSeminarSpeakerDetail[];
+  updatedAt: string;
+}
 
 export interface PartnerPortalDocument {
   id: string;

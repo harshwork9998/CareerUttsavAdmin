@@ -17,11 +17,14 @@ import { toast } from "sonner";
 import { SPONSORSHIP_TIERS } from "@/constants";
 import { partnersService } from "@/services/api";
 import { cn } from "@/lib/utils";
-import type { Partner } from "@/types";
+import type { Partner, PartnerLifecycleStage } from "@/types";
 import {
   BRAND,
   ELEVATION,
   INK,
+  LINE,
+  PAPER,
+  TEAL,
   displayClass,
   sectionMotion,
   surface,
@@ -30,7 +33,6 @@ import { PartnerDocsDialog } from "@/features/partners/partner-docs-dialog";
 import { PartnerStageBoard } from "@/features/partners/partner-stage-board";
 import { PartnerSummaryDialog } from "@/features/partners/partner-summary-dialog";
 import {
-  formatDaysSinceUploadChip,
   getPartnerPortalUploadProgress,
   getPartnerPortalUploadStatus,
 } from "@/lib/partner-portal-docs";
@@ -54,22 +56,42 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+const STAGE_ACCENT: Record<PartnerLifecycleStage, string> = {
+  New: BRAND[600],
+  Contacted: TEAL[700],
+  "Meeting Scheduled": "#5C6B8A",
+  Negotiation: "#8A6A2F",
+  Confirmed: "#2F6B4F",
+  "Not Proceeding": "#9A4A4A",
+};
+
+const MONOGRAM_WASH = [
+  { bg: BRAND[50], fg: BRAND[700] },
+  { bg: TEAL[100], fg: TEAL[700] },
+  { bg: "#EDE9E0", fg: "#6B5E4A" },
+  { bg: "#E8EEF6", fg: BRAND[600] },
+] as const;
+
+function partnerInitials(name: string) {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length >= 2) {
+    return `${words[0][0] ?? ""}${words[1][0] ?? ""}`.toUpperCase();
+  }
+  return name.slice(0, 2).toUpperCase();
+}
+
 function PartnerDocUploadBar({
   uploadStatus,
 }: {
   uploadStatus: ReturnType<typeof getPartnerPortalUploadStatus>;
 }) {
-  const { uploaded, total, ratio } = getPartnerPortalUploadProgress(uploadStatus);
-  const labelColor = ratio >= 1 ? "#247A52" : "#64748B";
+  const { uploaded, total } = getPartnerPortalUploadProgress(uploadStatus);
 
   return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between gap-2 text-[11px]">
-        <span className="font-medium text-muted-foreground">Documents</span>
-        <span className="font-semibold tabular-nums" style={{ color: labelColor }}>
-          {uploaded}/{total} uploaded
-        </span>
-      </div>
+    <div className="space-y-2">
+      <span className="text-[11px] font-medium tracking-wide text-muted-foreground">
+        Documents
+      </span>
       <div
         className="flex gap-1"
         role="progressbar"
@@ -80,17 +102,12 @@ function PartnerDocUploadBar({
       >
         {uploadStatus.checklist.map((item) => (
           <div
-            key={item.kind}
+            key={item.key}
             title={item.label}
-            className="h-2.5 min-w-0 flex-1 rounded-[3px] transition-colors duration-300"
-            style={
-              item.uploaded
-                ? { backgroundColor: "#247A52" }
-                : {
-                    backgroundColor: "#FFFFFF",
-                    border: "1px solid rgba(31, 56, 100, 0.14)",
-                  }
-            }
+            className={cn(
+              "h-1.5 min-w-0 flex-1 rounded-full transition-colors duration-300",
+              item.uploaded ? "bg-[#2F6B4F]" : "bg-[#E8E6E0]"
+            )}
           />
         ))}
       </div>
@@ -100,17 +117,23 @@ function PartnerDocUploadBar({
 
 function PartnerCard({
   partner,
+  index,
   onOpenSummary,
   onViewDocs,
   onDelete,
 }: {
   partner: Partner;
+  index: number;
   onOpenSummary: (p: Partner) => void;
   onViewDocs: (p: Partner) => void;
   onDelete: (p: Partner) => void;
 }) {
   const uploadStatus = getPartnerPortalUploadStatus(partner);
-  const reminderChip = formatDaysSinceUploadChip(uploadStatus);
+  const tierLabel = getPartnerDisplayTier(partner);
+  const location = partner.city || "—";
+  const wash = MONOGRAM_WASH[index % MONOGRAM_WASH.length];
+  const stageAccent =
+    STAGE_ACCENT[partner.stage as PartnerLifecycleStage] ?? BRAND[600];
 
   return (
     <motion.article
@@ -128,107 +151,127 @@ function PartnerCard({
       }}
       className={cn(
         surface.opening,
-        "flex w-[min(100%,340px)] shrink-0 cursor-pointer flex-col overflow-hidden p-5 outline-none transition-shadow hover:shadow-md focus-visible:ring-2 focus-visible:ring-brand-700/30 sm:w-[360px]"
+        "group flex h-[228px] w-[360px] shrink-0 cursor-pointer flex-col overflow-hidden outline-none transition-[box-shadow,transform] hover:-translate-y-0.5 hover:shadow-[0_8px_28px_rgba(18,35,63,0.1)] focus-visible:ring-2 focus-visible:ring-brand-700/30"
       )}
     >
-      <div className="flex items-start gap-3">
-        <div className="min-w-0 flex-1 space-y-1">
-          <h2
-            className={cn(displayClass, "text-xl font-semibold leading-snug")}
-            style={{ color: INK.primary }}
+      <div
+        className="h-1 shrink-0"
+        style={{ backgroundColor: stageAccent }}
+        aria-hidden
+      />
+
+      <div className="flex min-h-0 flex-1 flex-col px-4 pb-4 pt-3.5">
+        <div className="flex items-start gap-3">
+          <span
+            className={cn(
+              displayClass,
+              "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-sm font-bold tracking-tight"
+            )}
+            style={{ backgroundColor: wash.bg, color: wash.fg }}
+            aria-hidden
           >
-            {partner.name}
-          </h2>
-          <p className="text-sm" style={{ color: INK.secondary }}>
-            {partner.city}
-            {partner.state ? ` · ${partner.state}` : ""}
-          </p>
+            {partnerInitials(partner.name)}
+          </span>
+
+          <div className="min-w-0 flex-1 pt-0.5">
+            <div className="flex items-start gap-1">
+              <h2
+                className={cn(
+                  displayClass,
+                  "line-clamp-2 flex-1 text-[17px] font-semibold leading-[1.25] tracking-tight"
+                )}
+                style={{ color: INK.primary }}
+              >
+                {partner.name}
+              </h2>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="end"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <DropdownMenuItem asChild>
+                    <Link href={`/partners/${partner.id}`}>
+                      <ArrowRight className="h-4 w-4" />
+                      Edit partnership
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onViewDocs(partner)}>
+                    <FileStack className="h-4 w-4" />
+                    View docs
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onClick={() => onDelete(partner)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+            <p
+              className="mt-0.5 truncate text-xs"
+              style={{ color: INK.muted }}
+            >
+              {location}
+            </p>
+          </div>
         </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 shrink-0"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-            <DropdownMenuItem asChild>
-              <Link href={`/partners/${partner.id}`}>
-                <ArrowRight className="h-4 w-4" />
-                Edit partnership
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onViewDocs(partner)}>
-              <FileStack className="h-4 w-4" />
-              View docs
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-destructive focus:text-destructive"
-              onClick={() => onDelete(partner)}
-            >
-              <Trash2 className="h-4 w-4" />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        {getPartnerDisplayTier(partner) ? (
+        <div className="mt-3">
           <span
-            className="rounded-full px-2.5 py-1 text-xs font-semibold tracking-wide"
-            style={{
-              background: "rgba(31,56,100,0.16)",
-              color: "#1F3864",
-            }}
+            className="inline-block max-w-full truncate rounded-md px-2 py-0.5 text-[11px] font-semibold"
+            style={
+              tierLabel
+                ? { background: "rgba(31,56,100,0.1)", color: BRAND[700] }
+                : { background: PAPER.muted, color: INK.muted }
+            }
           >
-            {getPartnerDisplayTier(partner)}
+            {tierLabel ?? "Tier pending"}
           </span>
-        ) : null}
-        {reminderChip ? (
-          <span
-            className="rounded-full px-2.5 py-1 text-xs font-semibold tracking-wide"
-            style={{
-              background: "rgba(176,125,42,0.18)",
-              color: "#B07D2A",
+        </div>
+
+        <div className="mt-auto pt-4">
+          <PartnerDocUploadBar uploadStatus={uploadStatus} />
+        </div>
+
+        <div
+          className="mt-3 flex items-center justify-between gap-3 border-t pt-3"
+          style={{ borderColor: LINE.subtle }}
+        >
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onViewDocs(partner);
             }}
+            className="inline-flex items-center gap-1 text-xs font-medium transition-colors hover:text-brand-800"
+            style={{ color: INK.secondary }}
           >
-            {reminderChip}
-          </span>
-        ) : null}
-      </div>
-
-      <div className="mt-4">
-        <PartnerDocUploadBar uploadStatus={uploadStatus} />
-      </div>
-
-      <div className="mt-4 flex items-center justify-between gap-3">
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onViewDocs(partner);
-          }}
-          className="inline-flex items-center gap-1.5 text-sm font-medium transition-opacity hover:opacity-80"
-          style={{ color: BRAND[700] }}
-        >
-          <FileStack className="h-3.5 w-3.5" />
-          View docs
-        </button>
-        <Link
-          href={`/partners/${partner.id}`}
-          onClick={(e) => e.stopPropagation()}
-          className="inline-flex items-center gap-1.5 text-sm font-medium transition-opacity hover:opacity-80"
-          style={{ color: BRAND[700] }}
-        >
-          Edit partnership
-          <ArrowRight className="h-3.5 w-3.5" />
-        </Link>
+            <FileStack className="h-3.5 w-3.5" />
+            View docs
+          </button>
+          <Link
+            href={`/partners/${partner.id}`}
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex items-center gap-1 text-xs font-semibold transition-colors hover:text-brand-800"
+            style={{ color: BRAND[700] }}
+          >
+            Edit
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
       </div>
     </motion.article>
   );
@@ -337,7 +380,7 @@ export function PartnersList() {
                 {Array.from({ length: 3 }).map((_, j) => (
                   <Skeleton
                     key={j}
-                    className="h-56 w-[360px] shrink-0 rounded-[24px]"
+                    className="h-[228px] w-[360px] shrink-0 rounded-[24px]"
                   />
                 ))}
               </div>
@@ -385,10 +428,11 @@ export function PartnersList() {
       {!isLoading && !isError && filtered.length > 0 && (
         <PartnerStageBoard
           partners={filtered}
-          renderCard={(partner) => (
+          renderCard={(partner, index) => (
             <PartnerCard
               key={partner.id}
               partner={partner}
+              index={index}
               onOpenSummary={setSummaryPartner}
               onViewDocs={setDocsPartner}
               onDelete={setPendingDelete}
