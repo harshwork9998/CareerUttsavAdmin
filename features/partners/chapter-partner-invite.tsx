@@ -58,7 +58,7 @@ export function ChapterPartnerInvite(props: {
         eventPackages: eventPackages.map((pkg) => ({
           title: pkg.title,
           city: pkg.city,
-          tier: pkg.tier,
+          tier: pkg.tier ?? "Not set",
           deliverables: pkg.deliverables,
           seminars: pkg.seminars,
           seatsAssigned: pkg.seatsAssigned,

@@ -212,10 +212,12 @@ export function PartnerSummaryDialog({
   partner,
   open,
   onOpenChange,
+  onViewDocs,
 }: {
   partner: Partner | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onViewDocs?: (partner: Partner) => void;
 }) {
   const eventsQuery = useQuery({
     queryKey: ["events"],
@@ -242,13 +244,15 @@ export function PartnerSummaryDialog({
 
     const tier = getPartnerDisplayTier(partner);
     const owner = partner.relationshipOwner;
+    const eps = resolveEventPartnerships(partner);
     const partnershipDetail = tier
       ? `${tier}${owner?.organization ? ` · ${owner.organization}` : ""}`
-      : "Pending";
+      : "Terms not captured yet";
 
-    const deliverableCount = (partner.deliverables ?? []).filter(
-      (d) => d.included
-    ).length;
+    const deliverableCount = eps.reduce(
+      (sum, ep) => sum + ep.deliverables.filter((d) => d.included).length,
+      0
+    );
     const seatCount = (partner.seminarSlotAssignments ?? []).reduce(
       (s, a) => s + a.slots,
       0
@@ -283,8 +287,12 @@ export function PartnerSummaryDialog({
       {
         label: "Partnership terms",
         detail: partnershipDetail,
-        date: partner.deliverablesConfirmedAt,
-        done: Boolean(tier && partner.relationshipOwner?.managerName),
+        date: partner.updatedAt,
+        done: Boolean(
+          tier &&
+            partner.eventIds.length > 0 &&
+            partner.relationshipOwner?.managerName
+        ),
       },
       {
         label: "Deliverables",
@@ -729,16 +737,29 @@ export function PartnerSummaryDialog({
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Close
           </Button>
-          <Button
-            asChild
-            className="gap-2 text-white"
-            style={{ backgroundColor: BRAND[700] }}
-          >
-            <Link href={`/partners/${partner.id}`}>
-              Edit partnership
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {onViewDocs ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="gap-2"
+                onClick={() => onViewDocs(partner)}
+              >
+                <FileStack className="h-4 w-4" />
+                View docs
+              </Button>
+            ) : null}
+            <Button
+              asChild
+              className="gap-2 text-white"
+              style={{ backgroundColor: BRAND[700] }}
+            >
+              <Link href={`/partners/${partner.id}`}>
+                Edit partnership
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

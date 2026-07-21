@@ -24,9 +24,10 @@ import {
 } from "@/features/dashboard/dashboard-ui";
 import {
   formatFollowUpDateTime,
-  getFollowUpsDueOnDate,
+  getFollowUpsDue,
   hasSeenFollowUpDialogToday,
   markFollowUpDialogSeen,
+  toDateOnly,
 } from "@/lib/partner-meetings";
 import { partnersService } from "@/services/api";
 import { cn } from "@/lib/utils";
@@ -43,6 +44,9 @@ import {
 
 function FollowUpCard({ item }: { item: PartnerFollowUpItem }) {
   const { partner, meeting } = item;
+  const isOverdue =
+    toDateOnly(meeting.followUpAt!) <
+    toDateOnly(new Date().toISOString());
 
   return (
     <motion.li
@@ -84,14 +88,19 @@ function FollowUpCard({ item }: { item: PartnerFollowUpItem }) {
           <span
             className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
             style={{
-              background:
-                meeting.outcome === "lost"
+              background: isOverdue
+                ? "rgba(163,59,59,0.14)"
+                : meeting.outcome === "lost"
                   ? "rgba(163,59,59,0.14)"
                   : "rgba(176,125,42,0.16)",
-              color: meeting.outcome === "lost" ? "#A33B3B" : "#8A6A2F",
+              color: isOverdue || meeting.outcome === "lost" ? "#A33B3B" : "#8A6A2F",
             }}
           >
-            {meeting.outcome === "lost" ? "Re-engage" : "Follow-up due"}
+            {isOverdue
+              ? "Overdue"
+              : meeting.outcome === "lost"
+                ? "Re-engage"
+                : "Due today"}
           </span>
         </div>
       </div>
@@ -185,25 +194,33 @@ export function PartnerFollowUpDialog() {
     queryFn: () => partnersService.getAll(),
   });
 
-  const dueToday = useMemo(
-    () => getFollowUpsDueOnDate(partners ?? [], today),
+  const dueFollowUps = useMemo(
+    () => getFollowUpsDue(partners ?? [], today),
     [partners, today]
   );
 
+  const dueTodayCount = useMemo(
+    () =>
+      dueFollowUps.filter(
+        (item) =>
+          toDateOnly(item.meeting.followUpAt!) === toDateOnly(today.toISOString())
+      ).length,
+    [dueFollowUps, today]
+  );
+
   useEffect(() => {
-    if (pathname !== "/dashboard") return;
     if (!partners?.length) return;
-    if (dueToday.length === 0) return;
+    if (dueFollowUps.length === 0) return;
     if (hasSeenFollowUpDialogToday(today)) return;
     setOpen(true);
-  }, [pathname, partners, dueToday.length, today]);
+  }, [pathname, partners, dueFollowUps.length, today]);
 
   const dismiss = () => {
     markFollowUpDialogSeen(today);
     setOpen(false);
   };
 
-  if (dueToday.length === 0) return null;
+  if (dueFollowUps.length === 0) return null;
 
   return (
     <Dialog
@@ -226,18 +243,21 @@ export function PartnerFollowUpDialog() {
               className={cn(displayClass, "flex items-center gap-2 text-2xl text-white")}
             >
               <Sparkles className="h-6 w-6" />
-              Follow-ups due today
+              Partner follow-ups
             </DialogTitle>
             <DialogDescription className="text-sm text-white/85">
-              {dueToday.length} university follow-up
-              {dueToday.length === 1 ? "" : "s"} scheduled for today. Review
-              details before you reach out.
+              {dueFollowUps.length} follow-up
+              {dueFollowUps.length === 1 ? "" : "s"} need attention
+              {dueTodayCount > 0
+                ? ` (${dueTodayCount} due today)`
+                : " (including overdue)"}
+              .
             </DialogDescription>
           </DialogHeader>
         </div>
 
         <ul className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
-          {dueToday.map((item) => (
+          {dueFollowUps.map((item) => (
             <FollowUpCard key={`${item.partner.id}-${item.meeting.id}`} item={item} />
           ))}
         </ul>

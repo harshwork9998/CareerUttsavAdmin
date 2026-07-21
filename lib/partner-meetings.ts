@@ -79,6 +79,10 @@ export function hasLoggedMeeting(partner: Partner): boolean {
   return getPartnerMeetings(partner).length > 0;
 }
 
+export function hasWonMeeting(partner: Partner): boolean {
+  return getPartnerMeetings(partner).some((m) => m.outcome === "won");
+}
+
 export function syncLegacyMeetingFields(
   partner: Partner,
   meetings: PartnerMeetingLog[]
@@ -101,12 +105,32 @@ export function getFollowUpsDueOnDate(
   onDate: Date = new Date()
 ): PartnerFollowUpItem[] {
   const target = format(onDate, "yyyy-MM-dd");
+  return collectFollowUps(partners, (followUpDay) => followUpDay === target);
+}
+
+/** Follow-ups due today or overdue (on or before today). */
+export function getFollowUpsDue(
+  partners: Partner[],
+  asOf: Date = new Date()
+): PartnerFollowUpItem[] {
+  const cutoff = format(asOf, "yyyy-MM-dd");
+  return collectFollowUps(
+    partners,
+    (followUpDay) => followUpDay <= cutoff
+  );
+}
+
+function collectFollowUps(
+  partners: Partner[],
+  includeDay: (followUpDay: string) => boolean
+): PartnerFollowUpItem[] {
   const items: PartnerFollowUpItem[] = [];
 
   for (const partner of partners) {
     for (const meeting of getPartnerMeetings(partner)) {
       if (!meeting.followUpAt) continue;
-      if (toDateOnly(meeting.followUpAt) !== target) continue;
+      const day = toDateOnly(meeting.followUpAt);
+      if (!includeDay(day)) continue;
       if (
         meeting.outcome !== "in_discussion" &&
         meeting.outcome !== "lost"

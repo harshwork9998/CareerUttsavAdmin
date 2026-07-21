@@ -12,52 +12,69 @@ export type EventPackageSummary = {
   eventId: string;
   title: string;
   city: string;
-  tier: string;
+  tier: SponsorshipTier | undefined;
   deliverables: Array<{ id: string; label: string; option?: string }>;
   seminars: Array<{ id: string; title: string; slots: number }>;
   slotBudget: number;
   seatsAssigned: number;
 };
 
+export function hasPartnershipTier(
+  ep: Pick<PartnerEventPartnership, "sponsorshipTier">
+): ep is PartnerEventPartnership & { sponsorshipTier: SponsorshipTier } {
+  return Boolean(ep.sponsorshipTier);
+}
+
+export function partnershipsForEventIds(
+  partnerships: PartnerEventPartnership[],
+  eventIds: string[]
+): PartnerEventPartnership[] {
+  if (eventIds.length === 0) return [];
+  const idSet = new Set(eventIds);
+  return partnerships.filter((ep) => idSet.has(ep.eventId));
+}
+
 export function buildEventPackageSummaries(
   eventPartnerships: PartnerEventPartnership[],
   slotAssignments: PartnerSeminarSlotAssignment[],
   events: Event[]
 ): EventPackageSummary[] {
-  return eventPartnerships
-    .map((ep) => {
-      const event = events.find((e) => e.id === ep.eventId);
-      if (!event) return null;
+  const summaries: EventPackageSummary[] = [];
 
-      const seminars = slotAssignments
-        .filter((a) => a.eventId === ep.eventId && a.slots > 0)
-        .map((a) => {
-          const seminar = event.seminars.find((s) => s.id === a.seminarId);
-          return {
-            id: a.seminarId,
-            title: seminar?.title ?? a.seminarId,
-            slots: a.slots,
-          };
-        });
+  for (const ep of eventPartnerships) {
+    const event = events.find((e) => e.id === ep.eventId);
+    if (!event) continue;
 
-      return {
-        eventId: ep.eventId,
-        title: event.title,
-        city: event.city,
-        tier: ep.sponsorshipTier,
-        deliverables: ep.deliverables
-          .filter((d) => d.included)
-          .map((d) => ({
-            id: d.id,
-            label: d.label,
-            option: d.option,
-          })),
-        seminars,
-        slotBudget: ep.seminarSlotCount ?? 0,
-        seatsAssigned: seminars.reduce((s, row) => s + row.slots, 0),
-      };
-    })
-    .filter((row): row is EventPackageSummary => row !== null);
+    const seminars = slotAssignments
+      .filter((a) => a.eventId === ep.eventId && a.slots > 0)
+      .map((a) => {
+        const seminar = event.seminars.find((s) => s.id === a.seminarId);
+        return {
+          id: a.seminarId,
+          title: seminar?.title ?? a.seminarId,
+          slots: a.slots,
+        };
+      });
+
+    summaries.push({
+      eventId: ep.eventId,
+      title: event.title,
+      city: event.city,
+      tier: ep.sponsorshipTier,
+      deliverables: ep.deliverables
+        .filter((d) => d.included)
+        .map((d) => ({
+          id: d.id,
+          label: d.label,
+          option: d.option,
+        })),
+      seminars,
+      slotBudget: ep.seminarSlotCount ?? 0,
+      seatsAssigned: seminars.reduce((s, row) => s + row.slots, 0),
+    });
+  }
+
+  return summaries;
 }
 
 export function resolveEventPartnerships(
@@ -81,7 +98,7 @@ export function resolveEventPartnerships(
     );
   }
 
-  const tier = partner.sponsorshipTier ?? ("" as SponsorshipTier);
+  const tier = partner.sponsorshipTier;
   const baseDeliverables =
     partner.deliverables?.length && tier
       ? partner.deliverables.map((d) => ({ ...d }))
@@ -118,16 +135,17 @@ export function allEventsHaveTier(
   if (selectedEventIds.length === 0) return false;
   return selectedEventIds.every((eventId) => {
     const ep = eventPartnerships.find((p) => p.eventId === eventId);
-    return Boolean(ep?.sponsorshipTier);
+    return hasPartnershipTier(ep ?? { sponsorshipTier: undefined });
   });
 }
 
 export function partnerHasEventPackages(partner: Partner): boolean {
-  const eps = resolveEventPartnerships(partner);
-  return (
-    eps.length > 0 &&
-    eps.every((ep) => Boolean(ep.sponsorshipTier))
+  if (partner.eventIds.length === 0) return false;
+  const eps = partnershipsForEventIds(
+    resolveEventPartnerships(partner),
+    partner.eventIds
   );
+  return eps.length > 0 && eps.every((ep) => hasPartnershipTier(ep));
 }
 
 export function flattenDeliverables(
@@ -145,9 +163,14 @@ export function seminarSlotBudgetByEvent(
 }
 
 export function getPartnerDisplayTier(partner: Partner): string | undefined {
-  const eps = resolveEventPartnerships(partner);
+  const eps = partnershipsForEventIds(
+    resolveEventPartnerships(partner),
+    partner.eventIds
+  );
   if (eps.length === 0) return partner.sponsorshipTier;
-  const unique = [...new Set(eps.map((ep) => ep.sponsorshipTier).filter(Boolean))];
+  const unique = [
+    ...new Set(eps.map((ep) => ep.sponsorshipTier).filter(Boolean)),
+  ] as SponsorshipTier[];
   if (unique.length === 0) return partner.sponsorshipTier;
   if (unique.length === 1) return unique[0];
   return `${unique[0]} +${unique.length - 1}`;
@@ -174,7 +197,6 @@ export function upsertEventPartnership(
       ...list,
       {
         eventId,
-        sponsorshipTier: "" as SponsorshipTier,
         deliverables: [],
         seminarSlotCount: 0,
         ...patch,

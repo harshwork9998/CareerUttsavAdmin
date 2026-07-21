@@ -19,6 +19,7 @@ import {
   mockSettings,
 } from "@/lib/mock-data";
 import { normalizeRegistration } from "@/features/registrations/normalize-registration";
+import { isOperatingCity } from "@/lib/operating-cities";
 import type {
   Event,
   Registration,
@@ -50,6 +51,11 @@ export const eventsService = {
   getById: (id: string) =>
     simulate(eventsStore.find((e) => e.id === id) ?? null),
   create: (event: Omit<Event, "id" | "createdAt" | "updatedAt">) => {
+    if (!isOperatingCity(event.city)) {
+      return Promise.reject(
+        new Error("Event city must be Bangalore, Mysore, or Hubli")
+      );
+    }
     const created: Event = {
       ...event,
       id: generateId(),
@@ -65,6 +71,11 @@ export const eventsService = {
     return simulate(created);
   },
   update: (id: string, data: Partial<Event>) => {
+    if (data.city && !isOperatingCity(data.city)) {
+      return Promise.reject(
+        new Error("Event city must be Bangalore, Mysore, or Hubli")
+      );
+    }
     const existing = eventsStore.find((e) => e.id === id);
     if (!existing) {
       return simulate(null as unknown as Event);

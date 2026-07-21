@@ -282,7 +282,8 @@ export interface PartnerDeliverable {
 /** Per-event sponsorship package — tier, deliverables, and seminar slot budget */
 export interface PartnerEventPartnership {
   eventId: string;
-  sponsorshipTier: SponsorshipTier;
+  /** Set when the user picks a tier for this event */
+  sponsorshipTier?: SponsorshipTier;
   deliverables: PartnerDeliverable[];
   /** Total panelist slots allotted for this event (set in deliverables step) */
   seminarSlotCount: number;

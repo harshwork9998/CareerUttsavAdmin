@@ -15,6 +15,8 @@ import { Button } from "@/components/ui/button";
 export function getSectionBackHref(pathname: string): string | null {
   const segments = pathname.split("/").filter(Boolean);
   if (segments.length <= 1) return null;
+  // Partner journey pages manage their own back navigation.
+  if (segments[0] === "partners" && segments.length >= 2) return null;
   return `/${segments.slice(0, -1).join("/")}`;
 }
 

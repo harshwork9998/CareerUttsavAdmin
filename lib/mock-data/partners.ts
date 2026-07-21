@@ -77,7 +77,7 @@ export const mockPartners: Partner[] = [
         notes: "Walked through Gold vs University Partner packages.",
         outcome: "in_discussion",
         followUpNotes: "Share panel slot options for Day 1 seminars.",
-        followUpAt: "2026-07-20T14:00:00",
+        followUpAt: "2026-07-21T14:00:00",
         createdAt: "2026-06-18T16:00:00+05:30",
         updatedAt: "2026-06-18T16:00:00+05:30",
       },
@@ -113,6 +113,10 @@ export const mockPartners: Partner[] = [
       { eventId: "evt-001", seminarId: "sem-001-a", slots: 1 },
       { eventId: "evt-001", seminarId: "sem-001-b", slots: 1 },
     ],
+    portalInviteEmail: "anitha.rao@christuniversity.in",
+    portalLogin: "anitha.rao@christuniversity.in",
+    portalTempPassword: "ChristDemo9x",
+    portalInviteSentAt: "2026-07-10T10:00:00+05:30",
     portalDocuments: mockDocs("001", [
       {
         kind: "logo",
@@ -379,7 +383,7 @@ export const mockPartners: Partner[] = [
         outcome: "in_discussion",
         followUpNotes:
           "Send revised Knowledge Partner (Gold) deck and confirm VC join on call.",
-        followUpAt: "2026-07-20T10:30:00",
+        followUpAt: "2026-07-21T10:30:00",
         createdAt: "2026-07-01T11:30:00+05:30",
         updatedAt: "2026-07-01T11:30:00+05:30",
       },

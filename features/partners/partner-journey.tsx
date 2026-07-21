@@ -20,6 +20,7 @@ import {
   PARTNER_DELIVERABLE_DEFINITIONS,
   applyTierDefaultsPreservingCustom,
 } from "@/constants";
+import { isOperatingCity, OPERATING_CITIES } from "@/lib/operating-cities";
 import { eventsService, partnersService } from "@/services/api";
 import { DateField } from "@/features/events/event-datetime-fields";
 import {
@@ -66,6 +67,7 @@ import {
 } from "@/lib/partner-invite";
 import {
   hasLoggedMeeting,
+  hasWonMeeting,
   syncLegacyMeetingFields,
 } from "@/lib/partner-meetings";
 import { Button } from "@/components/ui/button";
@@ -89,7 +91,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-const EVENT_CITIES = ["Bangalore", "Mysore", "Hubli"] as const;
 const CUSTOM_ORG = "__custom__";
 const AUTO_SAVE_DELAY_MS = 1500;
 
@@ -125,14 +126,22 @@ const emptyOwner = (): RelationshipOwner => ({
   managerEmail: "",
 });
 
+function canPersistNewPartner(name: string, city: string, state: string) {
+  return (
+    name.trim().length >= 2 &&
+    isOperatingCity(city.trim()) &&
+    state.trim().length > 0
+  );
+}
+
 function maxUnlockedChapter(partner: Partner | null): ChapterId {
   if (!partner) return 1;
   if (!partner.contactedAt) return 2;
   if (!hasLoggedMeeting(partner)) return 3;
   if (
-    partner.stage === "Meeting Scheduled" ||
-    partner.stage === "Contacted" ||
-    partner.stage === "New"
+    !hasWonMeeting(partner) &&
+    partner.stage !== "Negotiation" &&
+    partner.stage !== "Confirmed"
   ) {
     return 3;
   }
@@ -148,9 +157,9 @@ function startingChapter(partner: Partner | null): ChapterId {
   if (!partner.contactedAt) return 2;
   if (!hasLoggedMeeting(partner)) return 3;
   if (
-    partner.stage === "Meeting Scheduled" ||
-    partner.stage === "Contacted" ||
-    partner.stage === "New"
+    !hasWonMeeting(partner) &&
+    partner.stage !== "Negotiation" &&
+    partner.stage !== "Confirmed"
   ) {
     return 3;
   }
@@ -214,12 +223,25 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
   ]);
 
   const events = useMemo(
-    () =>
-      (eventsQuery.data ?? []).filter((e) =>
-        EVENT_CITIES.includes(e.city as (typeof EVENT_CITIES)[number])
-      ),
+    () => (eventsQuery.data ?? []).filter((e) => isOperatingCity(e.city)),
     [eventsQuery.data]
   );
+
+  const canAdvanceFromMeetings = useMemo(() => {
+    if (!partner) return false;
+    if (partner.stage === "Negotiation" || partner.stage === "Confirmed") {
+      return true;
+    }
+    return hasWonMeeting(partner);
+  }, [partner]);
+
+  const chapter3GateMessage = useMemo(() => {
+    if (!partner || chapter !== 3 || canAdvanceFromMeetings) return null;
+    if (!hasLoggedMeeting(partner)) {
+      return "Log at least one meeting below. Then mark it as Deal won to unlock the next step.";
+    }
+    return "Mark a meeting as Deal won to unlock partnership details.";
+  }, [partner, chapter, canAdvanceFromMeetings]);
 
   const allPartners = allPartnersQuery.data ?? [];
 
@@ -411,9 +433,13 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
         >)
     | null => {
     if (chapter === 1) {
-      if (isNew && !name.trim()) return null;
+      const trimmedName = name.trim();
+      if (!trimmedName) return null;
+      if (isNew && !partnerId && !canPersistNewPartner(trimmedName, city, state)) {
+        return null;
+      }
       return {
-        name: name.trim() || partner?.name || "Untitled partner",
+        name: trimmedName,
         city: city.trim(),
         state: state.trim(),
         primaryContact: { ...primary },
@@ -487,11 +513,13 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     if (chapter === 6) {
       return {
         ...partner,
-        seminarSlotAssignments: slotAssignments.map((a) => ({
-          eventId: a.eventId,
-          seminarId: a.seminarId,
-          slots: a.slots,
-        })),
+        seminarSlotAssignments: slotAssignments
+          .filter((a) => eventIds.includes(a.eventId))
+          .map((a) => ({
+            eventId: a.eventId,
+            seminarId: a.seminarId,
+            slots: a.slots,
+          })),
       };
     }
     if (chapter === 7) {
@@ -534,7 +562,8 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     options?: { create?: boolean }
   ): Promise<Partner | null> => {
     const shouldCreate =
-      options?.create ?? (isNew && chapter === 1 && !partnerId);
+      options?.create ??
+      (isNew && chapter === 1 && !partnerId && canPersistNewPartner(data.name, data.city, data.state));
     if (shouldCreate) {
       const saved = await partnersService.create(data);
       if (saved) {
@@ -656,7 +685,11 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       void (async () => {
         try {
           const saved = await persistDraft(data, {
-            create: isNew && chapter === 1 && !partnerId,
+            create:
+              isNew &&
+              chapter === 1 &&
+              !partnerId &&
+              canPersistNewPartner(data.name, data.city, data.state),
           });
           if (saved) {
             lastSavedSnapshotRef.current = snapshot;
@@ -684,7 +717,9 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
   }, [partner?.id, chapter]);
 
   useEffect(() => {
-    const canPersist = Boolean(partnerId) || (isNew && name.trim());
+    const canPersist =
+      Boolean(partnerId) ||
+      (isNew && canPersistNewPartner(name, city, state));
     if (!canPersist) return;
 
     const flushOnLeave = () => {
@@ -702,7 +737,11 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
           body,
           keepalive: true,
         });
-      } else if (isNew && chapter === 1 && name.trim()) {
+      } else if (
+        isNew &&
+        chapter === 1 &&
+        canPersistNewPartner(data.name, data.city, data.state)
+      ) {
         void fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -758,7 +797,9 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
   const submitChapter1 = () => {
     const next: Record<string, string> = {};
     if (!name.trim()) next.name = "Required";
-    if (!city.trim()) next.city = "Required";
+    if (!city.trim() || !isOperatingCity(city.trim())) {
+      next.city = "Select Bangalore, Mysore, or Hubli";
+    }
     if (!state.trim()) next.state = "Required";
     if (!primary.name.trim() || !primary.phone.trim() || !primary.email.trim()) {
       next.primary = "Primary contact needs name, phone & email";
@@ -892,10 +933,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
 
   const submitChapter3 = () => {
     if (!partner) return;
-    if (
-      partner.stage === "Negotiation" ||
-      partner.stage === "Confirmed"
-    ) {
+    if (canAdvanceFromMeetings) {
       setErrors({});
       setChapter(4);
       return;
@@ -904,7 +942,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       toast.error("Log at least one meeting first");
       return;
     }
-    toast.message("Mark a meeting as deal won to continue to partnership details");
+    toast.error("Mark a meeting as Deal won to continue");
   };
 
   const submitChapter4 = () => {
@@ -918,7 +956,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     if (!managerEmail.trim()) next.mEmail = "Required";
     if (eventIds.length === 0) next.events = "Select at least one event";
     if (!allEventsHaveTier(eventPartnerships, eventIds)) {
-      next.tier = "Select a sponsorship tier for each event";
+      next.tier = "Select a tier for each selected event";
     }
     setErrors(next);
     if (Object.keys(next).length) return;
@@ -935,6 +973,9 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
         ...partner,
         ...legacy,
         eventPartnerships: activePartnerships,
+        seminarSlotAssignments: (partner.seminarSlotAssignments ?? []).filter(
+          (a) => eventIds.includes(a.eventId)
+        ),
         relationshipOwner: {
           organization,
           managerName: managerName.trim(),
@@ -1191,12 +1232,23 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
   return (
     <div className="pb-12">
       <header className="mb-8 flex flex-wrap items-start justify-between gap-3">
-        <h1
-          className={cn(displayClass, "text-3xl font-bold tracking-tight sm:text-4xl")}
-          style={{ color: INK.primary }}
-        >
-          {partner?.name || name.trim() || "New partner"}
-        </h1>
+        <div>
+          <p
+            className="text-xs font-semibold uppercase tracking-wider"
+            style={{ color: BRAND[700] }}
+          >
+            Step {chapter} of 8
+          </p>
+          <h1
+            className={cn(displayClass, "mt-1 text-3xl font-bold tracking-tight sm:text-4xl")}
+            style={{ color: INK.primary }}
+          >
+            {partner?.name || name.trim() || "New partner"}
+          </h1>
+          <p className="mt-1 text-sm" style={{ color: INK.muted }}>
+            {meta.title}
+          </p>
+        </div>
         {draftStatus !== "idle" ? (
           <p
             className="text-sm tabular-nums"
@@ -1246,6 +1298,13 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
                     type="button"
                     onClick={() => goChapter(c.id)}
                     disabled={isLocked}
+                    title={
+                      isLocked
+                        ? c.id === 4 && partner && !canAdvanceFromMeetings
+                          ? "Mark a meeting as Deal won first"
+                          : "Complete earlier steps to unlock"
+                        : undefined
+                    }
                     className={cn(
                       "flex w-full items-center gap-3 text-left transition-opacity",
                       isLocked && "cursor-not-allowed opacity-45"
@@ -1347,11 +1406,25 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
                 )}
 
                 {chapter === 3 && partner && (
-                  <ChapterMeetings
-                    partner={partner}
-                    onPersist={handleMeetingsPersist}
-                    saving={saveMutation.isPending}
-                  />
+                  <>
+                    {chapter3GateMessage ? (
+                      <div
+                        className="mb-5 rounded-xl border px-4 py-3 text-sm"
+                        style={{
+                          borderColor: "rgba(176,125,42,0.28)",
+                          background: "rgba(176,125,42,0.08)",
+                          color: "#8A6A2F",
+                        }}
+                      >
+                        {chapter3GateMessage}
+                      </div>
+                    ) : null}
+                    <ChapterMeetings
+                      partner={partner}
+                      onPersist={handleMeetingsPersist}
+                      saving={saveMutation.isPending}
+                    />
+                  </>
                 )}
 
                 {chapter === 4 && (
@@ -1392,7 +1465,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
                   <ChapterSeminarSlots
                     key={seminarSlotsUiKey}
                     partnerId={partner.id}
-                    eventIds={partner.eventIds}
+                    eventIds={eventIds}
                     events={eventsQuery.data ?? []}
                     allPartners={allPartners}
                     assignments={slotAssignments}
@@ -1466,7 +1539,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
                         );
                       }}
                     >
-                      {chapter === 1 ? "University overview" : "Back"}
+                      {chapter === 1 ? "Back to partners" : "Back"}
                     </Button>
                     {canResetPage ? (
                       <Button
@@ -1494,7 +1567,10 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
                   </div>
                   <Button
                     type="button"
-                    disabled={saveMutation.isPending}
+                    disabled={
+                      saveMutation.isPending ||
+                      (chapter === 3 && !canAdvanceFromMeetings)
+                    }
                     onClick={() => {
                       if (chapter === 1) submitChapter1();
                       else if (chapter === 2) submitChapter2();
@@ -1511,12 +1587,11 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
                     {saveMutation.isPending ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : null}
-                    {chapter === 8 ? "Send email & finish" : chapter === 3 &&
-                        partner &&
-                        (partner.stage === "Negotiation" ||
-                          partner.stage === "Confirmed")
-                      ? "Continue to partnership details"
-                      : "Save & next"}
+                    {chapter === 8
+                      ? "Send email & finish"
+                      : chapter === 3 && canAdvanceFromMeetings
+                        ? "Continue to partnership details"
+                        : "Save & next"}
                     {!saveMutation.isPending && chapter < 8 ? (
                       <ArrowRight className="h-4 w-4" />
                     ) : null}
@@ -1688,10 +1763,21 @@ function ChapterUniversity(props: {
         </div>
         <div className="space-y-1.5">
           <Label>City</Label>
-          <Input
-            value={props.city}
-            onChange={(e) => props.setCity(e.target.value)}
-          />
+          <Select
+            value={props.city || undefined}
+            onValueChange={props.setCity}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select city" />
+            </SelectTrigger>
+            <SelectContent>
+              {OPERATING_CITIES.map((c) => (
+                <SelectItem key={c} value={c}>
+                  {c}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <FieldError message={props.errors.city} />
         </div>
         <div className="space-y-1.5">
@@ -1811,7 +1897,6 @@ function ChapterPartnership(props: {
             eps,
             id,
             {
-              sponsorshipTier: "" as SponsorshipTier,
               deliverables: [],
               seminarSlotCount: 0,
             },

@@ -15,6 +15,7 @@ import {
 import { toast } from "sonner";
 
 import { SPONSORSHIP_TIERS } from "@/constants";
+import { OPERATING_CITIES } from "@/lib/operating-cities";
 import { partnersService } from "@/services/api";
 import { cn } from "@/lib/utils";
 import type { Partner, PartnerLifecycleStage } from "@/types";
@@ -106,7 +107,7 @@ function PartnerDocUploadBar({
             title={item.label}
             className={cn(
               "h-1.5 min-w-0 flex-1 rounded-full transition-colors duration-300",
-              item.uploaded ? "bg-[#2F6B4F]" : "bg-[#E8E6E0]"
+              item.complete ? "bg-[#2F6B4F]" : "bg-[#E8E6E0]"
             )}
           />
         ))}
@@ -268,7 +269,7 @@ function PartnerCard({
             className="inline-flex items-center gap-1 text-xs font-semibold transition-colors hover:text-brand-800"
             style={{ color: BRAND[700] }}
           >
-            Edit
+            Edit partnership
             <ArrowRight className="h-3.5 w-3.5" />
           </Link>
         </div>
@@ -304,7 +305,11 @@ export function PartnersList() {
   const partners = useMemo(() => data ?? [], [data]);
 
   const cityOptions = useMemo(() => {
-    const cities = [...new Set(partners.map((p) => p.city))].sort();
+    const fromData = [...new Set(partners.map((p) => p.city))].filter((city) =>
+      OPERATING_CITIES.includes(city as (typeof OPERATING_CITIES)[number])
+    );
+    const cities =
+      fromData.length > 0 ? fromData.sort() : [...OPERATING_CITIES];
     return cities.map((c) => ({ label: c, value: c }));
   }, [partners]);
 
@@ -322,7 +327,7 @@ export function PartnersList() {
     <div className="space-y-8">
       <PageHeader
         title="Partners"
-        description="Universities grouped by partnership stage — cards move when you advance the journey."
+        description="Track each university from first contact through confirmed partnership."
         actions={
           <Button
             onClick={() => router.push("/partners/new")}
@@ -349,7 +354,7 @@ export function PartnersList() {
           },
           {
             id: "city",
-            label: "Event city",
+            label: "University city",
             mode: "multi",
             values: cityFilter,
             onChange: setCityFilter,
@@ -446,6 +451,10 @@ export function PartnersList() {
         open={Boolean(summaryPartner)}
         onOpenChange={(open) => {
           if (!open) setSummaryPartner(null);
+        }}
+        onViewDocs={(p) => {
+          setSummaryPartner(null);
+          setDocsPartner(p);
         }}
       />
 

@@ -53,7 +53,9 @@ export function PartnerStageBoard({
 
   return (
     <div className={cn(surface.mint, "space-y-5 p-3.5 sm:p-4", className)}>
-      {rows.map((row) => (
+      {rows
+        .filter((row) => row.partners.length > 0)
+        .map((row) => (
         <section key={row.stage} className="space-y-2.5">
           <div
             className="flex items-center gap-2 rounded-lg px-2.5 py-2"
@@ -76,19 +78,18 @@ export function PartnerStageBoard({
 
           <div className="flex gap-3 overflow-x-auto pb-1">
             <AnimatePresence mode="popLayout" initial={false}>
-              {row.partners.length === 0 ? (
-                <p className="px-1 py-3 text-[11px] text-muted-foreground">
-                  No universities in this stage
-                </p>
-              ) : (
-                row.partners.map((partner, index) =>
-                  renderCard(partner, index)
-                )
+              {row.partners.map((partner, index) =>
+                renderCard(partner, index)
               )}
             </AnimatePresence>
           </div>
         </section>
       ))}
+      {rows.every((row) => row.partners.length === 0) ? (
+        <p className="px-1 py-6 text-center text-sm text-muted-foreground">
+          No partners match your filters.
+        </p>
+      ) : null}
     </div>
   );
 }

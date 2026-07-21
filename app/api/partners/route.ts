@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { loadPartners, savePartners } from "@/lib/server/partners-persistence";
+import { validatePartnerCreate } from "@/lib/partner-validation";
 import { generateId } from "@/lib/utils";
 import type { Partner } from "@/types";
 
@@ -16,9 +17,14 @@ export async function POST(request: Request) {
     Partner,
     "id" | "createdAt" | "updatedAt"
   >;
+  const validated = validatePartnerCreate(body);
+  if (!validated.ok) {
+    return NextResponse.json({ error: validated.error }, { status: 400 });
+  }
+
   const now = new Date().toISOString();
   const created: Partner = {
-    ...body,
+    ...validated.data,
     id: generateId(),
     createdAt: now,
     updatedAt: now,
