@@ -370,6 +370,8 @@ export interface PartnerSeminarSlotAssignment {
   eventId: string;
   seminarId: string;
   slots: number;
+  /** Snapshot of the seminar title when seats were allotted */
+  seminarTitle?: string;
 }
 
 export type SeminarSpeakerStatus = "Confirmed" | "Invited" | "Tentative";

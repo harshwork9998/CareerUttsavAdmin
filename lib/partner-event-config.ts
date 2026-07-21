@@ -52,7 +52,7 @@ export function buildEventPackageSummaries(
         const seminar = event.seminars.find((s) => s.id === a.seminarId);
         return {
           id: a.seminarId,
-          title: seminar?.title ?? a.seminarId,
+          title: a.seminarTitle ?? seminar?.title ?? a.seminarId,
           slots: a.slots,
         };
       });
@@ -223,4 +223,18 @@ export function assignedSlotsForEvent(
   return (assignments ?? [])
     .filter((a) => a.eventId === eventId)
     .reduce((sum, a) => sum + a.slots, 0);
+}
+
+export function enrichSeminarSlotAssignments(
+  assignments: PartnerSeminarSlotAssignment[],
+  events: Event[]
+): PartnerSeminarSlotAssignment[] {
+  return assignments.map((a) => {
+    if (a.seminarTitle?.trim()) return a;
+    const event = events.find((e) => e.id === a.eventId);
+    const seminar = event?.seminars.find((s) => s.id === a.seminarId);
+    return seminar?.title
+      ? { ...a, seminarTitle: seminar.title }
+      : a;
+  });
 }

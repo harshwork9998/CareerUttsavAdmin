@@ -62,6 +62,7 @@ import {
   allEventsHaveTier,
   assignedSlotsForEvent,
   buildEventPackageSummaries,
+  enrichSeminarSlotAssignments,
   hasPartnershipTier,
   partnerHasEventPackages,
   removeEventPartnership,
@@ -542,15 +543,13 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       };
     }
     if (chapter === 6) {
+      const events = eventsQuery.data ?? [];
       return {
         ...partner,
-        seminarSlotAssignments: slotAssignments
-          .filter((a) => eventIds.includes(a.eventId))
-          .map((a) => ({
-            eventId: a.eventId,
-            seminarId: a.seminarId,
-            slots: a.slots,
-          })),
+        seminarSlotAssignments: enrichSeminarSlotAssignments(
+          slotAssignments.filter((a) => eventIds.includes(a.eventId)),
+          events
+        ),
       };
     }
     if (chapter === 7) {
@@ -1134,11 +1133,10 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       advance: true,
       data: {
         ...partner,
-        seminarSlotAssignments: slotAssignments.map((a) => ({
-          eventId: a.eventId,
-          seminarId: a.seminarId,
-          slots: a.slots,
-        })),
+        seminarSlotAssignments: enrichSeminarSlotAssignments(
+          slotAssignments,
+          eventsQuery.data ?? []
+        ),
         seminarSlotsConfirmedAt: new Date().toISOString(),
       },
     });
