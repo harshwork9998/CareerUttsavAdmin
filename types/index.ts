@@ -773,7 +773,7 @@ export interface PartnerSalesAnalytics {
 }
 
 export type OperatingCity = "Bangalore" | "Mysore" | "Hubli";
-export type DashboardCityFilter = "all" | OperatingCity;
+export type DashboardCityFilter = "all" | string;
 
 export interface CityComparisonMetric {
   id: string;
@@ -812,5 +812,7 @@ export interface DashboardData {
   insights: DashboardInsight[];
   studentRegistration: StudentRegistrationAnalytics;
   partnerSales: PartnerSalesAnalytics;
-  citySlices: Record<OperatingCity, CityDashboardSlice>;
+  /** Cities derived from current events (one hero tab per city). */
+  eventCities: string[];
+  citySlices: Record<string, CityDashboardSlice>;
 }

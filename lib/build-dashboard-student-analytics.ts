@@ -1,11 +1,10 @@
 import { resolveEventCity } from "@/lib/resolve-event-city";
-import { isOperatingCity, OPERATING_CITIES } from "@/lib/operating-cities";
+import { citiesMatch, getEventCities } from "@/lib/event-cities";
 import type {
   ChartDataPoint,
   Event,
   InstitutionRanking,
   LiveRegistrationItem,
-  OperatingCity,
   Registration,
   StudentRegistrationAnalytics,
 } from "@/types";
@@ -119,7 +118,7 @@ function buildWeeklyTrend(registrations: Registration[]): ChartDataPoint[] {
 
 function buildTopSchools(
   registrations: Registration[],
-  city?: OperatingCity
+  city?: string
 ): InstitutionRanking[] {
   return countBy(registrations, (registration) => registration.college)
     .slice(0, 8)
@@ -159,7 +158,7 @@ function startOfToday(): Date {
 function filterRegistrationsForScope(
   registrations: Registration[],
   events: Event[],
-  city: OperatingCity | "all"
+  city: string | "all"
 ): Registration[] {
   const eventIds = new Set(events.map((event) => event.id));
   const eventCityById = new Map(events.map((event) => [event.id, event.city]));
@@ -169,24 +168,22 @@ function filterRegistrationsForScope(
   );
 
   if (city === "all") {
-    return scoped.filter((registration) => {
-      const eventCity = resolveEventCity(registration, eventCityById);
-      return eventCity && isOperatingCity(eventCity);
-    });
+    return scoped;
   }
 
-  return scoped.filter(
-    (registration) =>
-      resolveEventCity(registration, eventCityById) === city
-  );
+  return scoped.filter((registration) => {
+    const eventCity = resolveEventCity(registration, eventCityById);
+    return eventCity ? citiesMatch(eventCity, city) : false;
+  });
 }
 
 export function buildStudentRegistrationAnalytics(
   registrations: Registration[],
   events: Event[],
-  city: OperatingCity | "all"
+  city: string | "all"
 ): StudentRegistrationAnalytics {
   const filtered = filterRegistrationsForScope(registrations, events, city);
+  const eventCities = getEventCities(events);
   const today = startOfToday();
 
   const todayCount = filtered.filter((registration) => {
@@ -197,12 +194,12 @@ export function buildStudentRegistrationAnalytics(
 
   const byCity =
     city === "all"
-      ? OPERATING_CITIES.map((operatingCity) => ({
-          name: operatingCity,
+      ? eventCities.map((eventCity) => ({
+          name: eventCity,
           value: filterRegistrationsForScope(
             registrations,
             events,
-            operatingCity
+            eventCity
           ).length,
         })).filter((row) => row.value > 0)
       : [{ name: city, value: filtered.length }];

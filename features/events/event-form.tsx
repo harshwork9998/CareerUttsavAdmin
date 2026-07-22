@@ -227,6 +227,10 @@ export function EventForm({ eventId }: EventFormProps) {
           : [],
       }),
     onSuccess: (updated) => {
+      if (!updated) {
+        toast.error("Failed to update event");
+        return;
+      }
       queryClient.setQueryData<Event[]>(["events"], (old) =>
         old?.map((e) => (e.id === updated.id ? updated : e))
       );

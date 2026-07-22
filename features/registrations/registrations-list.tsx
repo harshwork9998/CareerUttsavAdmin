@@ -1,14 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Download, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { eventsService, registrationsService } from "@/services/api";
 import { getPrimarySeminar } from "@/lib/enrich-registration";
-import { resolveEventCity } from "@/lib/resolve-event-city";
-import { OPERATING_CITIES } from "@/lib/operating-cities";
+import {
+  filterRegistrationsForEventCatalog,
+  registrationMatchesEventFilter,
+} from "@/lib/registration-event-links";
 import { formatNumber } from "@/lib/utils";
 import type { Registration } from "@/types";
 import {
@@ -79,12 +81,22 @@ function uniqueSorted(
     .map((value) => ({ label: value, value }));
 }
 
+function registrationMatchesSeminar(
+  registration: Registration,
+  seminar: string
+): boolean {
+  const interests = registration.seminarInterests?.filter(Boolean) ?? [];
+  if (interests.some((entry) => entry === seminar)) return true;
+  return interests.length === 0 && getPrimarySeminar(registration) === seminar;
+}
+
 export function RegistrationsList() {
   const [search, setSearch] = useState("");
-  const [eventCityFilter, setEventCityFilter] = useState<string[]>([]);
+  const [eventFilter, setEventFilter] = useState<string[]>([]);
   const [classFilter, setClassFilter] = useState("all");
   const [streamFilter, setStreamFilter] = useState("all");
   const [boardFilter, setBoardFilter] = useState("all");
+  const [seminarFilter, setSeminarFilter] = useState("all");
   const [cityFilter, setCityFilter] = useState("all");
   const [genderFilter, setGenderFilter] = useState("all");
   const [page, setPage] = useState(1);
@@ -103,19 +115,46 @@ export function RegistrationsList() {
   });
 
   const registrations = data ?? [];
+  const catalogEvents = eventsQuery.data ?? [];
 
-  const eventCityById = useMemo(() => {
+  const validEventIdsKey = useMemo(
+    () => catalogEvents.map((event) => event.id).sort().join(","),
+    [catalogEvents]
+  );
+
+  useEffect(() => {
+    const validIds = new Set(validEventIdsKey.split(",").filter(Boolean));
+    if (validIds.size === 0) return;
+    setEventFilter((prev) => {
+      const next = prev.filter((id) => validIds.has(id));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [validEventIdsKey]);
+
+  const linkedRegistrations = useMemo(() => {
+    const validIds = new Set(catalogEvents.map((event) => event.id));
+    return filterRegistrationsForEventCatalog(registrations, validIds);
+  }, [registrations, catalogEvents]);
+
+  const eventOptions = useMemo(() => {
+    return [...catalogEvents]
+      .sort(
+        (a, b) =>
+          a.city.localeCompare(b.city) || a.title.localeCompare(b.title)
+      )
+      .map((event) => ({
+        label: `${event.city} · ${event.title}`,
+        value: event.id,
+      }));
+  }, [catalogEvents]);
+
+  const eventTitleById = useMemo(() => {
     const map = new Map<string, string>();
-    for (const event of eventsQuery.data ?? []) {
-      map.set(event.id, event.city);
+    for (const event of catalogEvents) {
+      map.set(event.id, event.title);
     }
     return map;
-  }, [eventsQuery.data]);
-
-  const eventCityOptions = OPERATING_CITIES.map((city) => ({
-    label: city,
-    value: city,
-  }));
+  }, [catalogEvents]);
 
   const classOptions = useMemo(() => {
     const order = [
@@ -130,41 +169,64 @@ export function RegistrationsList() {
       "Class 12",
     ];
     const present = new Set(
-      registrations.map((r) => r.classLabel).filter(Boolean)
+      linkedRegistrations.map((r) => r.classLabel).filter(Boolean)
     );
     return order
       .filter((value) => present.has(value))
       .map((value) => ({ label: value, value }));
-  }, [registrations]);
+  }, [linkedRegistrations]);
   const streamOptions = useMemo(
-    () => uniqueSorted(registrations.map((r) => r.interestedStream)),
-    [registrations]
+    () => uniqueSorted(linkedRegistrations.map((r) => r.interestedStream)),
+    [linkedRegistrations]
   );
   const boardOptions = useMemo(
-    () => uniqueSorted(registrations.map((r) => r.board)),
-    [registrations]
+    () => uniqueSorted(linkedRegistrations.map((r) => r.board)),
+    [linkedRegistrations]
   );
   const cityOptions = useMemo(
-    () => uniqueSorted(registrations.map((r) => r.city)),
-    [registrations]
+    () => uniqueSorted(linkedRegistrations.map((r) => r.city)),
+    [linkedRegistrations]
   );
   const genderOptions = useMemo(
-    () => uniqueSorted(registrations.map((r) => r.gender)),
-    [registrations]
+    () => uniqueSorted(linkedRegistrations.map((r) => r.gender)),
+    [linkedRegistrations]
   );
+  const seminarOptions = useMemo(() => {
+    const titles = new Set<string>();
+    for (const registration of linkedRegistrations) {
+      for (const seminar of registration.seminarInterests ?? []) {
+        const trimmed = seminar.trim();
+        if (trimmed) titles.add(trimmed);
+      }
+      const primary = getPrimarySeminar(registration);
+      if (primary !== "—") titles.add(primary);
+    }
+    for (const event of catalogEvents) {
+      for (const seminar of event.seminars ?? []) {
+        const trimmed = seminar.title?.trim();
+        if (trimmed) titles.add(trimmed);
+      }
+    }
+    return [...titles]
+      .sort((a, b) => a.localeCompare(b))
+      .map((value) => ({ label: value, value }));
+  }, [linkedRegistrations, catalogEvents]);
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
 
-    return registrations.filter((r) => {
-      if (eventCityFilter.length > 0) {
-        const eventCity = resolveEventCity(r, eventCityById);
-        if (!eventCity || !eventCityFilter.includes(eventCity)) return false;
-      }
+    return linkedRegistrations.filter((r) => {
+      if (!registrationMatchesEventFilter(r, eventFilter)) return false;
       if (classFilter !== "all" && r.classLabel !== classFilter) return false;
       if (streamFilter !== "all" && r.interestedStream !== streamFilter)
         return false;
       if (boardFilter !== "all" && r.board !== boardFilter) return false;
+      if (
+        seminarFilter !== "all" &&
+        !registrationMatchesSeminar(r, seminarFilter)
+      ) {
+        return false;
+      }
       if (cityFilter !== "all" && r.city !== cityFilter) return false;
       if (genderFilter !== "all" && r.gender !== genderFilter) return false;
 
@@ -179,17 +241,18 @@ export function RegistrationsList() {
         (r.classLabel ?? "").toLowerCase().includes(query) ||
         (r.interestedStream ?? "").toLowerCase().includes(query) ||
         (r.board ?? "").toLowerCase().includes(query) ||
+        getPrimarySeminar(r).toLowerCase().includes(query) ||
         r.city.toLowerCase().includes(query)
       );
     });
   }, [
-    registrations,
+    linkedRegistrations,
     search,
-    eventCityFilter,
-    eventCityById,
+    eventFilter,
     classFilter,
     streamFilter,
     boardFilter,
+    seminarFilter,
     cityFilter,
     genderFilter,
   ]);
@@ -218,10 +281,11 @@ export function RegistrationsList() {
   };
 
   const clearFilters = () => {
-    setEventCityFilter([]);
+    setEventFilter([]);
     setClassFilter("all");
     setStreamFilter("all");
     setBoardFilter("all");
+    setSeminarFilter("all");
     setCityFilter("all");
     setGenderFilter("all");
     setSearch("");
@@ -230,10 +294,11 @@ export function RegistrationsList() {
 
   const hasActiveFilters =
     Boolean(search.trim()) ||
-    eventCityFilter.length > 0 ||
+    eventFilter.length > 0 ||
     classFilter !== "all" ||
     streamFilter !== "all" ||
     boardFilter !== "all" ||
+    seminarFilter !== "all" ||
     cityFilter !== "all" ||
     genderFilter !== "all";
 
@@ -253,6 +318,15 @@ export function RegistrationsList() {
       cell: ({ row }) => (
         <span className="line-clamp-2 max-w-[200px] text-sm">
           {row.original.college}
+        </span>
+      ),
+    },
+    {
+      id: "eventTitle",
+      header: "Event",
+      cell: ({ row }) => (
+        <span className="line-clamp-2 max-w-[220px] text-sm">
+          {eventTitleById.get(row.original.eventId) ?? row.original.eventTitle}
         </span>
       ),
     },
@@ -342,7 +416,7 @@ export function RegistrationsList() {
           title="Registrations"
           description="Manage student registrations across all Career Utsav events."
         />
-        <TableSkeleton rows={8} columns={11} />
+        <TableSkeleton rows={8} columns={12} />
       </div>
     );
   }
@@ -399,13 +473,13 @@ export function RegistrationsList() {
             id: "event",
             label: "Event",
             mode: "multi",
-            values: eventCityFilter,
+            values: eventFilter,
             onChange: (v) => {
-              setEventCityFilter(v);
+              setEventFilter(v);
               setPage(1);
             },
-            options: eventCityOptions,
-            placeholder: "All cities",
+            options: eventOptions,
+            placeholder: "All events",
           },
           {
             id: "class",
@@ -436,6 +510,17 @@ export function RegistrationsList() {
               setPage(1);
             },
             options: boardOptions,
+          },
+          {
+            id: "seminar",
+            label: "Seminar",
+            value: seminarFilter,
+            onChange: (v) => {
+              setSeminarFilter(v);
+              setPage(1);
+            },
+            options: seminarOptions,
+            placeholder: "All seminars",
           },
           {
             id: "city",

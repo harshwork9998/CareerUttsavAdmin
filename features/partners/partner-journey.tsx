@@ -21,7 +21,6 @@ import {
   applyTierDefaultsPreservingCustom,
 } from "@/constants";
 import { isIndianStateOrUt } from "@/lib/indian-states-uts";
-import { isOperatingCity } from "@/lib/operating-cities";
 import { eventsService, partnersService } from "@/services/api";
 import { DateField } from "@/features/events/event-datetime-fields";
 import {
@@ -65,6 +64,8 @@ import {
   enrichSeminarSlotAssignments,
   hasPartnershipTier,
   partnerHasEventPackages,
+  partnerNeedsEventLinkPrune,
+  prunePartnerEventLinks,
   removeEventPartnership,
   resolveEventPartnerships,
   seminarSlotBudgetByEvent,
@@ -75,7 +76,9 @@ import {
   generatePartnerLogin,
   generateTempPassword,
   buildPartnerWelcomeEmail,
+  isPartnerPortalEmail,
   openGmailCompose,
+  resolvePortalLogin,
 } from "@/lib/partner-invite";
 import {
   getPartnerMeetings,
@@ -253,9 +256,27 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     setChapter(startingChapter(partner));
   }, [isNew, partnerId, partner?.id]);
 
-  const events = useMemo(
-    () => (eventsQuery.data ?? []).filter((e) => isOperatingCity(e.city)),
-    [eventsQuery.data]
+  const catalogEvents = eventsQuery.data ?? [];
+
+  const partnershipEvents = useMemo(
+    () =>
+      [...catalogEvents]
+        .sort(
+          (a, b) =>
+            a.city.localeCompare(b.city) || a.title.localeCompare(b.title)
+        )
+        .map((event) => ({
+          id: event.id,
+          title: event.title,
+          city: event.city,
+          venue: event.venue,
+        })),
+    [catalogEvents]
+  );
+
+  const validEventIdsKey = useMemo(
+    () => catalogEvents.map((event) => event.id).sort().join(","),
+    [catalogEvents]
   );
 
   const canAdvanceFromMeetings = useMemo(() => {
@@ -370,9 +391,17 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     setInviteEmail(
       partner.portalInviteEmail || partner.primaryContact.email || ""
     );
-    setPortalLogin(partner.portalLogin || generatePartnerLogin(partner));
+    setPortalLogin(resolvePortalLogin(partner, partner.portalInviteEmail));
     setTempPassword((prev) => partner.portalTempPassword || prev || generateTempPassword());
   }, [partner?.id, partnerQuery.isSuccess]);
+
+  useEffect(() => {
+    if (chapter !== 8) return;
+    const email = inviteEmail.trim().toLowerCase();
+    if (isPartnerPortalEmail(email)) {
+      setPortalLogin(email);
+    }
+  }, [chapter, inviteEmail]);
 
   const persistCache = (saved: Partner) => {
     queryClient.setQueryData(["partners", saved.id], saved);
@@ -384,6 +413,43 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
         : [saved, ...old];
     });
   };
+
+  useEffect(() => {
+    const validIds = new Set(validEventIdsKey.split(",").filter(Boolean));
+    if (validIds.size === 0) return;
+
+    setEventIds((prev) => {
+      const next = prev.filter((id) => validIds.has(id));
+      return next.length === prev.length ? prev : next;
+    });
+    setEventPartnerships((prev) => {
+      const next = prev.filter((ep) => validIds.has(ep.eventId));
+      return next.length === prev.length ? prev : next;
+    });
+    setSlotAssignments((prev) => {
+      const next = prev.filter((assignment) => validIds.has(assignment.eventId));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [validEventIdsKey]);
+
+  useEffect(() => {
+    if (!partner || catalogEvents.length === 0) return;
+    const validIds = new Set(catalogEvents.map((event) => event.id));
+    if (!partnerNeedsEventLinkPrune(partner, validIds)) return;
+
+    const pruned = prunePartnerEventLinks(partner, validIds);
+    void partnersService
+      .update(partner.id, {
+        eventIds: pruned.eventIds,
+        eventPartnerships: pruned.eventPartnerships,
+        seminarSlotAssignments: pruned.seminarSlotAssignments,
+        sponsorshipTier: pruned.sponsorshipTier,
+        deliverables: pruned.deliverables,
+      })
+      .then((saved) => {
+        if (saved) persistCache(saved);
+      });
+  }, [partner, catalogEvents, queryClient]);
 
   const saveMutation = useMutation({
     mutationFn: async (payload: {
@@ -423,6 +489,8 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
         return;
       }
       persistCache(saved);
+      void queryClient.invalidateQueries({ queryKey: ["partners"] });
+      void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       if (vars.markNotProceeding) {
         toast.success("Marked as not proceeding");
         router.push("/partners");
@@ -565,9 +633,10 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       };
     }
     if (chapter === 8) {
+      const login = resolvePortalLogin(partner, inviteEmail);
       return {
         ...partner,
-        portalLogin: portalLogin.trim() || partner.portalLogin,
+        portalLogin: login,
         portalTempPassword: tempPassword || partner.portalTempPassword,
         portalInviteEmail: inviteEmail.trim() || partner.portalInviteEmail,
       };
@@ -837,6 +906,8 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     else if (!isIndianStateOrUt(state.trim())) next.state = "Select a state or UT";
     if (!primary.name.trim() || !primary.phone.trim() || !primary.email.trim()) {
       next.primary = "Primary contact needs name, phone & email";
+    } else if (!isPartnerPortalEmail(primary.email)) {
+      next.primary = "Enter a valid primary contact email";
     }
     if (
       !secondary.name.trim() ||
@@ -844,6 +915,8 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       !secondary.email.trim()
     ) {
       next.secondary = "Secondary contact needs name, phone & email";
+    } else if (!isPartnerPortalEmail(secondary.email)) {
+      next.secondary = "Enter a valid secondary contact email";
     }
     setErrors(next);
     if (Object.keys(next).length) return;
@@ -1174,11 +1247,14 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       next.inviteEmail = "Enter a valid email";
     }
-    if (!portalLogin.trim()) next.login = "Login required";
+    if (!portalLogin.trim() || !isPartnerPortalEmail(portalLogin)) {
+      next.login = "Login must be a valid email";
+    }
     if (!tempPassword.trim()) next.password = "Password required";
     setErrors(next);
     if (Object.keys(next).length) return;
 
+    const login = resolvePortalLogin(partner, email);
     const activePartnerships = eventPartnerships.filter((ep) =>
       eventIds.includes(ep.eventId)
     );
@@ -1189,7 +1265,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     );
     const welcomeEmail = buildPartnerWelcomeEmail({
       partnerName: partner.name,
-      login: portalLogin.trim(),
+      login,
       temporaryPassword: tempPassword,
       hasSeminarSlots: slotAssignments.some((a) => a.slots > 0),
       eventPackages: eventPackages.map((pkg) => ({
@@ -1215,7 +1291,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       isFinal: true,
       data: {
         ...partner,
-        portalLogin: portalLogin.trim(),
+        portalLogin: login,
         portalTempPassword: tempPassword,
         portalInviteEmail: email,
         portalInviteSentAt: new Date().toISOString(),
@@ -1299,8 +1375,13 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       setDiscountAmount("");
     } else if (chapter === 8) {
       if (!partner) return;
-      setInviteEmail(partner.primaryContact.email || "");
-      setPortalLogin(generatePartnerLogin(partner));
+      setInviteEmail(
+        partner.portalInviteEmail ||
+          (isPartnerPortalEmail(partner.primaryContact.email)
+            ? partner.primaryContact.email
+            : "")
+      );
+      setPortalLogin(resolvePortalLogin(partner, partner.portalInviteEmail));
       setTempPassword(generateTempPassword());
     }
 
@@ -1556,7 +1637,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
                     setEventIds={setEventIds}
                     eventPartnerships={eventPartnerships}
                     setEventPartnerships={setEventPartnerships}
-                    events={events}
+                    events={partnershipEvents}
                     sponsorshipNotes={sponsorshipNotes}
                     setSponsorshipNotes={setSponsorshipNotes}
                     errors={errors}

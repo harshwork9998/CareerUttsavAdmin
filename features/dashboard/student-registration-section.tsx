@@ -21,7 +21,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { cn, formatNumber } from "@/lib/utils";
 import type {
+  Event,
   LiveRegistrationItem,
+  Registration,
   StudentRegistrationAnalytics,
 } from "@/types";
 import { BRAND, surface } from "@/features/dashboard/dashboard-ui";
@@ -620,10 +622,16 @@ export function StudentRegistrationSection({
   data,
   cityLabel,
   isAllCities,
+  eventCities = [],
+  registrations = [],
+  events = [],
 }: {
   data: StudentRegistrationAnalytics;
   cityLabel?: string;
   isAllCities?: boolean;
+  eventCities?: string[];
+  registrations?: Registration[];
+  events?: Event[];
 }) {
   const streamData = useMemo(
     () =>
@@ -675,13 +683,20 @@ export function StudentRegistrationSection({
   );
 
   const weeklyTrend = useMemo(() => {
-    const source =
-      data.weeklyTrend?.length ? data.weeklyTrend : DUMMY_WEEKLY_TREND;
-    return source.map((item) => ({
-      name: String(item.name),
-      value: Number(item.value),
-    }));
-  }, [data.weeklyTrend]);
+    if (data.weeklyTrend?.length) {
+      return data.weeklyTrend.map((item) => ({
+        name: String(item.name),
+        value: Number(item.value),
+      }));
+    }
+    if (isAllCities) {
+      return DUMMY_WEEKLY_TREND.map((item) => ({
+        name: String(item.name),
+        value: Number(item.value),
+      }));
+    }
+    return [];
+  }, [data.weeklyTrend, isAllCities]);
 
   const liveFeed = useMemo(
     () => data.liveFeed ?? [],
@@ -730,6 +745,9 @@ export function StudentRegistrationSection({
         items={seminarData}
         isAllCities={isAllCities ?? true}
         cityLabel={cityLabel}
+        eventCities={eventCities}
+        registrations={registrations}
+        events={events}
       />
     </section>
   );

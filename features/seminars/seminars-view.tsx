@@ -15,6 +15,7 @@ import {
 import { toast } from "sonner";
 
 import { eventsService, seminarsService } from "@/services/api";
+import { rosterSessionKey } from "@/lib/seminar-roster-links";
 import {
   BRAND,
   INK,
@@ -116,19 +117,49 @@ export function SeminarsView() {
     queryFn: () => seminarsService.getRosters(),
   });
 
-  const events = eventsQuery.data ?? [];
+  const events = useMemo(
+    () =>
+      [...(eventsQuery.data ?? [])].sort(
+        (a, b) =>
+          a.city.localeCompare(b.city) || a.title.localeCompare(b.title)
+      ),
+    [eventsQuery.data]
+  );
   const rosters = rostersQuery.data ?? [];
 
+  const validEventIdsKey = useMemo(
+    () => events.map((event) => event.id).sort().join(","),
+    [events]
+  );
+
+  useEffect(() => {
+    const validIds = new Set(validEventIdsKey.split(",").filter(Boolean));
+    if (validIds.size === 0) {
+      setEventFilter("all");
+      return;
+    }
+    if (eventFilter !== "all" && !validIds.has(eventFilter)) {
+      setEventFilter("all");
+    }
+  }, [validEventIdsKey, eventFilter]);
+
   const rows = useMemo(() => {
-    const rosterBySeminar = new Map(rosters.map((r) => [r.seminarId, r]));
+    const rosterBySession = new Map(
+      rosters.map((roster) => [
+        rosterSessionKey(roster.eventId, roster.seminarId),
+        roster,
+      ])
+    );
     const list: SeminarRow[] = [];
     for (const event of events) {
       for (const seminar of event.seminars ?? []) {
         list.push({
-          key: `${event.id}:${seminar.id}`,
+          key: rosterSessionKey(event.id, seminar.id),
           event,
           seminar,
-          roster: rosterBySeminar.get(seminar.id) ?? null,
+          roster:
+            rosterBySession.get(rosterSessionKey(event.id, seminar.id)) ??
+            null,
         });
       }
     }
@@ -309,7 +340,7 @@ export function SeminarsView() {
                 key={event.id}
                 active={eventFilter === event.id}
                 onClick={() => setEventFilter(event.id)}
-                label={event.city}
+                label={`${event.city} · ${event.title}`}
               />
             ))}
           </div>

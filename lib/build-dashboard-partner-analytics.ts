@@ -1,14 +1,15 @@
 import { SPONSORSHIP_TIERS } from "@/constants";
-import { isOperatingCity, OPERATING_CITIES } from "@/lib/operating-cities";
+import { citiesMatch } from "@/lib/event-cities";
+import {
+  partnerMatchesEventFilter,
+  resolveEventPartnerships,
+} from "@/lib/partner-event-config";
 import {
   getPartnershipTierLabel,
   isStandardSponsorshipTier,
 } from "@/lib/partner-tier";
-import {
-  resolveEventPartnerships,
-} from "@/lib/partner-event-config";
 import type {
-  OperatingCity,
+  Event,
   Partner,
   PartnerJourneyStage,
   PartnerLifecycleStage,
@@ -28,14 +29,36 @@ const LIFECYCLE_STAGES: PartnerLifecycleStage[] = [
   "Not Proceeding",
 ];
 
+function eventIdsForCity(events: Event[], city: string): string[] {
+  return events
+    .filter((event) => citiesMatch(event.city, city))
+    .map((event) => event.id);
+}
+
 function filterPartnersForScope(
   partners: Partner[],
-  city: OperatingCity | "all"
+  events: Event[],
+  city: string | "all"
 ): Partner[] {
-  if (city === "all") {
-    return partners.filter((partner) => isOperatingCity(partner.city));
+  const catalogEventIds = events.map((event) => event.id);
+  if (catalogEventIds.length === 0) {
+    return [];
   }
-  return partners.filter((partner) => partner.city === city);
+
+  if (city === "all") {
+    return partners.filter((partner) =>
+      partnerMatchesEventFilter(partner, catalogEventIds)
+    );
+  }
+
+  const scopedEventIds = eventIdsForCity(events, city);
+  if (scopedEventIds.length === 0) {
+    return [];
+  }
+
+  return partners.filter((partner) =>
+    partnerMatchesEventFilter(partner, scopedEventIds)
+  );
 }
 
 function partnerAmount(partner: Partner): number {
@@ -173,9 +196,11 @@ function buildLeaderboard(partners: Partner[]) {
 
 export function buildPartnerSalesAnalytics(
   partners: Partner[],
-  city: OperatingCity | "all"
+  events: Event[],
+  city: string | "all",
+  eventCities: string[] = []
 ): PartnerSalesAnalytics {
-  const filtered = filterPartnersForScope(partners, city);
+  const filtered = filterPartnersForScope(partners, events, city);
   const deals = filtered.map(buildDeal);
   const confirmed = filtered.filter(
     (partner) => partner.stage === "Confirmed"
@@ -236,9 +261,9 @@ export function buildPartnerSalesAnalytics(
 
   const byCity =
     city === "all"
-      ? OPERATING_CITIES.map((operatingCity) => ({
-          name: operatingCity,
-          value: filterPartnersForScope(partners, operatingCity).filter(
+      ? eventCities.map((eventCity) => ({
+          name: eventCity,
+          value: filterPartnersForScope(partners, events, eventCity).filter(
             (partner) => partner.stage === "Confirmed"
           ).length,
         })).filter((row) => row.value > 0)

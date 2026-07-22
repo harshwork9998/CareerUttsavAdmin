@@ -11,8 +11,15 @@ function withPartnerApiCors(response: NextResponse) {
   return response;
 }
 
+function isPartnerPortalApi(pathname: string) {
+  return (
+    pathname.startsWith("/api/partners") ||
+    pathname.startsWith("/api/partner-portal")
+  );
+}
+
 export function middleware(request: NextRequest) {
-  if (!request.nextUrl.pathname.startsWith("/api/partners")) {
+  if (!isPartnerPortalApi(request.nextUrl.pathname)) {
     return NextResponse.next();
   }
 
@@ -24,5 +31,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: "/api/partners/:path*",
+  matcher: ["/api/partners/:path*", "/api/partner-portal/:path*"],
 };

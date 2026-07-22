@@ -188,6 +188,14 @@ export function partnerMatchesTierFilter(
   return partner.sponsorshipTier === tier;
 }
 
+export function partnerMatchesEventFilter(
+  partner: Partner,
+  eventIds: string[]
+): boolean {
+  if (eventIds.length === 0) return true;
+  return partner.eventIds.some((id) => eventIds.includes(id));
+}
+
 export function upsertEventPartnership(
   list: PartnerEventPartnership[],
   eventId: string,
@@ -214,6 +222,62 @@ export function removeEventPartnership(
   eventId: string
 ): PartnerEventPartnership[] {
   return list.filter((ep) => ep.eventId !== eventId);
+}
+
+/** Drop partner links to events that no longer exist in the catalog. */
+export function prunePartnerEventLinks(
+  partner: Partner,
+  validEventIds: Set<string>
+): Partner {
+  const eventIds = partner.eventIds.filter((id) => validEventIds.has(id));
+  const eventPartnerships = (partner.eventPartnerships ?? []).filter((ep) =>
+    validEventIds.has(ep.eventId)
+  );
+  const seminarSlotAssignments = (partner.seminarSlotAssignments ?? []).filter(
+    (assignment) => validEventIds.has(assignment.eventId)
+  );
+
+  const hadStaleLinks =
+    eventIds.length !== partner.eventIds.length ||
+    eventPartnerships.length !== (partner.eventPartnerships?.length ?? 0) ||
+    seminarSlotAssignments.length !==
+      (partner.seminarSlotAssignments?.length ?? 0);
+
+  if (!hadStaleLinks) {
+    return partner;
+  }
+
+  const legacy = syncLegacyPartnerFields(eventPartnerships);
+
+  return {
+    ...partner,
+    eventIds,
+    eventPartnerships,
+    seminarSlotAssignments,
+    sponsorshipTier: legacy.sponsorshipTier,
+    deliverables: legacy.deliverables,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+export function partnerNeedsEventLinkPrune(
+  partner: Partner,
+  validEventIds: Set<string>
+): boolean {
+  if (partner.eventIds.some((id) => !validEventIds.has(id))) return true;
+  if (
+    (partner.eventPartnerships ?? []).some((ep) => !validEventIds.has(ep.eventId))
+  ) {
+    return true;
+  }
+  if (
+    (partner.seminarSlotAssignments ?? []).some(
+      (assignment) => !validEventIds.has(assignment.eventId)
+    )
+  ) {
+    return true;
+  }
+  return false;
 }
 
 export function assignedSlotsForEvent(

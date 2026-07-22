@@ -13,7 +13,7 @@ import {
 import { Mail } from "lucide-react";
 
 import { cn, formatNumber } from "@/lib/utils";
-import type { ChartDataPoint, EventSeminar, OperatingCity } from "@/types";
+import type { ChartDataPoint, Event, EventSeminar, Registration } from "@/types";
 import {
   CITY_COLORS,
   CHART_SERIES,
@@ -23,10 +23,11 @@ import {
 } from "@/features/dashboard/dashboard-ui";
 import { CAREER_UTSAV_SEMINARS } from "@/features/dashboard/seminars";
 import { SeminarBroadcastDialog } from "@/features/messaging/seminar-broadcast-dialog";
+import { citiesMatch } from "@/lib/event-cities";
 import {
-  buildSeminarBreakdown,
-  buildSeminarCityProfile,
-} from "@/lib/mock-data/seminar-breakdown";
+  buildLiveSeminarBreakdown,
+  buildLiveSeminarCityProfile,
+} from "@/lib/build-live-seminar-breakdown";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -37,15 +38,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-const CITY_PILL_ORDER: OperatingCity[] = ["Bangalore", "Mysore", "Hubli"];
-
-const CITY_PILL_COLOR: Record<OperatingCity, string> = {
-  Bangalore: CITY_COLORS.Bangalore,
-  Mysore: CITY_COLORS.Mysore,
-  Hubli: CITY_COLORS.Hubli,
-};
-
 const DONUT_PALETTE = [...CHART_SERIES];
+
+function cityPillColor(city: string, index: number): string {
+  if (city in CITY_COLORS) {
+    return CITY_COLORS[city as keyof typeof CITY_COLORS];
+  }
+  return DONUT_PALETTE[index % DONUT_PALETTE.length];
+}
 
 const easeOut = [0.22, 1, 0.36, 1] as const;
 
@@ -333,6 +333,9 @@ function SeminarDetailDialog({
   onOpenChange,
   city: fixedCity,
   showCityToggle = false,
+  eventCities = [],
+  registrations = [],
+  events = [],
   eventId,
   eventTitle,
   eventSeminars,
@@ -342,18 +345,22 @@ function SeminarDetailDialog({
   total: number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  city: OperatingCity;
+  city: string;
   showCityToggle?: boolean;
+  eventCities?: string[];
+  registrations?: Registration[];
+  events?: Event[];
   eventId?: string;
   eventTitle?: string;
   eventSeminars?: EventSeminar[];
   eventSeminarTitles?: readonly string[];
 }) {
-  const [city, setCity] = useState<OperatingCity>(fixedCity);
+  const [city, setCity] = useState<string>(fixedCity);
   const [broadcastOpen, setBroadcastOpen] = useState(false);
 
   const canMessage = Boolean(eventId && eventTitle && eventSeminarTitles?.length);
   const seminarSlot = eventSeminars?.find((s) => s.title === name);
+  const cityOrder = eventCities.length > 0 ? eventCities : [fixedCity];
 
   useEffect(() => {
     setCity(fixedCity);
@@ -366,18 +373,19 @@ function SeminarDetailDialog({
   const breakdown = useMemo(
     () =>
       showCityToggle
-        ? buildSeminarBreakdown(name, Math.max(total, 1))
+        ? buildLiveSeminarBreakdown(registrations, events, name)
         : null,
-    [showCityToggle, name, total]
+    [showCityToggle, registrations, events, name]
   );
 
   const cityTotal = showCityToggle
-    ? (breakdown?.byCity.find((c) => c.city === city)?.total ?? total)
+    ? (breakdown?.byCity.find((entry) => citiesMatch(entry.city, city))?.total ??
+      0)
     : total;
 
   const profile = useMemo(
-    () => buildSeminarCityProfile(name, Math.max(cityTotal, 1), city),
-    [name, cityTotal, city]
+    () => buildLiveSeminarCityProfile(registrations, events, name, city),
+    [registrations, events, name, city]
   );
 
   return (
@@ -403,16 +411,18 @@ function SeminarDetailDialog({
               aria-label="City"
               className="mb-3 inline-flex flex-wrap gap-1 rounded-lg border border-[rgba(212,209,200,0.85)] bg-[#F1F0EC]/80 p-0.5"
             >
-              {CITY_PILL_ORDER.map((c) => {
-                const slice = breakdown?.byCity.find((b) => b.city === c);
-                const active = city === c;
+              {cityOrder.map((entry, index) => {
+                const slice = breakdown?.byCity.find((row) =>
+                  citiesMatch(row.city, entry)
+                );
+                const active = city === entry;
                 return (
                   <button
-                    key={c}
+                    key={entry}
                     type="button"
                     role="tab"
                     aria-selected={active}
-                    onClick={() => setCity(c)}
+                    onClick={() => setCity(entry)}
                     className={cn(
                       "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] font-semibold transition-colors",
                       active
@@ -422,9 +432,9 @@ function SeminarDetailDialog({
                   >
                     <span
                       className="h-1.5 w-1.5 rounded-[2px]"
-                      style={{ backgroundColor: CITY_PILL_COLOR[c] }}
+                      style={{ backgroundColor: cityPillColor(entry, index) }}
                     />
-                    {c}
+                    {entry}
                     <span
                       className={cn(
                         "tabular-nums",
@@ -517,6 +527,9 @@ export function SeminarProgram({
   items,
   isAllCities = true,
   cityLabel,
+  eventCities = [],
+  registrations = [],
+  events = [],
   seminarTitles,
   subtitle,
   uniformCards: uniformCardsProp,
@@ -527,6 +540,9 @@ export function SeminarProgram({
   items: Array<{ name: string; value: number }>;
   isAllCities?: boolean;
   cityLabel?: string;
+  eventCities?: string[];
+  registrations?: Registration[];
+  events?: Event[];
   /** When set, only these seminar titles are shown (e.g. event schedule). */
   seminarTitles?: readonly string[];
   subtitle?: string;
@@ -567,10 +583,10 @@ export function SeminarProgram({
   const selected = seminars.find((s) => s.name === selectedName) ?? null;
   const open = selectedName !== null;
 
-  const activeCity: OperatingCity =
-    cityLabel === "Mysore" || cityLabel === "Hubli" || cityLabel === "Bangalore"
+  const activeCity =
+    !isAllCities && cityLabel
       ? cityLabel
-      : "Bangalore";
+      : eventCities[0] ?? "Bangalore";
 
   const eventSeminarTitles = useMemo(
     () =>
@@ -730,6 +746,9 @@ export function SeminarProgram({
           total={selected.value}
           city={activeCity}
           showCityToggle={isAllCities}
+          eventCities={eventCities}
+          registrations={registrations}
+          events={events}
           open={open}
           eventId={eventId}
           eventTitle={eventTitle}

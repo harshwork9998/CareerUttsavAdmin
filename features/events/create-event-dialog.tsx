@@ -41,7 +41,6 @@ function defaultFairStart(): string {
   return toISODate(nextSaturday(new Date()));
 }
 
-const EVENT_CITIES = ["Bangalore", "Mysore", "Hubli"] as const;
 const AUDI_OPTIONS = [1, 2, 3] as const;
 const DAY_OPTIONS = [1, 2, 3] as const;
 
@@ -176,7 +175,7 @@ export function CreateEventDialog({
   const isEditing = Boolean(event);
 
   const [title, setTitle] = useState("");
-  const [city, setCity] = useState<string>("Bangalore");
+  const [city, setCity] = useState("");
   const [venue, setVenue] = useState("");
   const [startDate, setStartDate] = useState("");
   const [dayCount, setDayCount] = useState(2);
@@ -209,7 +208,7 @@ export function CreateEventDialog({
       const eventStart = toDateOnly(event.startDate);
       const eventEnd = toDateOnly(event.endDate);
       setTitle(event.title);
-      setCity(event.city || "Bangalore");
+      setCity(event.city ?? "");
       setVenue(event.venue ?? "");
       setStartDate(eventStart);
       setDayCount(inclusiveDayCount(eventStart, eventEnd));
@@ -221,7 +220,7 @@ export function CreateEventDialog({
       return;
     }
     setTitle("");
-    setCity("Bangalore");
+    setCity("");
     setVenue("");
     setStartDate(defaultFairStart());
     setDayCount(2);
@@ -274,7 +273,8 @@ export function CreateEventDialog({
   const validate = (): boolean => {
     const next: Record<string, string> = {};
     if (!title.trim()) next.title = "Event name is required";
-    if (!city) next.city = "City is required";
+    if (!city.trim()) next.city = "City is required";
+    else if (city.trim().length < 2) next.city = "Enter at least 2 characters";
     if (!startDate) next.startDate = "Date of event is required";
     if (!DAY_OPTIONS.includes(dayCount as (typeof DAY_OPTIONS)[number])) {
       next.dayCount = "Select 1, 2, or 3 days";
@@ -323,13 +323,14 @@ export function CreateEventDialog({
       }));
 
       if (event) {
+        const cityValue = city.trim();
         return eventsService.update(event.id, {
           title: title.trim(),
           slug: slugify(title.trim()),
-          shortDescription: `${title.trim()} — ${city}`,
-          description: event.description || `${title.trim()} career fair in ${city}.`,
+          shortDescription: `${title.trim()} — ${cityValue}`,
+          description: event.description || `${title.trim()} career fair in ${cityValue}.`,
           venue: venue.trim(),
-          city,
+          city: cityValue,
           startDate,
           endDate,
           startTime,
@@ -340,15 +341,16 @@ export function CreateEventDialog({
         });
       }
 
+      const cityValue = city.trim();
       const payload: Omit<Event, "id" | "createdAt" | "updatedAt"> = {
         title: title.trim(),
         slug: slugify(title.trim()),
-        description: `${title.trim()} career fair in ${city}.`,
-        shortDescription: `${title.trim()} — ${city}`,
+        description: `${title.trim()} career fair in ${cityValue}.`,
+        shortDescription: `${title.trim()} — ${cityValue}`,
         status: "Draft",
         venue: venue.trim(),
         address: "",
-        city,
+        city: cityValue,
         state: "Karnataka",
         pincode: "",
         startDate,
@@ -382,6 +384,10 @@ export function CreateEventDialog({
       });
       queryClient.setQueryData(["events", saved.id], saved);
       void queryClient.invalidateQueries({ queryKey: ["events"] });
+      void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      void queryClient.invalidateQueries({ queryKey: ["registrations"] });
+      void queryClient.invalidateQueries({ queryKey: ["partners"] });
+      void queryClient.invalidateQueries({ queryKey: ["seminar-rosters"] });
       toast.success(isEditing ? "Event updated" : "Event created");
       onOpenChange(false);
     },
@@ -441,19 +447,13 @@ export function CreateEventDialog({
                 </div>
 
                 <div className="space-y-2">
-                  <Label>City of conduction</Label>
-                  <Select value={city} onValueChange={setCity}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {EVENT_CITIES.map((c) => (
-                        <SelectItem key={c} value={c}>
-                          {c}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label htmlFor="ce-city">City of conduction</Label>
+                  <Input
+                    id="ce-city"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    placeholder="e.g. Bangalore, Mysore, Hubli"
+                  />
                   {errors.city && (
                     <p className="text-xs text-destructive">{errors.city}</p>
                   )}

@@ -17,9 +17,10 @@ import { toast } from "sonner";
 import { SPONSORSHIP_TIERS } from "@/constants";
 import {
   getPartnerDisplayTier,
+  partnerMatchesEventFilter,
   partnerMatchesTierFilter,
 } from "@/lib/partner-event-config";
-import { partnersService } from "@/services/api";
+import { eventsService, partnersService } from "@/services/api";
 import { cn } from "@/lib/utils";
 import type { Partner, PartnerLifecycleStage } from "@/types";
 import {
@@ -285,16 +286,23 @@ export function PartnersList() {
   const [docsPartner, setDocsPartner] = useState<Partner | null>(null);
   const [tierFilter, setTierFilter] = useState("all");
   const [cityFilter, setCityFilter] = useState<string[]>([]);
+  const [eventFilter, setEventFilter] = useState<string[]>([]);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["partners"],
     queryFn: () => partnersService.getAll(),
   });
 
+  const eventsQuery = useQuery({
+    queryKey: ["events"],
+    queryFn: () => eventsService.getAll(),
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) => partnersService.delete(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["partners"] });
+      void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       toast.success("Partner deleted");
       setPendingDelete(null);
     },
@@ -317,15 +325,28 @@ export function PartnersList() {
     return [...tiers].sort().map((tier) => ({ label: tier, value: tier }));
   }, [partners]);
 
+  const eventOptions = useMemo(() => {
+    return [...(eventsQuery.data ?? [])]
+      .sort(
+        (a, b) =>
+          a.city.localeCompare(b.city) || a.title.localeCompare(b.title)
+      )
+      .map((event) => ({
+        label: `${event.city} · ${event.title}`,
+        value: event.id,
+      }));
+  }, [eventsQuery.data]);
+
   const filtered = useMemo(() => {
     return partners.filter((p) => {
       if (tierFilter !== "all" && !partnerMatchesTierFilter(p, tierFilter)) {
         return false;
       }
       if (cityFilter.length > 0 && !cityFilter.includes(p.city)) return false;
+      if (!partnerMatchesEventFilter(p, eventFilter)) return false;
       return true;
     });
-  }, [partners, tierFilter, cityFilter]);
+  }, [partners, tierFilter, cityFilter, eventFilter]);
 
   return (
     <div className="space-y-8">
@@ -362,10 +383,20 @@ export function PartnersList() {
             options: cityOptions,
             placeholder: "All cities",
           },
+          {
+            id: "event",
+            label: "Sponsored event",
+            mode: "multi",
+            values: eventFilter,
+            onChange: setEventFilter,
+            options: eventOptions,
+            placeholder: "All events",
+          },
         ]}
         onClearAll={() => {
           setTierFilter("all");
           setCityFilter([]);
+          setEventFilter([]);
         }}
       />
 
@@ -466,6 +497,7 @@ export function PartnersList() {
           if (!open) {
             setDocsPartner(null);
             void queryClient.invalidateQueries({ queryKey: ["partners"] });
+            void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
           }
         }}
       />

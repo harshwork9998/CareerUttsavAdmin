@@ -7,10 +7,14 @@ import {
   updatePartnerApi,
 } from "@/lib/partners-api-client";
 import {
-  mockEvents,
-  mockRegistrations,
+  createEventApi,
+  deleteEventApi,
+  fetchAllEvents,
+  fetchEventById,
+  updateEventApi,
+} from "@/lib/events-api-client";
+import {
   mockUniversities,
-  mockSeminarRosters,
   mockUsers,
   mockRoles,
   mockActivityLogs,
@@ -18,9 +22,16 @@ import {
   mockReports,
   mockSettings,
 } from "@/lib/mock-data";
-import { resolveRegistration, resolveRegistrations } from "@/lib/enrich-registration";
+import {
+  fetchAllRegistrations,
+  fetchRegistrationById,
+  updateRegistrationApi,
+} from "@/lib/registrations-api-client";
+import {
+  fetchAllSeminarRosters,
+  upsertSeminarRosterApi,
+} from "@/lib/seminar-rosters-api-client";
 import { buildDashboardData } from "@/lib/build-dashboard-data";
-import { isOperatingCity } from "@/lib/operating-cities";
 import type {
   Event,
   Registration,
@@ -39,92 +50,47 @@ import type {
 
 const SIMULATED_DELAY = 400;
 
-async function simulate<T>(data: T): Promise<T> {
+async function simulate<T>(data: T | Promise<T>): Promise<T> {
   await delay(SIMULATED_DELAY);
-  return data;
+  return await data;
 }
 
-/** In-memory event store so create/update/delete persist for the session. */
-let eventsStore: Event[] = [...mockEvents];
-
-function getResolvedRegistrations(): Registration[] {
-  return resolveRegistrations(mockRegistrations, eventsStore);
+async function getResolvedRegistrations(): Promise<Registration[]> {
+  return fetchAllRegistrations();
 }
 
 export const eventsService = {
-  getAll: () => simulate([...eventsStore]),
-  getById: (id: string) =>
-    simulate(eventsStore.find((e) => e.id === id) ?? null),
+  getAll: () => simulate(fetchAllEvents()),
+  getById: (id: string) => simulate(fetchEventById(id)),
   create: (event: Omit<Event, "id" | "createdAt" | "updatedAt">) => {
-    if (!isOperatingCity(event.city)) {
-      return Promise.reject(
-        new Error("Event city must be Bangalore, Mysore, or Hubli")
-      );
+    const city = event.city?.trim() ?? "";
+    if (city.length < 2) {
+      return Promise.reject(new Error("Event city is required (at least 2 characters)"));
     }
-    const created: Event = {
-      ...event,
-      id: generateId(),
-      seminars: event.seminars ?? [],
-      startTime: event.startTime ?? "09:00",
-      endTime: event.endTime ?? "18:00",
-      hallCount: event.hallCount ?? 1,
-      venue: event.venue ?? "",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    eventsStore = [created, ...eventsStore];
-    return simulate(created);
+    return simulate(createEventApi({ ...event, city }));
   },
   update: (id: string, data: Partial<Event>) => {
-    if (data.city && !isOperatingCity(data.city)) {
+    if (data.city !== undefined && data.city.trim().length < 2) {
       return Promise.reject(
-        new Error("Event city must be Bangalore, Mysore, or Hubli")
+        new Error("Event city is required (at least 2 characters)")
       );
     }
-    const existing = eventsStore.find((e) => e.id === id);
-    if (!existing) {
-      return simulate(null as unknown as Event);
-    }
-    const updated: Event = {
-      ...existing,
-      ...data,
-      updatedAt: new Date().toISOString(),
-    };
-    eventsStore = eventsStore.map((e) => (e.id === id ? updated : e));
-    return simulate(updated);
+    return simulate(updateEventApi(id, data));
   },
-  delete: (id: string) => {
-    eventsStore = eventsStore.filter((e) => e.id !== id);
-    return simulate([...eventsStore]);
-  },
+  delete: (id: string) => simulate(deleteEventApi(id)),
 };
 
 export const registrationsService = {
-  getAll: () => simulate(getResolvedRegistrations()),
-  getById: (id: string) =>
+  getAll: () => simulate(fetchAllRegistrations()),
+  getById: (id: string) => simulate(fetchRegistrationById(id)),
+  getByEvent: async (eventId: string) =>
     simulate(
-      (() => {
-        const row = mockRegistrations.find((r) => r.id === id);
-        return row ? resolveRegistrations([row], eventsStore)[0] : null;
-      })()
-    ),
-  getByEvent: (eventId: string) =>
-    simulate(
-      resolveRegistrations(
-        mockRegistrations.filter((r) => r.eventId === eventId),
-        eventsStore
+      (await fetchAllRegistrations()).filter(
+        (registration) => registration.eventId === eventId
       )
     ),
   update: (id: string, data: Partial<Registration>) =>
-    simulate(
-      resolveRegistration(
-        {
-          ...mockRegistrations.find((r) => r.id === id)!,
-          ...data,
-        },
-        eventsStore
-      )
-    ),
+    simulate(updateRegistrationApi(id, data)),
 };
 
 export const universitiesService = {
@@ -148,28 +114,18 @@ export const partnersService = {
   delete: async (id: string) => simulate(await deletePartnerApi(id)),
 };
 
-let seminarRostersStore: SeminarSessionRoster[] = [...mockSeminarRosters];
-
 export const seminarsService = {
-  getRosters: () => simulate([...seminarRostersStore]),
-  getRosterBySeminarId: (seminarId: string) =>
+  getRosters: () => simulate(fetchAllSeminarRosters()),
+  getRosterBySeminarId: async (seminarId: string, eventId?: string) =>
     simulate(
-      seminarRostersStore.find((r) => r.seminarId === seminarId) ?? null
+      (await fetchAllSeminarRosters()).find((roster) =>
+        eventId
+          ? roster.seminarId === seminarId && roster.eventId === eventId
+          : roster.seminarId === seminarId
+      ) ?? null
     ),
-  upsertRoster: (roster: SeminarSessionRoster) => {
-    const idx = seminarRostersStore.findIndex(
-      (r) => r.seminarId === roster.seminarId
-    );
-    const next = { ...roster, updatedAt: new Date().toISOString() };
-    if (idx >= 0) {
-      seminarRostersStore = seminarRostersStore.map((r, i) =>
-        i === idx ? next : r
-      );
-    } else {
-      seminarRostersStore = [...seminarRostersStore, next];
-    }
-    return simulate(next);
-  },
+  upsertRoster: (roster: SeminarSessionRoster) =>
+    simulate(upsertSeminarRosterApi(roster)),
 };
 
 export const usersService = {
@@ -195,15 +151,21 @@ export const activityLogsService = {
 };
 
 export const dashboardService = {
-  getData: async () =>
-    simulate(
+  getData: async () => {
+    const [registrations, events, partners] = await Promise.all([
+      getResolvedRegistrations(),
+      fetchAllEvents(),
+      fetchAllPartners(),
+    ]);
+    return simulate(
       buildDashboardData(
         mockDashboardData,
-        getResolvedRegistrations(),
-        [...eventsStore],
-        await fetchAllPartners()
+        registrations,
+        events,
+        partners
       )
-    ),
+    );
+  },
 };
 
 export const reportsService = {

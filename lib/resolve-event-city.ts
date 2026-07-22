@@ -1,16 +1,12 @@
 import type { Registration } from "@/types";
-import { OPERATING_CITIES } from "@/lib/operating-cities";
 
-/** Resolve operating city from event id map, with title fallback for legacy rows. */
+/** Resolve conduction city from event id map, with title fallback for legacy rows. */
 export function resolveEventCity(
   registration: Registration,
   eventCityById: Map<string, string>
 ): string | null {
-  const fromEvent = eventCityById.get(registration.eventId);
-  if (
-    fromEvent &&
-    OPERATING_CITIES.includes(fromEvent as (typeof OPERATING_CITIES)[number])
-  ) {
+  const fromEvent = eventCityById.get(registration.eventId)?.trim();
+  if (fromEvent) {
     return fromEvent;
   }
   const title = registration.eventTitle.toLowerCase();

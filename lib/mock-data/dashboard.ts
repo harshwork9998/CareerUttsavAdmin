@@ -423,6 +423,7 @@ export const mockDashboardData: DashboardData = {
   ],
   studentRegistration: buildAllCitiesStudentRegistration(),
   partnerSales: buildAllCitiesPartnerSales(),
+  eventCities: [...OPERATING_CITIES],
   citySlices: mockCitySlices,
 };
 

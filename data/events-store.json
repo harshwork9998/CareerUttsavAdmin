@@ -1,0 +1,233 @@
+[
+  {
+    "title": "Career Uttsav Chennai",
+    "slug": "career-uttsav-chennai",
+    "description": "Career Uttsav Chennai career fair in Chennai.",
+    "shortDescription": "Career Uttsav Chennai — Chennai",
+    "status": "Draft",
+    "venue": "Chidambaram",
+    "address": "",
+    "city": "Chennai",
+    "state": "Karnataka",
+    "pincode": "",
+    "startDate": "2026-07-25",
+    "endDate": "2026-07-25",
+    "startTime": "09:00",
+    "endTime": "18:00",
+    "hallCount": 1,
+    "seminars": [
+      {
+        "id": "fy6t19ay1",
+        "title": "Liberated careers with liberal arts",
+        "date": "2026-07-25",
+        "startTime": "10:00",
+        "endTime": "11:00",
+        "panelistSlots": 2,
+        "hall": 1
+      },
+      {
+        "id": "gd6hjvcly",
+        "title": "How to select a stream – Art – Science – Commerce?",
+        "date": "2026-07-25",
+        "startTime": "12:00",
+        "endTime": "13:00",
+        "panelistSlots": 2,
+        "hall": 1
+      },
+      {
+        "id": "dia09kukp",
+        "title": "Is CA / CS My Cup of Tea?",
+        "date": "2026-07-25",
+        "startTime": "15:00",
+        "endTime": "16:00",
+        "panelistSlots": 2,
+        "hall": 1
+      }
+    ],
+    "registrationDeadline": "2026-07-25",
+    "maxCapacity": 10000,
+    "registrationCount": 0,
+    "checkInCount": 0,
+    "isFeatured": false,
+    "tags": [],
+    "createdBy": "usr-001",
+    "id": "q60hw0hyp",
+    "createdAt": "2026-07-22T19:56:02.100Z",
+    "updatedAt": "2026-07-22T19:56:02.100Z"
+  },
+  {
+    "id": "evt-001",
+    "title": "Career Utsav Bengaluru 2026",
+    "slug": "career-utsav-bengaluru-2026",
+    "description": "India's largest career fair in Bengaluru featuring 150+ universities, industry leaders, and career counselling sessions. Connect with top institutions from Karnataka and across India.",
+    "shortDescription": "150+ universities, career counselling & industry sessions in Bengaluru.",
+    "status": "Published",
+    "venue": "Palace Grounds",
+    "address": "Bellary Road, Vasanth Nagar",
+    "city": "Bangalore",
+    "state": "Karnataka",
+    "pincode": "560052",
+    "startDate": "2026-08-15",
+    "endDate": "2026-08-16",
+    "startTime": "09:00",
+    "endTime": "18:00",
+    "hallCount": 3,
+    "seminars": [
+      {
+        "id": "sem-001-a",
+        "title": "How to select a stream – Art – Science – Commerce?",
+        "date": "2026-08-15",
+        "startTime": "10:00",
+        "endTime": "11:00",
+        "panelistSlots": 3,
+        "hall": 1
+      },
+      {
+        "id": "sem-001-b",
+        "title": "Real Careers with Artificial Intelligence",
+        "date": "2026-08-15",
+        "startTime": "11:30",
+        "endTime": "12:30",
+        "panelistSlots": 2,
+        "hall": 2
+      },
+      {
+        "id": "sem-001-c",
+        "title": "All about Overseas Education",
+        "date": "2026-08-16",
+        "startTime": "10:00",
+        "endTime": "11:00",
+        "panelistSlots": 4,
+        "hall": 1
+      },
+      {
+        "id": "sem-001-d",
+        "title": "Medicine in the 21st century",
+        "date": "2026-08-16",
+        "startTime": "14:00",
+        "endTime": "15:00",
+        "panelistSlots": 3,
+        "hall": 3
+      }
+    ],
+    "registrationDeadline": "2026-08-10T23:59:59+05:30",
+    "maxCapacity": 15000,
+    "registrationCount": 8420,
+    "checkInCount": 0,
+    "bannerImage": "/images/events/bengaluru-2026.jpg",
+    "isFeatured": true,
+    "tags": [
+      "Engineering",
+      "MBA",
+      "Study Abroad",
+      "Career Counselling"
+    ],
+    "createdBy": "usr-001",
+    "createdAt": "2025-11-01T10:00:00+05:30",
+    "updatedAt": "2026-06-20T14:30:00+05:30"
+  },
+  {
+    "id": "evt-002",
+    "title": "Career Utsav Mysore 2026",
+    "slug": "career-utsav-mysore-2026",
+    "description": "Premier education expo in Mysore. Meet representatives from leading universities and career counsellors across Karnataka.",
+    "shortDescription": "Premier education expo in Mysore with career counselling sessions.",
+    "status": "Live",
+    "venue": "Mysore Exhibition Grounds",
+    "address": "JLB Road",
+    "city": "Mysore",
+    "state": "Karnataka",
+    "pincode": "570001",
+    "startDate": "2026-07-05",
+    "endDate": "2026-07-05",
+    "startTime": "10:00",
+    "endTime": "19:00",
+    "hallCount": 2,
+    "seminars": [
+      {
+        "id": "sem-002-a",
+        "title": "Cracking the codes to ace competitive exams",
+        "date": "2026-07-05",
+        "startTime": "11:00",
+        "endTime": "12:00",
+        "panelistSlots": 2,
+        "hall": 1
+      },
+      {
+        "id": "sem-002-b",
+        "title": "Careers in Management & Entrepreneurship",
+        "date": "2026-07-05",
+        "startTime": "14:00",
+        "endTime": "15:00",
+        "panelistSlots": 3,
+        "hall": 2
+      }
+    ],
+    "registrationDeadline": "2026-07-04T23:59:59+05:30",
+    "maxCapacity": 8000,
+    "registrationCount": 4250,
+    "checkInCount": 2180,
+    "bannerImage": "/images/events/delhi-ncr-2026.jpg",
+    "isFeatured": true,
+    "tags": [
+      "Engineering",
+      "Medical",
+      "Law"
+    ],
+    "createdBy": "usr-002",
+    "createdAt": "2025-10-15T09:00:00+05:30",
+    "updatedAt": "2026-07-05T08:00:00+05:30"
+  },
+  {
+    "id": "evt-003",
+    "title": "Career Utsav Hubli 2025",
+    "slug": "career-utsav-hubli-2025",
+    "description": "North Karnataka career fair connecting students with national education opportunities and workshops.",
+    "shortDescription": "North Karnataka fair with engineering & management workshops.",
+    "status": "Completed",
+    "venue": "Hubli Trade Centre",
+    "address": "Gokul Road",
+    "city": "Hubli",
+    "state": "Karnataka",
+    "pincode": "580030",
+    "startDate": "2025-12-10",
+    "endDate": "2025-12-11",
+    "startTime": "09:30",
+    "endTime": "18:30",
+    "hallCount": 3,
+    "seminars": [
+      {
+        "id": "sem-003-a",
+        "title": "New-age Engineering Careers",
+        "date": "2025-12-10",
+        "startTime": "10:00",
+        "endTime": "11:00",
+        "panelistSlots": 3,
+        "hall": 1
+      },
+      {
+        "id": "sem-003-b",
+        "title": "Is CA / CS My Cup of Tea?",
+        "date": "2025-12-11",
+        "startTime": "11:00",
+        "endTime": "12:00",
+        "panelistSlots": 2,
+        "hall": 2
+      }
+    ],
+    "registrationDeadline": "2025-12-08T23:59:59+05:30",
+    "maxCapacity": 6000,
+    "registrationCount": 5890,
+    "checkInCount": 4340,
+    "bannerImage": "/images/events/mumbai-2025.jpg",
+    "isFeatured": false,
+    "tags": [
+      "Engineering",
+      "Management",
+      "Finance"
+    ],
+    "createdBy": "usr-002",
+    "createdAt": "2025-06-01T11:00:00+05:30",
+    "updatedAt": "2025-12-12T10:00:00+05:30"
+  }
+]

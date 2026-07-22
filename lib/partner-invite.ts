@@ -1,8 +1,13 @@
 import type { Partner } from "@/types";
 
+export function isPartnerPortalEmail(value: string | undefined): boolean {
+  if (!value?.trim()) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
 export function generatePartnerLogin(partner: Pick<Partner, "name" | "primaryContact">) {
   const email = partner.primaryContact.email.trim().toLowerCase();
-  if (email) return email;
+  if (isPartnerPortalEmail(email)) return email;
 
   const slug = partner.name
     .toLowerCase()
@@ -10,6 +15,26 @@ export function generatePartnerLogin(partner: Pick<Partner, "name" | "primaryCon
     .replace(/^\.+|\.+$/g, "")
     .slice(0, 24);
   return `${slug || "partner"}@partners.careeruttsav.in`;
+}
+
+/** Login shown in Chapter 8 and used by the partner portal. */
+export function resolvePortalLogin(
+  partner: Pick<
+    Partner,
+    "name" | "primaryContact" | "portalLogin" | "portalInviteEmail"
+  >,
+  inviteEmail?: string
+): string {
+  const invite = inviteEmail?.trim().toLowerCase() ?? "";
+  if (isPartnerPortalEmail(invite)) return invite;
+
+  const stored = partner.portalLogin?.trim().toLowerCase() ?? "";
+  if (isPartnerPortalEmail(stored)) return stored;
+
+  const sentTo = partner.portalInviteEmail?.trim().toLowerCase() ?? "";
+  if (isPartnerPortalEmail(sentTo)) return sentTo;
+
+  return generatePartnerLogin(partner);
 }
 
 export function generateTempPassword(length = 10) {

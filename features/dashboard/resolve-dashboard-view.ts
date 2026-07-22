@@ -1,3 +1,4 @@
+import { citiesMatch } from "@/lib/event-cities";
 import type {
   CityComparisonMetric,
   CityDashboardSlice,
@@ -12,7 +13,6 @@ import type {
   UpcomingEventSummary,
   StudentRegistrationAnalytics,
   ChartDataPoint,
-  OperatingCity,
 } from "@/types";
 
 export interface ResolvedDashboardView {
@@ -35,35 +35,49 @@ export interface ResolvedDashboardView {
   partnerWonValue: number;
 }
 
-function isOperatingCity(value: DashboardCityFilter): value is OperatingCity {
-  return value === "Bangalore" || value === "Mysore" || value === "Hubli";
+function resolveCitySlice(
+  dashboard: DashboardData,
+  cityFilter: string
+): CityDashboardSlice | undefined {
+  const direct = dashboard.citySlices[cityFilter];
+  if (direct) return direct;
+
+  const matchedCity = dashboard.eventCities.find((city) =>
+    citiesMatch(city, cityFilter)
+  );
+  return matchedCity ? dashboard.citySlices[matchedCity] : undefined;
 }
 
 export function resolveDashboardView(
   dashboard: DashboardData,
   cityFilter: DashboardCityFilter
 ): ResolvedDashboardView {
-  if (isOperatingCity(cityFilter)) {
-    const slice: CityDashboardSlice = dashboard.citySlices[cityFilter];
-    return {
-      cityFilter,
-      cityLabel: cityFilter,
-      isAllCities: false,
-      kpis: slice.kpis,
-      targets: slice.targets,
-      insights: slice.insights,
-      registrationTrend: slice.registrationTrend,
-      eventPerformance: slice.eventPerformance,
-      registrationsByCity: dashboard.registrationsByCity,
-      registrationsByStatus: slice.registrationsByStatus,
-      recentActivities: slice.recentActivities,
-      upcomingTasks: slice.upcomingTasks,
-      upcomingEvents: slice.upcomingEvents,
-      studentRegistration: slice.studentRegistration,
-      partnerSales: slice.partnerSales,
-      vsAverage: slice.vsAverage,
-      partnerWonValue: slice.partnerSales.wonValue ?? 0,
-    };
+  if (cityFilter !== "all") {
+    const slice = resolveCitySlice(dashboard, cityFilter);
+    if (slice) {
+      const cityLabel =
+        dashboard.eventCities.find((city) => citiesMatch(city, cityFilter)) ??
+        cityFilter;
+      return {
+        cityFilter: cityLabel,
+        cityLabel,
+        isAllCities: false,
+        kpis: slice.kpis,
+        targets: slice.targets,
+        insights: slice.insights,
+        registrationTrend: slice.registrationTrend,
+        eventPerformance: slice.eventPerformance,
+        registrationsByCity: dashboard.registrationsByCity,
+        registrationsByStatus: slice.registrationsByStatus,
+        recentActivities: slice.recentActivities,
+        upcomingTasks: slice.upcomingTasks,
+        upcomingEvents: slice.upcomingEvents,
+        studentRegistration: slice.studentRegistration,
+        partnerSales: slice.partnerSales,
+        vsAverage: slice.vsAverage,
+        partnerWonValue: slice.partnerSales.wonValue ?? 0,
+      };
+    }
   }
 
   return {

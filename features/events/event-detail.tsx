@@ -111,6 +111,10 @@ export function EventDetail({ eventId }: EventDetailProps) {
         old?.filter((e) => e.id !== eventId)
       );
       void queryClient.invalidateQueries({ queryKey: ["events"] });
+      void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      void queryClient.invalidateQueries({ queryKey: ["registrations"] });
+      void queryClient.invalidateQueries({ queryKey: ["partners"] });
+      void queryClient.invalidateQueries({ queryKey: ["seminar-rosters"] });
       toast.success("Event deleted");
       router.push("/events");
     },

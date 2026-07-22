@@ -1,13 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 
-import { dashboardService } from "@/services/api";
+import { dashboardService, eventsService, registrationsService } from "@/services/api";
 import { cn, formatNumber } from "@/lib/utils";
+import { citiesMatch } from "@/lib/event-cities";
 import type {
   DashboardCityFilter,
+  DashboardData,
   PartnerSalesAnalytics,
   StudentRegistrationAnalytics,
 } from "@/types";
@@ -23,16 +25,28 @@ import {
   DASH_COLORS,
 } from "@/features/dashboard/dashboard-ui";
 
-const HERO_TABS: Array<{
-  value: DashboardCityFilter;
-  label: string;
-}> = [
-  { value: "all", label: "Consolidated" },
-  { value: "Bangalore", label: "Bangalore" },
-  { value: "Mysore", label: "Mysore" },
-  { value: "Hubli", label: "Hubli" },
-];
+function buildHeroTabs(
+  eventCities: string[]
+): Array<{ value: DashboardCityFilter; label: string }> {
+  return [
+    { value: "all", label: "Consolidated" },
+    ...eventCities.map((city) => ({ value: city, label: city })),
+  ];
+}
 
+function formatCitySubtitle(eventCities: string[]): string {
+  return eventCities.length > 0 ? eventCities.join(" · ") : "No events yet";
+}
+
+function isValidCityFilter(
+  filter: DashboardCityFilter,
+  dashboard: DashboardData
+): boolean {
+  return (
+    filter === "all" ||
+    dashboard.eventCities.some((city) => citiesMatch(city, filter))
+  );
+}
 function buildSupportFacts(
   students: StudentRegistrationAnalytics
 ): Array<{ label: string; value: string }> {
@@ -52,7 +66,7 @@ function buildSupportFacts(
   }
   if (topStream) {
     facts.push({
-      label: "Popular stream",
+      label: "Top stream",
       value: String(topStream.name),
     });
   }
@@ -79,9 +93,6 @@ function buildPartnerSupportFacts(
   const topTier = [...(partners.byTier ?? [])].sort(
     (a, b) => Number(b.value) - Number(a.value)
   )[0];
-  const topStage = [...(partners.byStage ?? [])]
-    .filter((s) => !["Confirmed", "Not Proceeding", "Lost", "Won"].includes(s.name))
-    .sort((a, b) => b.count - a.count)[0];
 
   const facts: Array<{ label: string; value: string }> = [
     {
@@ -96,18 +107,13 @@ function buildPartnerSupportFacts(
 
   if (topTier) {
     facts.push({
-      label: "Top sponsorship tier",
+      label: "Top sponsorship",
       value: String(topTier.name),
-    });
-  } else if (topStage) {
-    facts.push({
-      label: "Busiest stage",
-      value: String(topStage.name),
     });
   }
 
   facts.push({
-    label: "Total partners",
+    label: "Total sponsors",
     value: formatNumber(partners.totalPartners),
   });
 
@@ -130,7 +136,7 @@ function CityHeroCards({
   onSelect: (value: DashboardCityFilter) => void;
 }) {
   return (
-    <div className="mb-12 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="mb-12 grid gap-4 sm:grid-cols-2 xl:[grid-template-columns:repeat(auto-fit,minmax(240px,1fr))]">
       {cards.map((card, index) => {
         const active = activeValue === card.value;
         return (
@@ -247,8 +253,38 @@ export function DashboardView() {
     queryKey: ["dashboard"],
     queryFn: () => dashboardService.getData(),
   });
+  const eventsQuery = useQuery({
+    queryKey: ["events"],
+    queryFn: () => eventsService.getAll(),
+  });
+  const registrationsQuery = useQuery({
+    queryKey: ["registrations"],
+    queryFn: () => registrationsService.getAll(),
+  });
 
   const dashboard = dashboardQuery.data;
+  const events = eventsQuery.data ?? [];
+  const registrations = registrationsQuery.data ?? [];
+
+  useEffect(() => {
+    if (!dashboard) return;
+    if (!isValidCityFilter(studentCityFilter, dashboard)) {
+      setStudentCityFilter("all");
+    }
+    if (!isValidCityFilter(partnerCityFilter, dashboard)) {
+      setPartnerCityFilter("all");
+    }
+  }, [dashboard, studentCityFilter, partnerCityFilter]);
+
+  const heroTabs = useMemo(
+    () => (dashboard ? buildHeroTabs(dashboard.eventCities) : []),
+    [dashboard]
+  );
+  const citySubtitle = useMemo(
+    () => (dashboard ? formatCitySubtitle(dashboard.eventCities) : ""),
+    [dashboard]
+  );
+
   const studentView = useMemo(
     () =>
       dashboard ? resolveDashboardView(dashboard, studentCityFilter) : null,
@@ -262,7 +298,7 @@ export function DashboardView() {
 
   const studentHeroCards = useMemo(() => {
     if (!dashboard) return [];
-    return HERO_TABS.map((tab) => {
+    return heroTabs.map((tab) => {
       const slice = resolveDashboardView(dashboard, tab.value);
       return {
         ...tab,
@@ -272,11 +308,11 @@ export function DashboardView() {
         facts: buildSupportFacts(slice.studentRegistration),
       };
     });
-  }, [dashboard]);
+  }, [dashboard, heroTabs]);
 
   const partnerHeroCards = useMemo(() => {
     if (!dashboard) return [];
-    return HERO_TABS.map((tab) => {
+    return heroTabs.map((tab) => {
       const slice = resolveDashboardView(dashboard, tab.value);
       return {
         ...tab,
@@ -286,7 +322,7 @@ export function DashboardView() {
         facts: buildPartnerSupportFacts(slice.partnerSales),
       };
     });
-  }, [dashboard]);
+  }, [dashboard, heroTabs]);
 
   if (dashboardQuery.isLoading) return <DashboardSkeleton />;
 
@@ -321,9 +357,7 @@ export function DashboardView() {
           Student details
         </h2>
         <p className="mt-2 text-[13px] text-muted-foreground">
-          {studentView.isAllCities
-            ? "Bangalore · Mysore · Hubli"
-            : studentView.cityLabel}
+          {studentView.isAllCities ? citySubtitle : studentView.cityLabel}
         </p>
       </header>
 
@@ -339,6 +373,9 @@ export function DashboardView() {
             data={studentView.studentRegistration}
             cityLabel={studentView.cityLabel}
             isAllCities={studentView.isAllCities}
+            eventCities={dashboard.eventCities}
+            registrations={registrations}
+            events={events}
           />
         </motion.div>
       </AnimatePresence>
@@ -354,9 +391,7 @@ export function DashboardView() {
             Partner details
           </h2>
           <p className="mt-2 text-[13px] text-muted-foreground">
-            {partnerView.isAllCities
-              ? "Bangalore · Mysore · Hubli"
-              : partnerView.cityLabel}
+            {partnerView.isAllCities ? citySubtitle : partnerView.cityLabel}
           </p>
         </div>
         <button
