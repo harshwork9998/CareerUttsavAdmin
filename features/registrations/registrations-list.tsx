@@ -6,6 +6,9 @@ import { Download, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { eventsService, registrationsService } from "@/services/api";
+import { getPrimarySeminar } from "@/lib/enrich-registration";
+import { resolveEventCity } from "@/lib/resolve-event-city";
+import { OPERATING_CITIES } from "@/lib/operating-cities";
 import { formatNumber } from "@/lib/utils";
 import type { Registration } from "@/types";
 import {
@@ -23,27 +26,6 @@ import { Button } from "@/components/ui/button";
 import { StudentDrawer } from "./student-drawer";
 
 const PAGE_SIZE = 10;
-const EVENT_CITIES = ["Bangalore", "Mysore", "Hubli"] as const;
-
-function resolveEventCity(
-  registration: Registration,
-  eventCityById: Map<string, string>
-): string | null {
-  const fromEvent = eventCityById.get(registration.eventId);
-  if (
-    fromEvent &&
-    EVENT_CITIES.includes(fromEvent as (typeof EVENT_CITIES)[number])
-  ) {
-    return fromEvent;
-  }
-  const title = registration.eventTitle.toLowerCase();
-  if (title.includes("bangalore") || title.includes("bengaluru")) {
-    return "Bangalore";
-  }
-  if (title.includes("mysore") || title.includes("mysuru")) return "Mysore";
-  if (title.includes("hubli") || title.includes("hubballi")) return "Hubli";
-  return null;
-}
 
 function exportToCsv(registrations: Registration[], filename: string) {
   const headers = [
@@ -52,6 +34,7 @@ function exportToCsv(registrations: Registration[], filename: string) {
     "Class",
     "Stream",
     "Board",
+    "Seminar",
     "City",
     "Gender",
     "Student Mobile Number",
@@ -65,6 +48,7 @@ function exportToCsv(registrations: Registration[], filename: string) {
     r.classLabel ?? "",
     r.interestedStream ?? "",
     r.board ?? "",
+    getPrimarySeminar(r),
     r.city,
     r.gender ?? "",
     r.phone,
@@ -128,7 +112,7 @@ export function RegistrationsList() {
     return map;
   }, [eventsQuery.data]);
 
-  const eventCityOptions = EVENT_CITIES.map((city) => ({
+  const eventCityOptions = OPERATING_CITIES.map((city) => ({
     label: city,
     value: city,
   }));
@@ -300,6 +284,15 @@ export function RegistrationsList() {
       ),
     },
     {
+      id: "seminarInterests",
+      header: "Seminar",
+      cell: ({ row }) => (
+        <span className="line-clamp-2 max-w-[220px] text-sm">
+          {getPrimarySeminar(row.original)}
+        </span>
+      ),
+    },
+    {
       accessorKey: "city",
       header: "City",
       cell: ({ row }) => (
@@ -349,7 +342,7 @@ export function RegistrationsList() {
           title="Registrations"
           description="Manage student registrations across all Career Utsav events."
         />
-        <TableSkeleton rows={8} columns={10} />
+        <TableSkeleton rows={8} columns={11} />
       </div>
     );
   }

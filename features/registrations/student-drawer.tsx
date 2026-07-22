@@ -17,6 +17,7 @@ import {
   formatDate,
   formatDateTime,
 } from "@/lib/utils";
+import { getPrimarySeminar } from "@/lib/enrich-registration";
 import { StatusChip } from "@/components/shared";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -54,7 +55,7 @@ function DetailRow({
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           {label}
         </p>
-        <p className="mt-0.5 text-sm font-medium text-foreground">{value}</p>
+        <div className="mt-0.5 text-sm font-medium text-foreground">{value}</div>
       </div>
     </div>
   );
@@ -185,6 +186,11 @@ export function StudentDrawer({
                   icon={Ticket}
                   label="Event"
                   value={registration.eventTitle}
+                />
+                <DetailRow
+                  icon={Ticket}
+                  label="Seminar"
+                  value={getPrimarySeminar(registration)}
                 />
                 <DetailRow
                   icon={Calendar}

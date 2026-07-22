@@ -59,7 +59,7 @@ function buildSupportFacts(
   if (topClass) {
     facts.push({
       label: "Top class",
-      value: `${String(topClass.name)} · ${formatNumber(Number(topClass.value))}`,
+      value: String(topClass.name),
     });
   }
   if (topBoard) {

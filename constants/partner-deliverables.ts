@@ -19,9 +19,9 @@ export const STALL_LOGO_POSITIONING_OPTIONS = [
 ] as const;
 
 export const BOOK_PREMIUM_SPOT_OPTIONS = [
-  "premium",
-  "front cover inside",
-  "back cover page",
+  "front cover (inside)",
+  "back cover (inside)",
+  "back cover",
 ] as const;
 
 export const PRE_REG_ACCESS_OPTIONS = [
@@ -173,7 +173,7 @@ const UNIVERSITY: TierPreset = {
   ...GOLD,
   stallSize: { included: true, option: "12 (4x3)" },
   stallLogoPositioning: { included: true, option: "premium" },
-  bookAdPremiumSpot: { included: true, option: "premium" },
+  bookAdPremiumSpot: { included: true, option: "back cover (inside)" },
   brochureWelcomeKit: { included: true },
   additionalStandee: { included: true },
   accessPreRegisteredStudents: {
@@ -186,7 +186,7 @@ const CO_PRESENTING: TierPreset = {
   ...UNIVERSITY,
   stallSize: { included: true, option: "20 (5x4)" },
   stallLogoPositioning: { included: true, option: "super premium" },
-  bookAdPremiumSpot: { included: true, option: "front cover inside" },
+  bookAdPremiumSpot: { included: true, option: "front cover (inside)" },
   brandVideos: { included: true },
 };
 
@@ -194,7 +194,7 @@ const PRESENTING: TierPreset = {
   ...CO_PRESENTING,
   stallSize: { included: true, option: "24 (6x4)" },
   stallLogoPositioning: { included: true, option: "ultra premium" },
-  bookAdPremiumSpot: { included: true, option: "back cover page" },
+  bookAdPremiumSpot: { included: true, option: "back cover" },
   accessPreRegisteredStudents: { included: true, option: "full access" },
   dedicatedActivityRoom: { included: true },
   celebrityStageShare: { included: true },

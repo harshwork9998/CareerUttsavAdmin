@@ -18,7 +18,8 @@ import {
   mockReports,
   mockSettings,
 } from "@/lib/mock-data";
-import { normalizeRegistration } from "@/features/registrations/normalize-registration";
+import { resolveRegistration, resolveRegistrations } from "@/lib/enrich-registration";
+import { buildDashboardData } from "@/lib/build-dashboard-data";
 import { isOperatingCity } from "@/lib/operating-cities";
 import type {
   Event,
@@ -45,6 +46,10 @@ async function simulate<T>(data: T): Promise<T> {
 
 /** In-memory event store so create/update/delete persist for the session. */
 let eventsStore: Event[] = [...mockEvents];
+
+function getResolvedRegistrations(): Registration[] {
+  return resolveRegistrations(mockRegistrations, eventsStore);
+}
 
 export const eventsService = {
   getAll: () => simulate([...eventsStore]),
@@ -95,26 +100,30 @@ export const eventsService = {
 };
 
 export const registrationsService = {
-  getAll: () => simulate(mockRegistrations.map(normalizeRegistration)),
+  getAll: () => simulate(getResolvedRegistrations()),
   getById: (id: string) =>
     simulate(
       (() => {
         const row = mockRegistrations.find((r) => r.id === id);
-        return row ? normalizeRegistration(row) : null;
+        return row ? resolveRegistrations([row], eventsStore)[0] : null;
       })()
     ),
   getByEvent: (eventId: string) =>
     simulate(
-      mockRegistrations
-        .filter((r) => r.eventId === eventId)
-        .map(normalizeRegistration)
+      resolveRegistrations(
+        mockRegistrations.filter((r) => r.eventId === eventId),
+        eventsStore
+      )
     ),
   update: (id: string, data: Partial<Registration>) =>
     simulate(
-      normalizeRegistration({
-        ...mockRegistrations.find((r) => r.id === id)!,
-        ...data,
-      })
+      resolveRegistration(
+        {
+          ...mockRegistrations.find((r) => r.id === id)!,
+          ...data,
+        },
+        eventsStore
+      )
     ),
 };
 
@@ -186,7 +195,15 @@ export const activityLogsService = {
 };
 
 export const dashboardService = {
-  getData: () => simulate({ ...mockDashboardData }),
+  getData: async () =>
+    simulate(
+      buildDashboardData(
+        mockDashboardData,
+        getResolvedRegistrations(),
+        [...eventsStore],
+        await fetchAllPartners()
+      )
+    ),
 };
 
 export const reportsService = {
