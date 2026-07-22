@@ -238,3 +238,33 @@ export function enrichSeminarSlotAssignments(
       : a;
   });
 }
+
+export function resolveSeminarTitle(
+  assignment: PartnerSeminarSlotAssignment,
+  events: Event[]
+): string {
+  if (assignment.seminarTitle?.trim()) return assignment.seminarTitle.trim();
+  const event = events.find((e) => e.id === assignment.eventId);
+  const seminar = event?.seminars.find((s) => s.id === assignment.seminarId);
+  return seminar?.title ?? assignment.seminarId;
+}
+
+/** Attach human-readable seminar titles from the event catalog. */
+export function enrichPartnerWithEventCatalog(
+  partner: Partner,
+  events: Event[]
+): Partner {
+  const assignments = partner.seminarSlotAssignments ?? [];
+  if (assignments.length === 0) return partner;
+  return {
+    ...partner,
+    seminarSlotAssignments: enrichSeminarSlotAssignments(assignments, events),
+  };
+}
+
+export function enrichPartnersWithEventCatalog(
+  partners: Partner[],
+  events: Event[]
+): Partner[] {
+  return partners.map((partner) => enrichPartnerWithEventCatalog(partner, events));
+}

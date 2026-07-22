@@ -1,14 +1,24 @@
 import fs from "fs";
 import path from "path";
 
+import { enrichPartnersWithEventCatalog } from "@/lib/partner-event-config";
 import { mockPartners } from "@/lib/mock-data/partners";
+import { getEventCatalog } from "@/lib/server/events-catalog";
 import type { Partner } from "@/types";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const STORE_PATH = path.join(DATA_DIR, "partners-store.json");
 
+function enrichStoredPartners(partners: Partner[]): Partner[] {
+  return enrichPartnersWithEventCatalog(partners, getEventCatalog());
+}
+
+function seminarAssignmentsDigest(partners: Partner[]): string {
+  return JSON.stringify(partners.map((p) => p.seminarSlotAssignments ?? []));
+}
+
 function seedStore(): Partner[] {
-  const seed = mockPartners.map((p) => structuredClone(p));
+  const seed = enrichStoredPartners(mockPartners.map((p) => structuredClone(p)));
   fs.mkdirSync(DATA_DIR, { recursive: true });
   fs.writeFileSync(STORE_PATH, JSON.stringify(seed, null, 2), "utf-8");
   return seed;
@@ -25,16 +35,22 @@ export function loadPartners(): Partner[] {
     if (!Array.isArray(parsed)) {
       return seedStore();
     }
-    return parsed;
+    const enriched = enrichStoredPartners(parsed);
+    if (seminarAssignmentsDigest(parsed) !== seminarAssignmentsDigest(enriched)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+      fs.writeFileSync(STORE_PATH, JSON.stringify(enriched, null, 2), "utf-8");
+    }
+    return enriched;
   } catch {
     return seedStore();
   }
 }
 
 export function savePartners(partners: Partner[]): Partner[] {
+  const enriched = enrichStoredPartners(partners);
   fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(STORE_PATH, JSON.stringify(partners, null, 2), "utf-8");
-  return partners;
+  fs.writeFileSync(STORE_PATH, JSON.stringify(enriched, null, 2), "utf-8");
+  return enriched;
 }
 
 export function getPartnerStorePath() {

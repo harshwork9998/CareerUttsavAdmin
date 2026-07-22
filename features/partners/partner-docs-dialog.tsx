@@ -31,8 +31,9 @@ import {
   getPartnerPortalUploadStatus,
   type PortalSubmissionChecklistItem,
 } from "@/lib/partner-portal-docs";
+import { enrichSeminarSlotAssignments } from "@/lib/partner-event-config";
 import { cn } from "@/lib/utils";
-import { partnersService } from "@/services/api";
+import { eventsService, partnersService } from "@/services/api";
 import type { Partner, PartnerPortalDocument } from "@/types";
 import { Button } from "@/components/ui/button";
 import {
@@ -392,7 +393,28 @@ export function PartnerDocsDialog({
     enabled: open && Boolean(initialPartner?.id),
   });
 
+  const eventsQuery = useQuery({
+    queryKey: ["events"],
+    queryFn: () => eventsService.getAll(),
+    enabled: open,
+  });
+
   const partner = partnerQuery.data ?? initialPartner;
+
+  const partnerWithSeminarTitles = useMemo(() => {
+    if (!partner) return null;
+    const events = eventsQuery.data ?? [];
+    if (events.length === 0) return partner;
+    return {
+      ...partner,
+      seminarSlotAssignments: enrichSeminarSlotAssignments(
+        partner.seminarSlotAssignments ?? [],
+        events
+      ),
+    };
+  }, [partner, eventsQuery.data]);
+
+  const previewPartner = partnerWithSeminarTitles ?? partner;
 
   const uploadStatus = useMemo(
     () => (partner ? getPartnerPortalUploadStatus(partner) : null),
@@ -643,7 +665,7 @@ export function PartnerDocsDialog({
           </aside>
 
           <div className="flex min-h-0 flex-col">
-            {partner && selectedItem ? (
+            {previewPartner && selectedItem ? (
               selectedKey?.startsWith("extra:") ? (
                 (() => {
                   const docId = selectedKey.replace("extra:", "");
@@ -651,7 +673,7 @@ export function PartnerDocsDialog({
                   if (!doc) return null;
                   return (
                     <SubmissionPreview
-                      partner={partner}
+                      partner={previewPartner}
                       item={{
                         key: "logo",
                         label: doc.label,
@@ -664,7 +686,7 @@ export function PartnerDocsDialog({
                   );
                 })()
               ) : (
-                <SubmissionPreview partner={partner} item={selectedItem} />
+                <SubmissionPreview partner={previewPartner} item={selectedItem} />
               )
             ) : (
               <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-16 text-center">
