@@ -463,7 +463,10 @@ export function PartnersList() {
         partner={docsPartner}
         open={Boolean(docsPartner)}
         onOpenChange={(open) => {
-          if (!open) setDocsPartner(null);
+          if (!open) {
+            setDocsPartner(null);
+            void queryClient.invalidateQueries({ queryKey: ["partners"] });
+          }
         }}
       />
 

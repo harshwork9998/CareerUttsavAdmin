@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Bell,
   Check,
@@ -9,6 +10,10 @@ import {
   File,
   FileText,
   ImageIcon,
+  Link2,
+  MessageSquare,
+  Mic2,
+  Type,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -24,9 +29,10 @@ import {
 import {
   formatDaysSinceUploadChip,
   getPartnerPortalUploadStatus,
-  REQUIRED_PORTAL_DOCUMENTS,
+  type PortalSubmissionChecklistItem,
 } from "@/lib/partner-portal-docs";
 import { cn } from "@/lib/utils";
+import { partnersService } from "@/services/api";
 import type { Partner, PartnerPortalDocument } from "@/types";
 import { Button } from "@/components/ui/button";
 import {
@@ -58,13 +64,6 @@ function isImageDoc(doc: PartnerPortalDocument) {
   return doc.mimeType.startsWith("image/");
 }
 
-function kindLabel(kind: PartnerPortalDocument["kind"]) {
-  const required = REQUIRED_PORTAL_DOCUMENTS.find((doc) => doc.kind === kind);
-  if (required) return required.label;
-  if (kind === "other") return "Other";
-  return "Document";
-}
-
 async function downloadDoc(doc: PartnerPortalDocument) {
   try {
     const res = await fetch(doc.url);
@@ -84,8 +83,300 @@ async function downloadDoc(doc: PartnerPortalDocument) {
   }
 }
 
-export function PartnerDocsDialog({
+function checklistIcon(item: PortalSubmissionChecklistItem) {
+  if (item.kind === "logo" || item.kind === "file") return FileText;
+  if (item.kind === "url") return Link2;
+  if (item.kind === "textarea") return MessageSquare;
+  if (item.kind === "speakers") return Mic2;
+  return Type;
+}
+
+function SubmissionPreview({
   partner,
+  item,
+}: {
+  partner: Partner;
+  item: PortalSubmissionChecklistItem;
+}) {
+  if ((item.kind === "file" || item.kind === "logo") && item.file) {
+    const selected = item.file;
+    return (
+      <>
+        <div
+          className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-3"
+          style={{ borderColor: LINE.subtle }}
+        >
+          <div className="min-w-0">
+            <p
+              className="truncate text-sm font-semibold"
+              style={{ color: INK.primary }}
+            >
+              {selected.fileName}
+            </p>
+            <p className="text-xs" style={{ color: INK.muted }}>
+              Uploaded {formatUploadedAt(selected.uploadedAt)}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() =>
+                window.open(selected.url, "_blank", "noopener,noreferrer")
+              }
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              Open
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              className="gap-1.5 text-white hover:opacity-90"
+              style={{ backgroundColor: BRAND[700] }}
+              onClick={() => void downloadDoc(selected)}
+            >
+              <Download className="h-3.5 w-3.5" />
+              Download
+            </Button>
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-auto p-5">
+          {isImageDoc(selected) ? (
+            <div
+              className="flex min-h-full items-center justify-center rounded-2xl border p-4"
+              style={{
+                borderColor: LINE.subtle,
+                background: PAPER.surface,
+              }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={selected.url}
+                alt={selected.label}
+                className="max-h-[min(52vh,560px)] max-w-full rounded-lg object-contain"
+              />
+            </div>
+          ) : (
+            <div
+              className="flex min-h-[40vh] flex-col items-center justify-center gap-3 rounded-2xl border px-6 text-center"
+              style={{
+                borderColor: LINE.subtle,
+                background: PAPER.surface,
+              }}
+            >
+              <FileText
+                className="h-12 w-12"
+                style={{ color: BRAND[700] }}
+              />
+              <div>
+                <p
+                  className="text-sm font-semibold"
+                  style={{ color: INK.primary }}
+                >
+                  {selected.fileName}
+                </p>
+                <p className="mt-1 text-xs" style={{ color: INK.muted }}>
+                  Preview isn’t available for this file type. Download or open
+                  it instead.
+                </p>
+              </div>
+              <Button
+                type="button"
+                className="gap-1.5 text-white hover:opacity-90"
+                style={{ backgroundColor: BRAND[700] }}
+                onClick={() => void downloadDoc(selected)}
+              >
+                <Download className="h-4 w-4" />
+                Download file
+              </Button>
+            </div>
+          )}
+        </div>
+      </>
+    );
+  }
+
+  if (item.kind === "text") {
+    return (
+      <div className="min-h-0 flex-1 overflow-auto p-5">
+        <div
+          className="rounded-2xl border p-5"
+          style={{ borderColor: LINE.subtle, background: PAPER.surface }}
+        >
+          <p
+            className="text-[11px] font-semibold tracking-[0.14em] uppercase"
+            style={{ color: INK.muted }}
+          >
+            {item.label}
+          </p>
+          <p
+            className="mt-3 text-lg font-semibold"
+            style={{ color: INK.primary }}
+          >
+            {partner.portalFasciaName?.trim() || "—"}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (item.kind === "url") {
+    const url = partner.portalWebsiteUrl?.trim();
+    return (
+      <div className="min-h-0 flex-1 overflow-auto p-5">
+        <div
+          className="rounded-2xl border p-5"
+          style={{ borderColor: LINE.subtle, background: PAPER.surface }}
+        >
+          <p
+            className="text-[11px] font-semibold tracking-[0.14em] uppercase"
+            style={{ color: INK.muted }}
+          >
+            {item.label}
+          </p>
+          {url ? (
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-3 inline-flex items-center gap-2 text-base font-semibold text-brand-700 hover:underline"
+            >
+              {url}
+              <ExternalLink className="h-4 w-4" />
+            </a>
+          ) : (
+            <p className="mt-3 text-base" style={{ color: INK.muted }}>
+              —
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (item.kind === "textarea") {
+    return (
+      <div className="min-h-0 flex-1 overflow-auto p-5">
+        <div
+          className="rounded-2xl border p-5"
+          style={{ borderColor: LINE.subtle, background: PAPER.surface }}
+        >
+          <p
+            className="text-[11px] font-semibold tracking-[0.14em] uppercase"
+            style={{ color: INK.muted }}
+          >
+            {item.label}
+          </p>
+          <p
+            className="mt-3 whitespace-pre-wrap text-sm leading-relaxed"
+            style={{ color: INK.primary }}
+          >
+            {partner.portalSmsContent?.trim() || "—"}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (item.kind === "speakers") {
+    const rows = partner.portalSeminarSpeakers ?? [];
+    const assignments = (partner.seminarSlotAssignments ?? []).filter(
+      (slot) => slot.slots > 0
+    );
+
+    return (
+      <div className="min-h-0 flex-1 overflow-auto p-5">
+        <div className="space-y-4">
+          {assignments.length === 0 ? (
+            <p className="text-sm" style={{ color: INK.muted }}>
+              No seminar seats allotted yet.
+            </p>
+          ) : (
+            assignments.map((slot) => {
+              const submission = rows.find(
+                (row) =>
+                  row.eventId === slot.eventId &&
+                  row.seminarId === slot.seminarId
+              );
+              const title =
+                slot.seminarTitle?.trim() || slot.seminarId || "Seminar";
+              const speakers = submission?.speakers ?? [];
+
+              return (
+                <div
+                  key={`${slot.eventId}-${slot.seminarId}`}
+                  className="rounded-2xl border p-4"
+                  style={{
+                    borderColor: LINE.subtle,
+                    background: PAPER.surface,
+                  }}
+                >
+                  <p
+                    className="text-sm font-semibold"
+                    style={{ color: INK.primary }}
+                  >
+                    {title}
+                  </p>
+                  <p className="text-xs" style={{ color: INK.muted }}>
+                    {slot.slots} speaker slot{slot.slots === 1 ? "" : "s"}
+                  </p>
+                  {speakers.length === 0 ? (
+                    <p className="mt-3 text-sm" style={{ color: INK.muted }}>
+                      Not submitted yet
+                    </p>
+                  ) : (
+                    <ul className="mt-3 space-y-3">
+                      {speakers.map((speaker, index) => (
+                        <li
+                          key={`${speaker.name}-${index}`}
+                          className="rounded-xl border px-3 py-2.5"
+                          style={{ borderColor: LINE.subtle }}
+                        >
+                          <p
+                            className="text-sm font-semibold"
+                            style={{ color: INK.primary }}
+                          >
+                            {speaker.name}
+                          </p>
+                          {speaker.designation ? (
+                            <p className="text-xs" style={{ color: INK.secondary }}>
+                              {speaker.designation}
+                            </p>
+                          ) : null}
+                          {speaker.contact || speaker.phone || speaker.email ? (
+                            <p className="mt-1 text-xs" style={{ color: INK.muted }}>
+                              {speaker.contact ?? speaker.phone ?? speaker.email}
+                            </p>
+                          ) : null}
+                          {speaker.introduction ? (
+                            <p
+                              className="mt-2 whitespace-pre-wrap text-xs leading-relaxed"
+                              style={{ color: INK.secondary }}
+                            >
+                              {speaker.introduction}
+                            </p>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+export function PartnerDocsDialog({
+  partner: initialPartner,
   open,
   onOpenChange,
 }: {
@@ -93,25 +384,36 @@ export function PartnerDocsDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const docs = partner?.portalDocuments ?? [];
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+
+  const partnerQuery = useQuery({
+    queryKey: ["partner-docs", initialPartner?.id],
+    queryFn: () => partnersService.getById(initialPartner!.id),
+    enabled: open && Boolean(initialPartner?.id),
+  });
+
+  const partner = partnerQuery.data ?? initialPartner;
 
   const uploadStatus = useMemo(
-    () =>
-      partner
-        ? getPartnerPortalUploadStatus(partner)
-        : null,
+    () => (partner ? getPartnerPortalUploadStatus(partner) : null),
     [partner]
   );
 
-  const selected = useMemo(() => {
-    if (!docs.length) return null;
-    const id =
-      selectedId && docs.some((d) => d.id === selectedId)
-        ? selectedId
-        : docs[0].id;
-    return docs.find((d) => d.id === id) ?? null;
-  }, [docs, selectedId]);
+  const selectedItem = useMemo(() => {
+    if (!uploadStatus) return null;
+    const key =
+      selectedKey &&
+      uploadStatus.checklist.some((item) => item.key === selectedKey)
+        ? selectedKey
+        : uploadStatus.checklist.find((item) => item.complete)?.key ??
+          uploadStatus.checklist[0]?.key ??
+          null;
+    return uploadStatus.checklist.find((item) => item.key === key) ?? null;
+  }, [uploadStatus, selectedKey]);
+
+  useEffect(() => {
+    if (!open) setSelectedKey(null);
+  }, [open]);
 
   const sendReminder = () => {
     if (!partner || !uploadStatus || uploadStatus.missing.length === 0) return;
@@ -129,11 +431,14 @@ export function PartnerDocsDialog({
     ? formatDaysSinceUploadChip(uploadStatus)
     : null;
 
+  const extraDocs =
+    partner?.portalDocuments?.filter((doc) => doc.kind === "other") ?? [];
+
   return (
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        if (!next) setSelectedId(null);
+        if (!next) setSelectedKey(null);
         onOpenChange(next);
       }}
     >
@@ -157,6 +462,11 @@ export function PartnerDocsDialog({
               >
                 Partner documents
               </DialogTitle>
+              {partner ? (
+                <p className="mt-1 text-sm" style={{ color: INK.secondary }}>
+                  Submitted via partner portal · {partner.name}
+                </p>
+              ) : null}
             </div>
             {reminderChip ? (
               <span
@@ -192,25 +502,20 @@ export function PartnerDocsDialog({
                 className="mb-2 px-1 text-[11px] font-semibold tracking-[0.14em] uppercase"
                 style={{ color: INK.muted }}
               >
-                Required uploads
+                Portal submissions
               </p>
               <ul className="space-y-1">
                 {uploadStatus?.checklist.map((item) => {
-                  const active =
-                    item.uploaded &&
-                    selected?.id === item.file?.id;
+                  const active = selectedItem?.key === item.key;
+                  const Icon = checklistIcon(item);
                   return (
                     <li key={item.key}>
                       <button
                         type="button"
-                        disabled={!item.uploaded}
-                        onClick={() => {
-                          if (item.file) setSelectedId(item.file.id);
-                        }}
+                        onClick={() => setSelectedKey(String(item.key))}
                         className={cn(
                           "flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left transition-colors",
-                          item.uploaded && !active && "hover:bg-black/[0.03]",
-                          !item.uploaded && "cursor-default opacity-90"
+                          !active && "hover:bg-black/[0.03]"
                         )}
                         style={{
                           background: active ? BRAND[50] : undefined,
@@ -222,9 +527,7 @@ export function PartnerDocsDialog({
                             background: item.uploaded
                               ? STATUS.successSoft
                               : "rgba(163,59,59,0.12)",
-                            color: item.uploaded
-                              ? STATUS.success
-                              : "#A33B3B",
+                            color: item.uploaded ? STATUS.success : "#A33B3B",
                           }}
                         >
                           {item.uploaded ? (
@@ -235,24 +538,23 @@ export function PartnerDocsDialog({
                         </span>
                         <span className="min-w-0 flex-1">
                           <span
-                            className="block truncate text-sm font-semibold"
+                            className="flex items-center gap-1.5 truncate text-sm font-semibold"
                             style={{ color: INK.primary }}
                           >
+                            <Icon className="h-3.5 w-3.5 shrink-0 text-brand-700" />
                             {item.label}
                           </span>
                           <span
                             className="mt-0.5 block truncate text-xs"
                             style={{
-                              color: item.uploaded
-                                ? STATUS.success
-                                : INK.muted,
+                              color: item.uploaded ? STATUS.success : INK.muted,
                             }}
                           >
                             {item.uploaded
                               ? item.file
                                 ? `${item.file.fileName} · ${formatBytes(item.file.fileSizeBytes)}`
-                                : "Uploaded"
-                              : "Not uploaded"}
+                                : "Submitted"
+                              : "Not submitted"}
                           </span>
                         </span>
                       </button>
@@ -261,7 +563,7 @@ export function PartnerDocsDialog({
                 })}
               </ul>
 
-              {docs.some((d) => d.kind === "other") ? (
+              {extraDocs.length > 0 ? (
                 <div className="mt-4">
                   <p
                     className="mb-2 px-1 text-[11px] font-semibold tracking-[0.14em] uppercase"
@@ -270,52 +572,49 @@ export function PartnerDocsDialog({
                     Extra files
                   </p>
                   <ul className="space-y-1">
-                    {docs
-                      .filter((d) => d.kind === "other")
-                      .map((doc) => {
-                        const active = selected?.id === doc.id;
-                        const Icon = isImageDoc(doc) ? ImageIcon : FileText;
-                        return (
-                          <li key={doc.id}>
-                            <button
-                              type="button"
-                              onClick={() => setSelectedId(doc.id)}
-                              className={cn(
-                                "flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left transition-colors",
-                                !active && "hover:bg-black/[0.03]"
-                              )}
+                    {extraDocs.map((doc) => {
+                      const active = selectedItem?.file?.id === doc.id;
+                      const Icon = isImageDoc(doc) ? ImageIcon : FileText;
+                      return (
+                        <li key={doc.id}>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedKey(`extra:${doc.id}`)}
+                            className={cn(
+                              "flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left transition-colors",
+                              !active && "hover:bg-black/[0.03]"
+                            )}
+                            style={{
+                              background: active ? BRAND[50] : undefined,
+                            }}
+                          >
+                            <span
+                              className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
                               style={{
-                                background: active ? BRAND[50] : undefined,
+                                background: active ? BRAND[700] : PAPER.muted,
+                                color: active ? "#fff" : BRAND[700],
                               }}
                             >
+                              <Icon className="h-4 w-4" />
+                            </span>
+                            <span className="min-w-0 flex-1">
                               <span
-                                className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
-                                style={{
-                                  background: active ? BRAND[700] : PAPER.muted,
-                                  color: active ? "#fff" : BRAND[700],
-                                }}
+                                className="block truncate text-sm font-semibold"
+                                style={{ color: INK.primary }}
                               >
-                                <Icon className="h-4 w-4" />
+                                {doc.label}
                               </span>
-                              <span className="min-w-0 flex-1">
-                                <span
-                                  className="block truncate text-sm font-semibold"
-                                  style={{ color: INK.primary }}
-                                >
-                                  {doc.label}
-                                </span>
-                                <span
-                                  className="mt-0.5 block truncate text-xs"
-                                  style={{ color: INK.muted }}
-                                >
-                                  {kindLabel(doc.kind)} ·{" "}
-                                  {formatBytes(doc.fileSizeBytes)}
-                                </span>
+                              <span
+                                className="mt-0.5 block truncate text-xs"
+                                style={{ color: INK.muted }}
+                              >
+                                {formatBytes(doc.fileSizeBytes)}
                               </span>
-                            </button>
-                          </li>
-                        );
-                      })}
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               ) : null}
@@ -344,109 +643,29 @@ export function PartnerDocsDialog({
           </aside>
 
           <div className="flex min-h-0 flex-col">
-            {selected ? (
-              <>
-                <div
-                  className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-3"
-                  style={{ borderColor: LINE.subtle }}
-                >
-                  <div className="min-w-0">
-                    <p
-                      className="truncate text-sm font-semibold"
-                      style={{ color: INK.primary }}
-                    >
-                      {selected.fileName}
-                    </p>
-                    <p className="text-xs" style={{ color: INK.muted }}>
-                      Uploaded {formatUploadedAt(selected.uploadedAt)}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="gap-1.5"
-                      onClick={() =>
-                        window.open(
-                          selected.url,
-                          "_blank",
-                          "noopener,noreferrer"
-                        )
-                      }
-                    >
-                      <ExternalLink className="h-3.5 w-3.5" />
-                      Open
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      className="gap-1.5 text-white hover:opacity-90"
-                      style={{ backgroundColor: BRAND[700] }}
-                      onClick={() => void downloadDoc(selected)}
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                      Download
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="min-h-0 flex-1 overflow-auto p-5">
-                  {isImageDoc(selected) ? (
-                    <div
-                      className="flex min-h-full items-center justify-center rounded-2xl border p-4"
-                      style={{
-                        borderColor: LINE.subtle,
-                        background: PAPER.surface,
+            {partner && selectedItem ? (
+              selectedKey?.startsWith("extra:") ? (
+                (() => {
+                  const docId = selectedKey.replace("extra:", "");
+                  const doc = extraDocs.find((row) => row.id === docId);
+                  if (!doc) return null;
+                  return (
+                    <SubmissionPreview
+                      partner={partner}
+                      item={{
+                        key: "logo",
+                        label: doc.label,
+                        complete: true,
+                        uploaded: true,
+                        kind: "logo",
+                        file: doc,
                       }}
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={selected.url}
-                        alt={selected.label}
-                        className="max-h-[min(52vh,560px)] max-w-full rounded-lg object-contain"
-                      />
-                    </div>
-                  ) : (
-                    <div
-                      className="flex min-h-[40vh] flex-col items-center justify-center gap-3 rounded-2xl border px-6 text-center"
-                      style={{
-                        borderColor: LINE.subtle,
-                        background: PAPER.surface,
-                      }}
-                    >
-                      <FileText
-                        className="h-12 w-12"
-                        style={{ color: BRAND[700] }}
-                      />
-                      <div>
-                        <p
-                          className="text-sm font-semibold"
-                          style={{ color: INK.primary }}
-                        >
-                          {selected.fileName}
-                        </p>
-                        <p
-                          className="mt-1 text-xs"
-                          style={{ color: INK.muted }}
-                        >
-                          Preview isn’t available for this file type. Download
-                          or open it instead.
-                        </p>
-                      </div>
-                      <Button
-                        type="button"
-                        className="gap-1.5 text-white hover:opacity-90"
-                        style={{ backgroundColor: BRAND[700] }}
-                        onClick={() => void downloadDoc(selected)}
-                      >
-                        <Download className="h-4 w-4" />
-                        Download file
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </>
+                    />
+                  );
+                })()
+              ) : (
+                <SubmissionPreview partner={partner} item={selectedItem} />
+              )
             ) : (
               <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-16 text-center">
                 <File className="h-10 w-10" style={{ color: INK.muted }} />
@@ -454,9 +673,11 @@ export function PartnerDocsDialog({
                   className="text-sm font-semibold"
                   style={{ color: INK.primary }}
                 >
-                  {uploadStatus?.allUploaded
-                    ? "Select a file to preview"
-                    : "No files uploaded yet"}
+                  {partnerQuery.isLoading
+                    ? "Loading portal submissions…"
+                    : uploadStatus?.allUploaded
+                      ? "Select an item to preview"
+                      : "No portal submissions yet"}
                 </p>
                 <p
                   className="max-w-sm text-sm"
@@ -464,7 +685,7 @@ export function PartnerDocsDialog({
                 >
                   {uploadStatus && !uploadStatus.allUploaded
                     ? "Tick marks show what’s in. Send a reminder for anything still missing."
-                    : "Choose an uploaded document from the list."}
+                    : "Choose a submission from the list."}
                 </p>
               </div>
             )}
