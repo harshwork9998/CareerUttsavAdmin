@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -14,8 +14,18 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { eventsService, seminarsService } from "@/services/api";
+import { eventsService, partnersService, seminarsService } from "@/services/api";
 import { rosterSessionKey } from "@/lib/seminar-roster-links";
+import {
+  blockedPartnerForSeat,
+  buildPartnerSeatBlocks,
+  createSpeakerFromPartnerBlock,
+  mergeRosterWithPartnerSeats,
+  panelistSeatsFromRoster,
+  resetBlockedSeat,
+  rosterFromPanelistSeats,
+  seatDisplayMetaForSeminar,
+} from "@/lib/seminar-partner-seats";
 import {
   BRAND,
   INK,
@@ -107,10 +117,20 @@ export function SeminarsView() {
     null
   );
   const [draft, setDraft] = useState<SeminarSessionRoster | null>(null);
+  const [panelistSeats, setPanelistSeats] = useState<
+    (SeminarSpeaker | null)[]
+  >([]);
 
   const eventsQuery = useQuery({
     queryKey: ["events"],
     queryFn: () => eventsService.getAll(),
+  });
+  const partnersQuery = useQuery({
+    queryKey: ["partners"],
+    queryFn: () => partnersService.getAll(),
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
   const rostersQuery = useQuery({
     queryKey: ["seminar-rosters"],
@@ -126,6 +146,10 @@ export function SeminarsView() {
     [eventsQuery.data]
   );
   const rosters = rostersQuery.data ?? [];
+  const partners = useMemo(
+    () => partnersQuery.data ?? [],
+    [partnersQuery.data]
+  );
 
   const validEventIdsKey = useMemo(
     () => events.map((event) => event.id).sort().join(","),
@@ -183,19 +207,89 @@ export function SeminarsView() {
 
   const active = filteredRows.find((r) => r.key === selectedKey) ?? null;
 
+  const activeSessionKey = active?.key ?? null;
+  const activeEventId = active?.event.id;
+  const activeSeminarId = active?.seminar.id;
+  const activePanelistSlots = active?.seminar.panelistSlots ?? 0;
+  const activeRoster = active?.roster ?? null;
+  const activeRosterUpdatedAt = active?.roster?.updatedAt ?? null;
+
+  const partnersSyncKey = useMemo(
+    () =>
+      partners
+        .map(
+          (partner) =>
+            `${partner.id}:${partner.updatedAt}:${partner.seminarSlotsConfirmedAt ?? ""}:${JSON.stringify(partner.seminarSlotAssignments ?? [])}:${JSON.stringify(partner.portalSeminarSpeakers ?? [])}`
+        )
+        .sort()
+        .join("|"),
+    [partners]
+  );
+
+  const lastHydratedKeyRef = useRef<string | null>(null);
+  const lastSessionKeyRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (!active) {
+    if (!activeSessionKey || !activeEventId || !activeSeminarId) {
+      lastHydratedKeyRef.current = null;
       setDraft(null);
-      setSelectedSpeakerId(null);
+      setPanelistSeats([]);
       return;
     }
-    setDraft(
-      active.roster
-        ? structuredClone(active.roster)
-        : emptyRoster(active.event.id, active.seminar.id)
+
+    const hydrationKey = `${activeSessionKey}|${activeRosterUpdatedAt ?? "none"}|${activePanelistSlots}|${partnersSyncKey}`;
+    if (lastHydratedKeyRef.current === hydrationKey) {
+      return;
+    }
+    lastHydratedKeyRef.current = hydrationKey;
+
+    const merged = mergeRosterWithPartnerSeats(
+      activeRoster,
+      activeEventId,
+      activeSeminarId,
+      activePanelistSlots,
+      partners
     );
-    setSelectedSpeakerId(null);
-  }, [active?.key]); // eslint-disable-line react-hooks/exhaustive-deps
+    setDraft(merged);
+    setPanelistSeats(
+      panelistSeatsFromRoster(merged, activePanelistSlots)
+    );
+
+    if (lastSessionKeyRef.current !== activeSessionKey) {
+      setSelectedSpeakerId(null);
+      lastSessionKeyRef.current = activeSessionKey;
+    }
+  }, [
+    activeSessionKey,
+    activeEventId,
+    activeSeminarId,
+    activePanelistSlots,
+    activeRoster,
+    activeRosterUpdatedAt,
+    partnersSyncKey,
+    partners,
+  ]);
+
+  const partnerBlocks = useMemo(() => {
+    if (!activeEventId || !activeSeminarId || !activePanelistSlots) return [];
+    return buildPartnerSeatBlocks(
+      partners,
+      activeEventId,
+      activeSeminarId,
+      activePanelistSlots
+    );
+  }, [
+    activeEventId,
+    activeSeminarId,
+    activePanelistSlots,
+    partnersSyncKey,
+    partners,
+  ]);
+
+  const seatMeta = useMemo(
+    () => seatDisplayMetaForSeminar(panelistSeats, partnerBlocks),
+    [panelistSeats, partnerBlocks]
+  );
 
   const saveMutation = useMutation({
     mutationFn: (roster: SeminarSessionRoster) =>
@@ -207,56 +301,110 @@ export function SeminarsView() {
     onError: () => toast.error("Could not save roster"),
   });
 
+  const handleSaveRoster = () => {
+    if (!draft || !active) return;
+    saveMutation.mutate(
+      rosterFromPanelistSeats(draft, panelistSeats)
+    );
+  };
+
   const selectedSpeaker: SeminarSpeaker | null = useMemo(() => {
-    if (!draft || !selectedSpeakerId) return null;
-    if (draft.moderator?.id === selectedSpeakerId) return draft.moderator;
-    return draft.panelists.find((p) => p.id === selectedSpeakerId) ?? null;
-  }, [draft, selectedSpeakerId]);
+    if (!selectedSpeakerId) return null;
+    if (draft?.moderator?.id === selectedSpeakerId) return draft.moderator;
+    for (const speaker of panelistSeats) {
+      if (speaker?.id === selectedSpeakerId) return speaker;
+    }
+    return null;
+  }, [draft, panelistSeats, selectedSpeakerId]);
+
+  const selectedSeatIndex = useMemo(() => {
+    if (!selectedSpeakerId) return null;
+    const idx = panelistSeats.findIndex(
+      (speaker) => speaker?.id === selectedSpeakerId
+    );
+    return idx >= 0 ? idx : null;
+  }, [panelistSeats, selectedSpeakerId]);
+
+  const selectedSeatBlock =
+    selectedSeatIndex != null
+      ? blockedPartnerForSeat(partnerBlocks, selectedSeatIndex)
+      : undefined;
 
   const isModeratorSelected =
     Boolean(draft?.moderator) && draft?.moderator?.id === selectedSpeakerId;
 
   const updateSpeaker = (patch: Partial<SeminarSpeaker>) => {
-    if (!draft || !selectedSpeakerId) return;
-    if (draft.moderator?.id === selectedSpeakerId) {
+    if (!selectedSpeakerId) return;
+    if (draft?.moderator?.id === selectedSpeakerId) {
       setDraft({
         ...draft,
-        moderator: { ...draft.moderator, ...patch },
+        moderator: { ...draft.moderator!, ...patch },
       });
       return;
     }
-    setDraft({
-      ...draft,
-      panelists: draft.panelists.map((p) =>
-        p.id === selectedSpeakerId ? { ...p, ...patch } : p
-      ),
+    setPanelistSeats((prev) =>
+      prev.map((speaker) =>
+        speaker?.id === selectedSpeakerId ? { ...speaker, ...patch } : speaker
+      )
+    );
+  };
+
+  const setPanelistAtSeat = (seatIndex: number, speaker: SeminarSpeaker) => {
+    setPanelistSeats((prev) => {
+      const next = [...prev];
+      while (next.length <= seatIndex) next.push(null);
+      next[seatIndex] = { ...speaker, seatIndex };
+      return next;
     });
   };
 
   const addPanelist = () => {
-    if (!draft || !active) return;
-    if (draft.panelists.length >= active.seminar.panelistSlots) {
+    if (!active) return;
+    const nextIndex = panelistSeats.findIndex((speaker) => !speaker);
+    if (nextIndex === -1) {
       toast.error("All panelist seats are filled");
       return;
     }
-    const speaker: SeminarSpeaker = {
-      id: generateId(),
-      name: "New panelist",
-      organization: "",
-      designation: "",
-      status: "Invited",
-    };
-    setDraft({ ...draft, panelists: [...draft.panelists, speaker] });
+    const block = blockedPartnerForSeat(partnerBlocks, nextIndex);
+    const speaker: SeminarSpeaker = block
+      ? createSpeakerFromPartnerBlock(block)
+      : {
+          id: generateId(),
+          name: "",
+          organization: "",
+          designation: "",
+          status: "Invited",
+          seatIndex: nextIndex,
+        };
+    setPanelistAtSeat(nextIndex, speaker);
     setSelectedSpeakerId(speaker.id);
   };
 
-  /** Open an existing panelist, or create one in the next empty seat. */
-  const openPanelistSeat = (speaker: SeminarSpeaker | null) => {
+  const openPanelistSeat = (
+    seatIndex: number,
+    speaker: SeminarSpeaker | null
+  ) => {
     if (speaker) {
       setSelectedSpeakerId(speaker.id);
       return;
     }
-    addPanelist();
+    const block = blockedPartnerForSeat(partnerBlocks, seatIndex);
+    if (block) {
+      const placeholder = createSpeakerFromPartnerBlock(block);
+      setPanelistAtSeat(seatIndex, placeholder);
+      setSelectedSpeakerId(placeholder.id);
+      return;
+    }
+    const newSpeaker: SeminarSpeaker = {
+      id: generateId(),
+      name: "",
+      organization: "",
+      designation: "",
+      status: "Invited",
+      seatIndex,
+    };
+    setPanelistAtSeat(seatIndex, newSpeaker);
+    setSelectedSpeakerId(newSpeaker.id);
   };
 
   const ensureModerator = () => {
@@ -267,9 +415,9 @@ export function SeminarsView() {
     }
     const speaker: SeminarSpeaker = {
       id: generateId(),
-      name: "New moderator",
-      organization: "Career Uttsav",
-      designation: "Moderator",
+      name: "",
+      organization: "",
+      designation: "",
       status: "Invited",
     };
     setDraft({ ...draft, moderator: speaker });
@@ -285,24 +433,36 @@ export function SeminarsView() {
       ensureModerator();
       return;
     }
-    openPanelistSeat(seat.speaker);
+    openPanelistSeat(seat.index, seat.speaker);
   };
 
   const removeSelected = () => {
-    if (!draft || !selectedSpeakerId) return;
-    if (draft.moderator?.id === selectedSpeakerId) {
+    if (!selectedSpeakerId) return;
+
+    if (draft?.moderator?.id === selectedSpeakerId) {
       setDraft({ ...draft, moderator: null });
-    } else {
-      setDraft({
-        ...draft,
-        panelists: draft.panelists.filter((p) => p.id !== selectedSpeakerId),
-      });
+      setSelectedSpeakerId(null);
+      return;
     }
+
+    if (selectedSeatIndex == null) {
+      setSelectedSpeakerId(null);
+      return;
+    }
+
+    const reset = resetBlockedSeat(partnerBlocks, selectedSeatIndex);
+    setPanelistSeats((prev) => {
+      const next = [...prev];
+      next[selectedSeatIndex] = reset;
+      return next;
+    });
     setSelectedSpeakerId(null);
   };
 
-  const isLoading = eventsQuery.isLoading || rostersQuery.isLoading;
-  const isError = eventsQuery.isError || rostersQuery.isError;
+  const isLoading =
+    eventsQuery.isLoading || rostersQuery.isLoading || partnersQuery.isLoading;
+  const isError =
+    eventsQuery.isError || rostersQuery.isError || partnersQuery.isError;
 
   return (
     <div className="space-y-6">
@@ -318,6 +478,7 @@ export function SeminarsView() {
           onRetry={() => {
             void eventsQuery.refetch();
             void rostersQuery.refetch();
+            void partnersQuery.refetch();
           }}
         />
       ) : null}
@@ -476,7 +637,7 @@ export function SeminarsView() {
                           className="gap-2 text-white hover:opacity-90"
                           style={{ backgroundColor: BRAND[700] }}
                           disabled={saveMutation.isPending}
-                          onClick={() => draft && saveMutation.mutate(draft)}
+                          onClick={handleSaveRoster}
                         >
                           <Save className="h-4 w-4" />
                           Save roster
@@ -506,7 +667,7 @@ export function SeminarsView() {
                               className="text-sm"
                               style={{ color: INK.secondary }}
                             >
-                              Tap a person to view or edit their details
+                              Tap a seat to view or edit — partner seats are reserved from the partnership journey
                             </p>
                           </div>
                           <div className="flex flex-wrap gap-2">
@@ -533,9 +694,10 @@ export function SeminarsView() {
 
                         <SeminarRoundTable
                           moderator={draft.moderator}
-                          panelists={draft.panelists}
+                          panelistSeats={panelistSeats}
                           totalSlots={active.seminar.panelistSlots}
                           selectedId={selectedSpeakerId}
+                          seatMeta={seatMeta}
                           onSeatClick={handleSeatClick}
                         />
                       </div>
@@ -588,7 +750,7 @@ export function SeminarsView() {
                       }}
                     >
                       <DialogContent
-                        className="max-w-[340px] gap-0 overflow-visible rounded-[28px] border-0 p-0 shadow-xl sm:rounded-[28px]"
+                        className="w-[min(calc(100vw-2rem),320px)] max-w-[320px] gap-0 overflow-hidden rounded-2xl border-0 p-0 shadow-xl sm:rounded-2xl"
                         overlayClassName="bg-black/25 backdrop-blur-sm"
                         style={{
                           background: PAPER.surface,
@@ -596,60 +758,58 @@ export function SeminarsView() {
                             "0 8px 30px rgba(18,35,63,0.14), 0 2px 8px rgba(18,35,63,0.06)",
                         }}
                       >
-                        {/* Bubble tail */}
                         <div
-                          className="pointer-events-none absolute -bottom-2 left-1/2 h-4 w-4 -translate-x-1/2 rotate-45"
-                          style={{
-                            background: PAPER.surface,
-                            boxShadow: "2px 2px 4px rgba(18,35,63,0.06)",
-                          }}
-                          aria-hidden
-                        />
-
-                        <div className="relative px-5 pb-5 pt-5">
-                          <DialogHeader className="space-y-1 pr-6 text-left">
+                          className="relative max-h-[min(72vh,440px)] overflow-y-auto px-4 pb-4 pt-4"
+                        >
+                          <DialogHeader className="space-y-0.5 pr-7 text-left">
                             <DialogTitle
-                              className="text-base font-semibold"
+                              className="text-sm font-semibold leading-snug"
                               style={{ color: INK.primary }}
                             >
-                              {selectedSpeaker?.name || "Seat"}
+                              {selectedSpeaker?.name?.trim() ||
+                                selectedSeatBlock?.partner.name ||
+                                "Seat"}
                             </DialogTitle>
                             <DialogDescription
-                              className="text-xs font-medium"
+                              className="text-[11px] font-medium leading-snug"
                               style={{ color: INK.muted }}
                             >
                               {isModeratorSelected ? "Moderator" : "Panelist"}
-                              {selectedSpeaker?.organization
-                                ? ` · ${selectedSpeaker.organization}`
-                                : ""}
+                              {selectedSeatBlock
+                                ? ` · ${selectedSeatBlock.partner.name}`
+                                : selectedSpeaker?.organization
+                                  ? ` · ${selectedSpeaker.organization}`
+                                  : ""}
                             </DialogDescription>
                           </DialogHeader>
 
                           {selectedSpeaker ? (
-                            <div className="mt-4 space-y-3">
-                              <div className="space-y-1.5">
-                                <Label>Name</Label>
+                            <div className="mt-3 space-y-2.5">
+                              <div className="space-y-1">
+                                <Label className="text-xs">Name</Label>
                                 <Input
+                                  className="h-9 text-sm"
                                   value={selectedSpeaker.name}
                                   onChange={(e) =>
                                     updateSpeaker({ name: e.target.value })
                                   }
                                 />
                               </div>
-                              <div className="space-y-1.5">
-                                <Label>Institution</Label>
+                              <div className="space-y-1">
+                                <Label className="text-xs">Contact number</Label>
                                 <Input
-                                  value={selectedSpeaker.organization}
+                                  className="h-9 text-sm"
+                                  value={selectedSpeaker.contact ?? ""}
                                   onChange={(e) =>
-                                    updateSpeaker({
-                                      organization: e.target.value,
-                                    })
+                                    updateSpeaker({ contact: e.target.value })
                                   }
+                                  placeholder="From partner portal"
                                 />
                               </div>
-                              <div className="space-y-1.5">
-                                <Label>Designation</Label>
+                              <div className="space-y-1">
+                                <Label className="text-xs">Designation</Label>
                                 <Input
+                                  className="h-9 text-sm"
                                   value={selectedSpeaker.designation ?? ""}
                                   onChange={(e) =>
                                     updateSpeaker({
@@ -658,8 +818,35 @@ export function SeminarsView() {
                                   }
                                 />
                               </div>
-                              <div className="space-y-1.5">
-                                <Label>Status</Label>
+                              <div className="space-y-1">
+                                <Label className="text-xs">Introduction</Label>
+                                <Textarea
+                                  rows={2}
+                                  className="min-h-[56px] resize-y text-sm"
+                                  value={selectedSpeaker.introduction ?? ""}
+                                  onChange={(e) =>
+                                    updateSpeaker({
+                                      introduction: e.target.value,
+                                    })
+                                  }
+                                  placeholder="Speaker bio from partner portal"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">Institution</Label>
+                                <Input
+                                  className="h-9 text-sm"
+                                  value={selectedSpeaker.organization}
+                                  onChange={(e) =>
+                                    updateSpeaker({
+                                      organization: e.target.value,
+                                    })
+                                  }
+                                  placeholder="Sponsoring partner"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">Status</Label>
                                 <Select
                                   value={selectedSpeaker.status}
                                   onValueChange={(v) =>
@@ -668,7 +855,7 @@ export function SeminarsView() {
                                     })
                                   }
                                 >
-                                  <SelectTrigger>
+                                  <SelectTrigger className="h-9 text-sm">
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -687,10 +874,13 @@ export function SeminarsView() {
                               <Button
                                 type="button"
                                 variant="outline"
-                                className="w-full text-destructive hover:text-destructive"
+                                size="sm"
+                                className="mt-1 w-full text-destructive hover:text-destructive"
                                 onClick={removeSelected}
                               >
-                                Remove from stage
+                                {selectedSeatBlock
+                                  ? "Clear seat details"
+                                  : "Remove from stage"}
                               </Button>
                             </div>
                           ) : null}

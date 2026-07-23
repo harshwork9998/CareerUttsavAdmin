@@ -3,6 +3,7 @@
 import { User } from "lucide-react";
 
 import { BRASS, INK, LINE, TEAL } from "@/features/dashboard/dashboard-ui";
+import type { SeatDisplayMeta } from "@/lib/seminar-partner-seats";
 import type { SeminarSpeaker } from "@/types";
 
 const MOD = {
@@ -17,6 +18,13 @@ const PANEL = {
   border: "#7BB8B7",
   icon: TEAL[500],
   ring: TEAL[700],
+} as const;
+
+const BLOCKED = {
+  bg: "#FFF8ED",
+  border: BRASS[500],
+  icon: BRASS[700],
+  ring: BRASS[700],
 } as const;
 
 type Seat =
@@ -57,15 +65,17 @@ function arrangeSeats(
 
 export function SeminarRoundTable({
   moderator,
-  panelists,
+  panelistSeats,
   totalSlots,
   selectedId,
+  seatMeta,
   onSeatClick,
 }: {
   moderator: SeminarSpeaker | null;
-  panelists: SeminarSpeaker[];
+  panelistSeats: (SeminarSpeaker | null)[];
   totalSlots: number;
   selectedId: string | null;
+  seatMeta?: SeatDisplayMeta[];
   onSeatClick: (
     seat:
       | { kind: "moderator"; speaker: SeminarSpeaker | null }
@@ -75,7 +85,7 @@ export function SeminarRoundTable({
   const slots = Math.max(totalSlots, 1);
   const panelSlots = Array.from(
     { length: slots },
-    (_, i) => panelists[i] ?? null
+    (_, i) => panelistSeats[i] ?? null
   );
   const seats = arrangeSeats(moderator, panelSlots);
   const total = seats.length;
@@ -120,6 +130,19 @@ export function SeminarRoundTable({
           </span>
           Panelist
         </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span
+            className="flex h-4 w-4 items-center justify-center rounded-full border border-dashed"
+            style={{
+              background: BLOCKED.bg,
+              color: BLOCKED.icon,
+              borderColor: BLOCKED.border,
+            }}
+          >
+            <User className="h-2.5 w-2.5" />
+          </span>
+          Partner seat
+        </span>
       </div>
 
       {/* Stage */}
@@ -145,15 +168,28 @@ export function SeminarRoundTable({
           const top = 68 + y * 0.85;
 
           const isMod = seat.kind === "moderator";
-          const palette = isMod ? MOD : PANEL;
+          const meta =
+            !isMod && seat.kind === "panelist"
+              ? seatMeta?.[seat.index]
+              : undefined;
+          const blocked = Boolean(meta?.blocked);
+          const palette = isMod ? MOD : blocked ? BLOCKED : PANEL;
           const speaker = seat.speaker;
           const empty = !speaker;
           const selected = Boolean(speaker && selectedId === speaker.id);
-          const name = speaker
+          const speakerLabel = speaker?.name?.trim()
             ? speaker.name.split(" ").slice(0, 2).join(" ")
-            : isMod
-              ? "Moderator"
-              : `Seat ${seat.index + 1}`;
+            : "";
+          const name = isMod
+            ? speakerLabel || "Moderator"
+            : speakerLabel ||
+              (meta?.awaitingSpeaker && meta.partnerName
+                ? meta.partnerName.split(" ").slice(0, 2).join(" ")
+                : `Seat ${seat.index + 1}`);
+          const subLabel =
+            !isMod && meta?.awaitingSpeaker && meta.partnerName
+              ? "Partner seat"
+              : null;
 
           return (
             <button
@@ -175,23 +211,34 @@ export function SeminarRoundTable({
               <span
                 className="flex h-9 w-9 items-center justify-center rounded-full"
                 style={{
-                  background: empty ? "#fff" : palette.bg,
-                  color: empty ? INK.muted : palette.icon,
-                  border: empty
-                    ? `1.5px dashed ${LINE.strong}`
-                    : selected
-                      ? `2px solid ${palette.ring}`
-                      : `1.5px solid ${palette.border}`,
+                  background: empty && !blocked ? "#fff" : palette.bg,
+                  color: empty && !blocked ? INK.muted : palette.icon,
+                  border:
+                    empty && !blocked
+                      ? `1.5px dashed ${LINE.strong}`
+                      : blocked && meta?.awaitingSpeaker
+                        ? `1.5px dashed ${palette.border}`
+                        : selected
+                          ? `2px solid ${palette.ring}`
+                          : `1.5px solid ${palette.border}`,
                 }}
               >
                 <User className="h-4 w-4" strokeWidth={2} />
               </span>
               <span
-                className="max-w-[72px] truncate text-center text-[10px] font-medium leading-tight"
-                style={{ color: empty ? INK.muted : INK.secondary }}
+                className="max-w-[80px] truncate text-center text-[10px] font-medium leading-tight"
+                style={{ color: empty && !blocked ? INK.muted : INK.secondary }}
               >
                 {name}
               </span>
+              {subLabel ? (
+                <span
+                  className="max-w-[80px] truncate text-center text-[9px] font-semibold leading-tight"
+                  style={{ color: BRASS[700] }}
+                >
+                  {subLabel}
+                </span>
+              ) : null}
             </button>
           );
         })}

@@ -6,6 +6,7 @@ import { ChevronDown } from "lucide-react";
 import { BRAND, INK } from "@/features/dashboard/dashboard-ui";
 import { INDIAN_STATES_AND_UTS } from "@/lib/indian-states-uts";
 import { cn } from "@/lib/utils";
+import { fieldErrorClass } from "@/components/shared/form-field-error";
 import { Input } from "@/components/ui/input";
 import {
   Popover,
@@ -18,6 +19,7 @@ type StateUtComboboxProps = {
   onChange: (value: string) => void;
   id?: string;
   placeholder?: string;
+  error?: string;
 };
 
 export function StateUtCombobox({
@@ -25,6 +27,7 @@ export function StateUtCombobox({
   onChange,
   id,
   placeholder = "Type to search state or UT…",
+  error,
 }: StateUtComboboxProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -78,7 +81,7 @@ export function StateUtCombobox({
       }}
     >
       <PopoverAnchor asChild>
-        <div className="relative">
+        <div className="relative" data-field-error={error ? "true" : undefined}>
           <Input
             id={id}
             role="combobox"
@@ -86,7 +89,9 @@ export function StateUtCombobox({
             aria-autocomplete="list"
             aria-controls={listboxId}
             aria-activedescendant={activeOptionId}
+            aria-invalid={Boolean(error)}
             autoComplete="off"
+            className={fieldErrorClass(error, "pr-9")}
             placeholder={placeholder}
             value={display}
             onChange={(e) => {
@@ -148,7 +153,6 @@ export function StateUtCombobox({
                 selectAt(index);
               }
             }}
-            className="pr-9"
           />
           <ChevronDown
             className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 opacity-50"

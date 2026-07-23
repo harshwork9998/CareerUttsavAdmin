@@ -18,6 +18,12 @@ import {
 import { SeminarTitleCombobox } from "@/features/events/seminar-title-combobox";
 import type { Event, EventSeminar } from "@/types";
 import { generateId } from "@/lib/utils";
+import {
+  FieldError,
+  fieldErrorClass,
+  fieldErrorSurfaceClass,
+  applyFormErrors,
+} from "@/components/shared/form-field-error";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -306,9 +312,13 @@ export function CreateEventDialog({
       }
     });
 
-    setErrors(next);
-    return Object.keys(next).length === 0;
+    if (applyFormErrors(setErrors, next)) return false;
+    return true;
   };
+
+  function seminarHasError(index: number) {
+    return Object.keys(errors).some((key) => key.startsWith(`sem-${index}-`));
+  }
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -434,29 +444,29 @@ export function CreateEventDialog({
                 Event details
               </h3>
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2 sm:col-span-2">
+                <div className="space-y-2 sm:col-span-2" data-field-error={errors.title ? "true" : undefined}>
                   <Label htmlFor="ce-title">Event name</Label>
                   <Input
                     id="ce-title"
+                    className={fieldErrorClass(errors.title)}
+                    aria-invalid={Boolean(errors.title)}
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                   />
-                  {errors.title && (
-                    <p className="text-xs text-destructive">{errors.title}</p>
-                  )}
+                  <FieldError message={errors.title} />
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-2" data-field-error={errors.city ? "true" : undefined}>
                   <Label htmlFor="ce-city">City of conduction</Label>
                   <Input
                     id="ce-city"
+                    className={fieldErrorClass(errors.city)}
+                    aria-invalid={Boolean(errors.city)}
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
                     placeholder="e.g. Bangalore, Mysore, Hubli"
                   />
-                  {errors.city && (
-                    <p className="text-xs text-destructive">{errors.city}</p>
-                  )}
+                  <FieldError message={errors.city} />
                 </div>
 
                 <div className="space-y-2">
@@ -473,16 +483,15 @@ export function CreateEventDialog({
                   />
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-2" data-field-error={errors.startDate ? "true" : undefined}>
                   <Label htmlFor="ce-event-date">Date of event</Label>
                   <DateField
                     id="ce-event-date"
                     value={startDate}
                     onChange={setStartDate}
+                    error={errors.startDate}
                   />
-                  {errors.startDate && (
-                    <p className="text-xs text-destructive">{errors.startDate}</p>
-                  )}
+                  <FieldError message={errors.startDate} />
                 </div>
 
                 <div className="space-y-2">
@@ -492,9 +501,7 @@ export function CreateEventDialog({
                     value={dayCount}
                     onChange={setDayCount}
                   />
-                  {errors.dayCount && (
-                    <p className="text-xs text-destructive">{errors.dayCount}</p>
-                  )}
+                  <FieldError message={errors.dayCount} />
                 </div>
 
                 <div className="space-y-2">
@@ -504,9 +511,7 @@ export function CreateEventDialog({
                     value={startTime}
                     onChange={setStartTime}
                   />
-                  {errors.startTime && (
-                    <p className="text-xs text-destructive">{errors.startTime}</p>
-                  )}
+                  <FieldError message={errors.startTime} />
                 </div>
 
                 <div className="space-y-2">
@@ -517,9 +522,7 @@ export function CreateEventDialog({
                     min={startTime || undefined}
                     onChange={setEndTime}
                   />
-                  {errors.endTime && (
-                    <p className="text-xs text-destructive">{errors.endTime}</p>
-                  )}
+                  <FieldError message={errors.endTime} />
                 </div>
 
                 <div className="space-y-2">
@@ -529,9 +532,7 @@ export function CreateEventDialog({
                     value={hallCount}
                     onChange={setHallCount}
                   />
-                  {errors.hallCount && (
-                    <p className="text-xs text-destructive">{errors.hallCount}</p>
-                  )}
+                  <FieldError message={errors.hallCount} />
                 </div>
               </div>
             </section>
@@ -586,11 +587,16 @@ export function CreateEventDialog({
                   {seminars.map((row, index) => (
                     <div
                       key={row.key}
-                      className="rounded-xl border p-4"
-                      style={{
-                        borderColor: LINE.subtle,
-                        background: PAPER.surface,
-                      }}
+                      className={fieldErrorSurfaceClass(
+                        seminarHasError(index),
+                        "rounded-xl border p-4"
+                      )}
+                      style={
+                        seminarHasError(index)
+                          ? undefined
+                          : { borderColor: LINE.subtle, background: PAPER.surface }
+                      }
+                      data-field-error={seminarHasError(index) ? "true" : undefined}
                     >
                       <p
                         className="mb-3 text-xs font-medium"
@@ -608,9 +614,7 @@ export function CreateEventDialog({
                             }
                           />
                           {errors[`sem-${index}-title`] && (
-                            <p className="text-xs text-destructive">
-                              {errors[`sem-${index}-title`]}
-                            </p>
+                            <FieldError message={errors[`sem-${index}-title`]} />
                           )}
                         </div>
 
@@ -624,7 +628,11 @@ export function CreateEventDialog({
                               }
                               disabled={!dayOptions.length}
                             >
-                              <SelectTrigger>
+                              <SelectTrigger
+                                className={fieldErrorClass(
+                                  errors[`sem-${index}-date`]
+                                )}
+                              >
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -635,11 +643,7 @@ export function CreateEventDialog({
                                 ))}
                               </SelectContent>
                             </Select>
-                            {errors[`sem-${index}-date`] && (
-                              <p className="text-xs text-destructive">
-                                {errors[`sem-${index}-date`]}
-                              </p>
-                            )}
+                            <FieldError message={errors[`sem-${index}-date`]} />
                           </div>
                         )}
 
@@ -651,7 +655,11 @@ export function CreateEventDialog({
                               updateSeminar(index, { hall: Number(v) })
                             }
                           >
-                            <SelectTrigger>
+                            <SelectTrigger
+                              className={fieldErrorClass(
+                                errors[`sem-${index}-hall`]
+                              )}
+                            >
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -662,11 +670,7 @@ export function CreateEventDialog({
                               ))}
                             </SelectContent>
                           </Select>
-                          {errors[`sem-${index}-hall`] && (
-                            <p className="text-xs text-destructive">
-                              {errors[`sem-${index}-hall`]}
-                            </p>
-                          )}
+                          <FieldError message={errors[`sem-${index}-hall`]} />
                         </div>
 
                         <div className="space-y-2">
@@ -686,11 +690,7 @@ export function CreateEventDialog({
                               });
                             }}
                           />
-                          {errors[`sem-${index}-start`] && (
-                            <p className="text-xs text-destructive">
-                              {errors[`sem-${index}-start`]}
-                            </p>
-                          )}
+                          <FieldError message={errors[`sem-${index}-start`]} />
                         </div>
 
                         <div className="space-y-2">
@@ -702,11 +702,7 @@ export function CreateEventDialog({
                               updateSeminar(index, { endTime: v })
                             }
                           />
-                          {errors[`sem-${index}-end`] && (
-                            <p className="text-xs text-destructive">
-                              {errors[`sem-${index}-end`]}
-                            </p>
-                          )}
+                          <FieldError message={errors[`sem-${index}-end`]} />
                         </div>
 
                         <div className="space-y-2">
@@ -715,7 +711,11 @@ export function CreateEventDialog({
                             type="text"
                             inputMode="numeric"
                             pattern="[0-9]*"
-                            className="h-10 w-14 text-center tabular-nums"
+                            className={fieldErrorClass(
+                              errors[`sem-${index}-slots`],
+                              "h-10 w-14 text-center tabular-nums"
+                            )}
+                            aria-invalid={Boolean(errors[`sem-${index}-slots`])}
                             value={row.panelistSlots || ""}
                             onChange={(e) => {
                               const raw = e.target.value.replace(/\D/g, "");
@@ -732,11 +732,7 @@ export function CreateEventDialog({
                               }
                             }}
                           />
-                          {errors[`sem-${index}-slots`] && (
-                            <p className="text-xs text-destructive">
-                              {errors[`sem-${index}-slots`]}
-                            </p>
-                          )}
+                          <FieldError message={errors[`sem-${index}-slots`]} />
                         </div>
                       </div>
                     </div>

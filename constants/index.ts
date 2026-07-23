@@ -83,6 +83,7 @@ export {
   PRE_REG_ACCESS_OPTIONS,
   buildDeliverablesForTier,
   applyTierDefaultsPreservingCustom,
+  normalizeDeliverableOptions,
 } from "./partner-deliverables";
 export type {
   PartnerDeliverableKey,

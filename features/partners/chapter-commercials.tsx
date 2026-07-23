@@ -22,6 +22,10 @@ import type {
   PartnerSeminarSlotAssignment,
 } from "@/types";
 import { Label } from "@/components/ui/label";
+import {
+  FieldError,
+  fieldErrorSurfaceClass,
+} from "@/components/shared/form-field-error";
 
 function formatInr(value: number) {
   return new Intl.NumberFormat("en-IN", {
@@ -413,11 +417,17 @@ function AmountField({
   hideLabel?: boolean;
 }) {
   return (
-    <div className="space-y-1.5">
+    <div
+      className="space-y-1.5"
+      data-field-error={error ? "true" : undefined}
+    >
       {!hideLabel && label ? <Label>{label}</Label> : null}
       <div
-        className="flex h-12 items-center gap-2 rounded-lg border px-3 transition-shadow focus-within:ring-2 focus-within:ring-ring"
-        style={{ borderColor: LINE.strong, background: PAPER.surface }}
+        className={fieldErrorSurfaceClass(
+          error,
+          "flex h-12 items-center gap-2 rounded-lg border px-3 transition-shadow focus-within:ring-2 focus-within:ring-ring"
+        )}
+        style={error ? undefined : { borderColor: LINE.strong, background: PAPER.surface }}
       >
         {prefix ? (
           <span
@@ -456,7 +466,7 @@ function AmountField({
           )
         ) : null}
       </div>
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      <FieldError message={error} />
     </div>
   );
 }

@@ -238,3 +238,24 @@ export function applyTierDefaultsPreservingCustom(
   const customs = (existing ?? []).filter((d) => d.isCustom);
   return [...buildDeliverablesForTier(tier, idFactory), ...customs];
 }
+
+/** Fill missing option values for included standard deliverables. */
+export function normalizeDeliverableOptions(
+  deliverables: PartnerDeliverable[],
+  tier?: SponsorshipTier
+): PartnerDeliverable[] {
+  const preset = tier ? TIER_PRESETS[tier] : undefined;
+
+  return deliverables.map((item) => {
+    if (!item.included || item.isCustom || item.option?.trim()) return item;
+
+    const def = PARTNER_DELIVERABLE_DEFINITIONS.find((d) => d.key === item.key);
+    if (!def?.options?.length) return item;
+
+    const presetOption = preset?.[item.key as PartnerDeliverableKey]?.option;
+    return {
+      ...item,
+      option: presetOption ?? def.options[0],
+    };
+  });
+}

@@ -1,4 +1,4 @@
-import { buildDeliverablesForTier } from "@/constants";
+import { buildDeliverablesForTier, normalizeDeliverableOptions } from "@/constants";
 import { getPartnershipTierLabel } from "@/lib/partner-tier";
 import type {
   Event,
@@ -85,7 +85,10 @@ export function resolveEventPartnerships(
   if (partner.eventPartnerships?.length) {
     return partner.eventPartnerships.map((ep) => ({
       ...ep,
-      deliverables: ep.deliverables.map((d) => ({ ...d })),
+      deliverables: normalizeDeliverableOptions(
+        ep.deliverables.map((d) => ({ ...d })),
+        ep.sponsorshipTier
+      ),
     }));
   }
 

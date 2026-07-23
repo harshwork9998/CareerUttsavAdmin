@@ -381,8 +381,14 @@ export interface SeminarSpeaker {
   id: string;
   name: string;
   designation?: string;
+  /** Phone or email from partner portal */
+  contact?: string;
+  /** Speaker bio / intro from partner portal */
+  introduction?: string;
   organization: string;
   partnerId?: string;
+  /** 0-based panel seat index within the seminar */
+  seatIndex?: number;
   status: SeminarSpeakerStatus;
 }
 

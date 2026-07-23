@@ -25,6 +25,10 @@ import {
   displayClass,
 } from "@/features/dashboard/dashboard-ui";
 import { cn } from "@/lib/utils";
+import {
+  FieldError,
+  fieldErrorSurfaceClass,
+} from "@/components/shared/form-field-error";
 import type {
   Event,
   Partner,
@@ -210,11 +214,16 @@ export function ChapterSeminarSlots(props: {
             className="space-y-4"
           >
             <div
-              className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3.5"
-              style={{
-                borderColor: LINE.subtle,
-                background: PAPER.muted,
-              }}
+              className={fieldErrorSurfaceClass(
+                eventError,
+                "flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3.5"
+              )}
+              style={
+                eventError
+                  ? undefined
+                  : { borderColor: LINE.subtle, background: PAPER.muted }
+              }
+              data-field-error={eventError ? "true" : undefined}
             >
               <div className="flex min-w-0 items-start gap-3">
                 <div
@@ -308,7 +317,7 @@ export function ChapterSeminarSlots(props: {
             </div>
 
             {eventError ? (
-              <p className="px-1 text-xs text-destructive">{eventError}</p>
+              <FieldError message={eventError} />
             ) : null}
           </motion.section>
         );

@@ -15,6 +15,10 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  FieldError,
+  fieldErrorClass,
+} from "@/components/shared/form-field-error";
 
 export function ChapterPartnerInvite(props: {
   inviteEmail: string;
@@ -132,19 +136,19 @@ export function ChapterPartnerInvite(props: {
                 Send to
               </p>
             </div>
-            <div className="space-y-1.5">
+            <div
+              className="space-y-1.5"
+              data-field-error={props.errors.inviteEmail ? "true" : undefined}
+            >
               <Label>Email</Label>
               <Input
                 type="email"
                 value={props.inviteEmail}
                 onChange={(e) => props.setInviteEmail(e.target.value)}
-                className="bg-white"
+                className={fieldErrorClass(props.errors.inviteEmail, "bg-white")}
+                aria-invalid={Boolean(props.errors.inviteEmail)}
               />
-              {props.errors.inviteEmail ? (
-                <p className="text-xs text-destructive">
-                  {props.errors.inviteEmail}
-                </p>
-              ) : null}
+              <FieldError message={props.errors.inviteEmail} />
             </div>
             <div
               className="mt-4 flex items-start gap-2 rounded-xl px-3 py-2.5 text-xs"

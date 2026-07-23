@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  ArrowLeft,
   ArrowRight,
   Check,
   Lock,
@@ -19,6 +20,7 @@ import {
   SPONSORSHIP_TIERS,
   PARTNER_DELIVERABLE_DEFINITIONS,
   applyTierDefaultsPreservingCustom,
+  normalizeDeliverableOptions,
 } from "@/constants";
 import { isIndianStateOrUt } from "@/lib/indian-states-uts";
 import { eventsService, partnersService } from "@/services/api";
@@ -88,6 +90,12 @@ import {
 } from "@/lib/partner-meetings";
 import { Button } from "@/components/ui/button";
 import { StateUtCombobox } from "@/components/shared/state-ut-combobox";
+import {
+  FieldError,
+  fieldErrorClass,
+  fieldErrorSurfaceClass,
+  applyFormErrors,
+} from "@/components/shared/form-field-error";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -918,8 +926,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     } else if (!isPartnerPortalEmail(secondary.email)) {
       next.secondary = "Enter a valid secondary contact email";
     }
-    setErrors(next);
-    if (Object.keys(next).length) return;
+    if (applyFormErrors(setErrors, next)) return;
 
     const base = {
       name: name.trim(),
@@ -957,7 +964,9 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
   const submitChapter2 = () => {
     if (!partner) return;
     if (!contactedAt) {
-      setErrors({ contactedAt: "Contact date is required" });
+      applyFormErrors(setErrors, {
+        contactedAt: "Contact date is required",
+      });
       return;
     }
     setErrors({});
@@ -1083,8 +1092,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
         next[`tierName-${eventId}`] = "Enter the custom tier name";
       }
     }
-    setErrors(next);
-    if (Object.keys(next).length) return;
+    if (applyFormErrors(setErrors, next)) return;
 
     const activePartnerships = eventPartnerships.filter((ep) =>
       eventIds.includes(ep.eventId)
@@ -1121,9 +1129,15 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
   const submitChapter5 = () => {
     if (!partner) return;
     const next: Record<string, string> = {};
-    const activePartnerships = eventPartnerships.filter((ep) =>
-      eventIds.includes(ep.eventId)
-    );
+    const activePartnerships = eventPartnerships
+      .filter((ep) => eventIds.includes(ep.eventId))
+      .map((ep) => ({
+        ...ep,
+        deliverables: normalizeDeliverableOptions(
+          ep.deliverables,
+          ep.sponsorshipTier
+        ),
+      }));
 
     for (const ep of activePartnerships) {
       const customPackage = isCustomPartnership(ep);
@@ -1166,8 +1180,19 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       }
     }
 
-    setErrors(next);
-    if (Object.keys(next).length) return;
+    if (applyFormErrors(setErrors, next)) return;
+
+    setEventPartnerships((prev) => {
+      const activeIds = new Set(eventIds);
+      const normalizedByEvent = new Map(
+        activePartnerships.map((ep) => [ep.eventId, ep])
+      );
+      return prev.map((ep) =>
+        activeIds.has(ep.eventId)
+          ? normalizedByEvent.get(ep.eventId) ?? ep
+          : ep
+      );
+    });
 
     const legacy = syncLegacyPartnerFields(activePartnerships);
 
@@ -1198,8 +1223,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       }
     }
 
-    setErrors(next);
-    if (Object.keys(next).length) return;
+    if (applyFormErrors(setErrors, next)) return;
 
     saveMutation.mutate({
       create: false,
@@ -1223,8 +1247,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     if (total <= 0) next.totalAmount = "Enter total amount";
     if (discount < 0) next.discountAmount = "Invalid discount";
     if (discount > total) next.discountAmount = "Discount cannot exceed total";
-    setErrors(next);
-    if (Object.keys(next).length) return;
+    if (applyFormErrors(setErrors, next)) return;
 
     const net = Math.max(0, total - discount);
     saveMutation.mutate({
@@ -1251,8 +1274,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       next.login = "Login must be a valid email";
     }
     if (!tempPassword.trim()) next.password = "Password required";
-    setErrors(next);
-    if (Object.keys(next).length) return;
+    if (applyFormErrors(setErrors, next)) return;
 
     const login = resolvePortalLogin(partner, email);
     const activePartnerships = eventPartnerships.filter((ep) =>
@@ -1411,10 +1433,27 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     );
   }
 
+  const goToPartnersOverview = () => {
+    void flushDraft(() => router.push("/partners"));
+  };
+
   const meta = CHAPTERS.find((c) => c.id === chapter)!;
 
   return (
     <div className="pb-12">
+      <div className="mb-4">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={goToPartnersOverview}
+          className="h-9 gap-1.5 rounded-full border-brand-900/15 bg-white px-3 font-medium text-brand-950 shadow-sm hover:bg-brand-50/80"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          <span className="hidden sm:inline">Back to partners</span>
+          <span className="sm:hidden">Back</span>
+        </Button>
+      </div>
       <header className="mb-8 flex flex-wrap items-start justify-between gap-3">
         <div>
           <p
@@ -1885,19 +1924,28 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
   );
 }
 
-function FieldError({ message }: { message?: string }) {
-  if (!message) return null;
-  return <p className="text-xs text-destructive">{message}</p>;
+function contactFieldHasError(
+  error: string | undefined,
+  key: keyof PartnerContact,
+  value: PartnerContact
+): boolean {
+  if (!error || key === "designation") return false;
+  if (key === "email" && error.toLowerCase().includes("valid")) {
+    return !value.email.trim() || !isPartnerPortalEmail(value.email);
+  }
+  return !value[key]?.trim();
 }
 
 function ContactFields({
   title,
   value,
   onChange,
+  error,
 }: {
   title: string;
   value: PartnerContact;
   onChange: (v: PartnerContact) => void;
+  error?: string;
 }) {
   return (
     <div className="space-y-3">
@@ -1912,16 +1960,25 @@ function ContactFields({
             ["phone", "Phone"],
             ["email", "Email"],
           ] as const
-        ).map(([key, label]) => (
-          <div key={key} className="space-y-1.5">
+        ).map(([key, label]) => {
+          const fieldError = contactFieldHasError(error, key, value);
+          return (
+          <div
+            key={key}
+            className="space-y-1.5"
+            data-field-error={fieldError ? "true" : undefined}
+          >
             <Label>{label}</Label>
             <Input
               type={key === "email" ? "email" : "text"}
+              className={fieldErrorClass(fieldError)}
+              aria-invalid={fieldError}
               value={value[key]}
               onChange={(e) => onChange({ ...value, [key]: e.target.value })}
             />
           </div>
-        ))}
+        );
+        })}
       </div>
     </div>
   );
@@ -1943,31 +2000,44 @@ function ChapterPartnerDetails(props: {
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5 sm:col-span-2">
+        <div className="space-y-1.5 sm:col-span-2" data-field-error={props.errors.name ? "true" : undefined}>
           <Label>Partner name</Label>
-          <Input value={props.name} onChange={(e) => props.setName(e.target.value)} />
+          <Input
+            className={fieldErrorClass(props.errors.name)}
+            aria-invalid={Boolean(props.errors.name)}
+            value={props.name}
+            onChange={(e) => props.setName(e.target.value)}
+          />
           <FieldError message={props.errors.name} />
         </div>
-        <div className="space-y-1.5">
+        <div className="space-y-1.5" data-field-error={props.errors.city ? "true" : undefined}>
           <Label>City</Label>
           <Input
+            className={fieldErrorClass(props.errors.city)}
+            aria-invalid={Boolean(props.errors.city)}
             value={props.city}
             onChange={(e) => props.setCity(e.target.value)}
             placeholder="e.g. Bengaluru"
           />
           <FieldError message={props.errors.city} />
         </div>
-        <div className="space-y-1.5">
+        <div className="space-y-1.5" data-field-error={props.errors.state ? "true" : undefined}>
           <Label>State / UT</Label>
           <StateUtCombobox
             value={props.state}
             onChange={props.setState}
+            error={props.errors.state}
           />
           <FieldError message={props.errors.state} />
         </div>
       </div>
       <div className="border-t pt-6" style={{ borderColor: LINE.subtle }}>
-        <ContactFields title="Primary contact" value={props.primary} onChange={props.setPrimary} />
+        <ContactFields
+          title="Primary contact"
+          value={props.primary}
+          onChange={props.setPrimary}
+          error={props.errors.primary}
+        />
         <FieldError message={props.errors.primary} />
       </div>
       <div className="border-t pt-6" style={{ borderColor: LINE.subtle }}>
@@ -1975,6 +2045,7 @@ function ChapterPartnerDetails(props: {
           title="Secondary contact"
           value={props.secondary}
           onChange={props.setSecondary}
+          error={props.errors.secondary}
         />
         <FieldError message={props.errors.secondary} />
       </div>
@@ -1991,9 +2062,13 @@ function ChapterContacted(props: {
 }) {
   return (
     <div className="mx-auto max-w-lg space-y-5">
-      <div className="space-y-1.5">
+      <div className="space-y-1.5" data-field-error={props.errors.contactedAt ? "true" : undefined}>
         <Label>Contact date</Label>
-        <DateField value={props.contactedAt} onChange={props.setContactedAt} />
+        <DateField
+          value={props.contactedAt}
+          onChange={props.setContactedAt}
+          error={props.errors.contactedAt}
+        />
         <FieldError message={props.errors.contactedAt} />
       </div>
       <div className="space-y-1.5">
@@ -2121,10 +2196,10 @@ function ChapterPartnership(props: {
           Relationship owner
         </h3>
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5 sm:col-span-2">
+          <div className="space-y-1.5 sm:col-span-2" data-field-error={props.errors.org ? "true" : undefined}>
             <Label>Closing organization</Label>
             <Select value={props.orgChoice} onValueChange={props.setOrgChoice}>
-              <SelectTrigger>
+              <SelectTrigger className={fieldErrorClass(props.errors.org)}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -2147,26 +2222,32 @@ function ChapterPartnership(props: {
               />
             </div>
           )}
-          <div className="space-y-1.5">
+          <div className="space-y-1.5" data-field-error={props.errors.mName ? "true" : undefined}>
             <Label>SPOC name</Label>
             <Input
+              className={fieldErrorClass(props.errors.mName)}
+              aria-invalid={Boolean(props.errors.mName)}
               value={props.managerName}
               onChange={(e) => props.setManagerName(e.target.value)}
             />
             <FieldError message={props.errors.mName} />
           </div>
-          <div className="space-y-1.5">
+          <div className="space-y-1.5" data-field-error={props.errors.mPhone ? "true" : undefined}>
             <Label>Contact number</Label>
             <Input
+              className={fieldErrorClass(props.errors.mPhone)}
+              aria-invalid={Boolean(props.errors.mPhone)}
               value={props.managerPhone}
               onChange={(e) => props.setManagerPhone(e.target.value)}
             />
             <FieldError message={props.errors.mPhone} />
           </div>
-          <div className="space-y-1.5 sm:col-span-2">
+          <div className="space-y-1.5 sm:col-span-2" data-field-error={props.errors.mEmail ? "true" : undefined}>
             <Label>Official email</Label>
             <Input
               type="email"
+              className={fieldErrorClass(props.errors.mEmail)}
+              aria-invalid={Boolean(props.errors.mEmail)}
               value={props.managerEmail}
               onChange={(e) => props.setManagerEmail(e.target.value)}
             />
@@ -2180,8 +2261,12 @@ function ChapterPartnership(props: {
           Events they will sponsor
         </h3>
         <div
-          className="space-y-1 rounded-xl border p-3"
-          style={{ borderColor: LINE.subtle, background: PAPER.muted }}
+          className={fieldErrorSurfaceClass(
+            props.errors.events || props.errors.tier,
+            "space-y-1 rounded-xl border p-3"
+          )}
+          style={!(props.errors.events || props.errors.tier) ? { borderColor: LINE.subtle, background: PAPER.muted } : undefined}
+          data-field-error={props.errors.events || props.errors.tier ? "true" : undefined}
         >
           {props.events.length === 0 ? (
             <p className="px-2 py-3 text-sm text-muted-foreground">No events yet.</p>
@@ -2210,12 +2295,24 @@ function ChapterPartnership(props: {
                     </span>
                   </label>
                   {selected ? (
-                    <div className="w-full space-y-2 sm:w-[min(100%,280px)] sm:shrink-0">
+                    <div
+                      className="w-full space-y-2 sm:w-[min(100%,280px)] sm:shrink-0"
+                      data-field-error={
+                        props.errors[`tierName-${event.id}`] ||
+                        props.errors.tier
+                          ? "true"
+                          : undefined
+                      }
+                    >
                       <Select
                         value={tierSelectValue(partnershipForEvent(event.id)) || undefined}
                         onValueChange={(v) => setTierForEvent(event.id, v)}
                       >
-                        <SelectTrigger className="h-9">
+                        <SelectTrigger
+                          className={fieldErrorClass(
+                            props.errors[`tierName-${event.id}`] || props.errors.tier
+                          )}
+                        >
                           <SelectValue placeholder="Sponsorship tier" />
                         </SelectTrigger>
                         <SelectContent>
@@ -2232,7 +2329,13 @@ function ChapterPartnership(props: {
                       {partnershipForEvent(event.id) &&
                       isCustomPartnership(partnershipForEvent(event.id)!) ? (
                         <Input
-                          className="h-9"
+                          className={fieldErrorClass(
+                            props.errors[`tierName-${event.id}`],
+                            "h-9"
+                          )}
+                          aria-invalid={Boolean(
+                            props.errors[`tierName-${event.id}`]
+                          )}
                           placeholder="e.g. Title Sponsor, Bronze Partner"
                           value={
                             partnershipForEvent(event.id)?.customTierLabel ?? ""

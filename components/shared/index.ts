@@ -46,3 +46,10 @@ export {
   type FilterOption,
 } from "./filters-bar";
 export { RichTextEditor, type RichTextEditorProps } from "./rich-text-editor";
+export {
+  FieldError,
+  fieldErrorClass,
+  fieldErrorSurfaceClass,
+  applyFormErrors,
+  scrollToFirstFormError,
+} from "./form-field-error";

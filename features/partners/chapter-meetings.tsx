@@ -43,6 +43,12 @@ import type {
   PartnerMeetingOutcome,
 } from "@/types";
 import { Button } from "@/components/ui/button";
+import {
+  FieldError,
+  fieldErrorClass,
+  fieldErrorSurfaceClass,
+  applyFormErrors,
+} from "@/components/shared/form-field-error";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -75,11 +81,6 @@ function outcomeMeta(outcome: PartnerMeetingOutcome) {
         ring: "rgba(176,125,42,0.35)",
       };
   }
-}
-
-function FieldError({ message }: { message?: string }) {
-  if (!message) return null;
-  return <p className="text-xs text-destructive">{message}</p>;
 }
 
 function MeetingOutcomeBadge({
@@ -327,8 +328,8 @@ export function ChapterMeetings({
     if (form.outcome === "lost" && !form.lostReason.trim()) {
       next.lostReason = "Reason is required when deal is lost";
     }
-    setErrors(next);
-    return Object.keys(next).length === 0;
+    if (applyFormErrors(setErrors, next)) return false;
+    return true;
   };
 
   const handleSave = () => {
@@ -496,11 +497,12 @@ export function ChapterMeetings({
               </div>
 
               <div className="grid gap-5 lg:grid-cols-2">
-                <div className="space-y-1.5">
+                <div className="space-y-1.5" data-field-error={errors.meetingDate ? "true" : undefined}>
                   <Label>Meeting date</Label>
                   <DateField
                     value={form.meetingDate}
                     onChange={(v) => setForm((f) => ({ ...f, meetingDate: v }))}
+                    error={errors.meetingDate}
                   />
                   <FieldError message={errors.meetingDate} />
                 </div>
@@ -574,13 +576,27 @@ export function ChapterMeetings({
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -8 }}
-                    className="mt-5 grid gap-4 rounded-xl border p-4 lg:grid-cols-2"
-                    style={{ borderColor: LINE.subtle, background: BRAND[50] }}
+                    className={fieldErrorSurfaceClass(
+                      errors.followUpNotes || errors.followUpDate,
+                      "mt-5 grid gap-4 rounded-xl border p-4 lg:grid-cols-2"
+                    )}
+                    style={
+                      errors.followUpNotes || errors.followUpDate
+                        ? undefined
+                        : { borderColor: LINE.subtle, background: BRAND[50] }
+                    }
+                    data-field-error={
+                      errors.followUpNotes || errors.followUpDate
+                        ? "true"
+                        : undefined
+                    }
                   >
                     <div className="space-y-1.5 lg:col-span-2">
                       <Label>Follow-up notes</Label>
                       <Textarea
                         rows={3}
+                        className={fieldErrorClass(errors.followUpNotes)}
+                        aria-invalid={Boolean(errors.followUpNotes)}
                         value={form.followUpNotes}
                         onChange={(e) =>
                           setForm((f) => ({
@@ -592,13 +608,14 @@ export function ChapterMeetings({
                       />
                       <FieldError message={errors.followUpNotes} />
                     </div>
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5" data-field-error={errors.followUpDate ? "true" : undefined}>
                       <Label>Next follow-up date</Label>
                       <DateField
                         value={form.followUpDate}
                         onChange={(v) =>
                           setForm((f) => ({ ...f, followUpDate: v }))
                         }
+                        error={errors.followUpDate}
                       />
                       <FieldError message={errors.followUpDate} />
                     </div>
@@ -620,16 +637,26 @@ export function ChapterMeetings({
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -8 }}
-                    className="mt-5 space-y-4 rounded-xl border p-4"
-                    style={{
-                      borderColor: "rgba(163,59,59,0.2)",
-                      background: "rgba(163,59,59,0.05)",
-                    }}
+                    className={fieldErrorSurfaceClass(
+                      errors.lostReason,
+                      "mt-5 space-y-4 rounded-xl border p-4"
+                    )}
+                    style={
+                      errors.lostReason
+                        ? undefined
+                        : {
+                            borderColor: "rgba(163,59,59,0.2)",
+                            background: "rgba(163,59,59,0.05)",
+                          }
+                    }
+                    data-field-error={errors.lostReason ? "true" : undefined}
                   >
                     <div className="space-y-1.5">
                       <Label>Reason deal lost</Label>
                       <Textarea
                         rows={3}
+                        className={fieldErrorClass(errors.lostReason)}
+                        aria-invalid={Boolean(errors.lostReason)}
                         value={form.lostReason}
                         onChange={(e) =>
                           setForm((f) => ({

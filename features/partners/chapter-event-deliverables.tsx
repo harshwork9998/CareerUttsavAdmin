@@ -34,13 +34,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  FieldError,
+  fieldErrorClass,
+  fieldErrorSurfaceClass,
+} from "@/components/shared/form-field-error";
 
 const CUSTOM_DELIVERABLE_OPTION = "__custom_deliverable__";
-
-function FieldError({ message }: { message?: string }) {
-  if (!message) return null;
-  return <p className="text-xs text-destructive">{message}</p>;
-}
 
 function EventDeliverableList({
   eventId,
@@ -148,8 +148,15 @@ function EventDeliverableList({
     : deliverables.filter((d) => d.isCustom);
 
   if (customPackage) {
+    const packageError = errors[`custom-package-${eventId}`];
     return (
-      <div className="space-y-4">
+      <div
+        className={fieldErrorSurfaceClass(
+          packageError,
+          "space-y-4 rounded-xl border border-transparent p-1"
+        )}
+        data-field-error={packageError ? "true" : undefined}
+      >
         <p className="text-sm leading-relaxed" style={{ color: INK.secondary }}>
           This is a custom partnership tier — pick deliverables from the standard
           catalog or add bespoke items. Use seminar slots below if panel seats
@@ -185,12 +192,21 @@ function EventDeliverableList({
                 (d) => d.key === item.key
               );
               const options = def?.options;
+              const itemError = errors[`${eventId}-${item.id}`];
 
               return (
                 <li
                   key={item.id}
-                  className="flex flex-col gap-2 rounded-xl border px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
-                  style={{ borderColor: LINE.subtle, background: BRAND[50] }}
+                  className={fieldErrorSurfaceClass(
+                    itemError,
+                    "flex flex-col gap-2 rounded-xl border px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
+                  )}
+                  style={
+                    itemError
+                      ? undefined
+                      : { borderColor: LINE.subtle, background: BRAND[50] }
+                  }
+                  data-field-error={itemError ? "true" : undefined}
                 >
                   {item.isCustom ? (
                     <Input
@@ -215,7 +231,7 @@ function EventDeliverableList({
                         value={item.option || undefined}
                         onValueChange={(v) => updateItem(item.id, { option: v })}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger className={fieldErrorClass(itemError)}>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -226,7 +242,7 @@ function EventDeliverableList({
                           ))}
                         </SelectContent>
                       </Select>
-                      <FieldError message={errors[`${eventId}-${item.id}`]} />
+                      <FieldError message={itemError} />
                     </div>
                   ) : null}
                   <Button
@@ -340,7 +356,7 @@ function EventDeliverableList({
             Add deliverable
           </Button>
         ) : null}
-        <FieldError message={errors[`custom-package-${eventId}`]} />
+        <FieldError message={packageError} />
       </div>
     );
   }
@@ -353,21 +369,31 @@ function EventDeliverableList({
             (d) => d.key === item.key
           );
           const options = def?.options;
+          const itemError = errors[`${eventId}-${item.id}`];
           return (
             <li
               key={item.id}
-              className="flex flex-col gap-2 rounded-xl border px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
+              className={fieldErrorSurfaceClass(
+                itemError,
+                "flex flex-col gap-2 rounded-xl border px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
+              )}
               style={{
-                borderColor: LINE.subtle,
+                borderColor: itemError ? undefined : LINE.subtle,
                 background: item.included ? BRAND[50] : PAPER.muted,
               }}
+              data-field-error={itemError ? "true" : undefined}
             >
               <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-3">
                 <Checkbox
                   checked={item.included}
-                  onCheckedChange={(v) =>
-                    updateItem(item.id, { included: v === true })
-                  }
+                  onCheckedChange={(v) => {
+                    const included = v === true;
+                    const patch: Partial<PartnerDeliverable> = { included };
+                    if (included && options?.length && !item.option) {
+                      patch.option = options[0];
+                    }
+                    updateItem(item.id, patch);
+                  }}
                   className="mt-0.5"
                 />
                 <span
@@ -384,7 +410,7 @@ function EventDeliverableList({
                     onValueChange={(v) => updateItem(item.id, { option: v })}
                     disabled={!item.included}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className={fieldErrorClass(itemError)}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -395,7 +421,7 @@ function EventDeliverableList({
                       ))}
                     </SelectContent>
                   </Select>
-                  <FieldError message={errors[`${eventId}-${item.id}`]} />
+                  <FieldError message={itemError} />
                 </div>
               ) : null}
             </li>
@@ -610,13 +636,20 @@ export function ChapterEventDeliverables({
             </div>
 
             <div
-              className="rounded-xl border p-4"
-              style={{
-                borderColor: LINE.subtle,
-                background: isCustomPartnership(ep)
-                  ? `linear-gradient(135deg, ${BRAND[50]} 0%, ${PAPER.muted} 100%)`
-                  : PAPER.muted,
-              }}
+              className={fieldErrorSurfaceClass(
+                errors[`seminar-slots-${ep.eventId}`],
+                "rounded-xl border p-4"
+              )}
+              style={
+                errors[`seminar-slots-${ep.eventId}`]
+                  ? undefined
+                  : { borderColor: LINE.subtle, background: isCustomPartnership(ep)
+                      ? `linear-gradient(135deg, ${BRAND[50]} 0%, ${PAPER.muted} 100%)`
+                      : PAPER.muted }
+              }
+              data-field-error={
+                errors[`seminar-slots-${ep.eventId}`] ? "true" : undefined
+              }
             >
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="flex items-start gap-3">
@@ -646,7 +679,11 @@ export function ChapterEventDeliverables({
                     type="number"
                     min={0}
                     max={99}
-                    className="w-20 text-center tabular-nums"
+                    className={fieldErrorClass(
+                      errors[`seminar-slots-${ep.eventId}`],
+                      "w-20 text-center tabular-nums"
+                    )}
+                    aria-invalid={Boolean(errors[`seminar-slots-${ep.eventId}`])}
                     value={ep.seminarSlotCount || ""}
                     onChange={(e) => {
                       const n = Math.max(0, parseInt(e.target.value, 10) || 0);

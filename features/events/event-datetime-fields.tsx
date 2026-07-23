@@ -21,6 +21,7 @@ import {
 import { CalendarDays, Check, ChevronLeft, ChevronRight, Clock, Keyboard } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { fieldErrorClass } from "@/components/shared/form-field-error";
 import { BRAND, INK, LINE, PAPER } from "@/features/dashboard/dashboard-ui";
 import { Button } from "@/components/ui/button";
 import {
@@ -109,6 +110,7 @@ type DateFieldProps = {
   placeholder?: string;
   id?: string;
   className?: string;
+  error?: string;
 };
 
 export function DateField({
@@ -119,6 +121,7 @@ export function DateField({
   placeholder = "",
   id,
   className,
+  error,
 }: DateFieldProps) {
   const [open, setOpen] = useState(false);
   const selected = parseISODate(value);
@@ -174,10 +177,15 @@ export function DateField({
           id={id}
           type="button"
           variant="outline"
-          className={cn(
-            "h-10 w-full justify-start gap-2 px-3 font-normal",
-            !value && "text-muted-foreground",
-            className
+          aria-invalid={Boolean(error)}
+          data-field-error={error ? "true" : undefined}
+          className={fieldErrorClass(
+            error,
+            cn(
+              "h-10 w-full justify-start gap-2 px-3 font-normal",
+              !value && "text-muted-foreground",
+              className
+            )
           )}
         >
           <CalendarDays className="h-4 w-4 shrink-0 opacity-70" />

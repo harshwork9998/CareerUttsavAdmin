@@ -1,7 +1,6 @@
 import fs from "fs";
 import path from "path";
 
-import { mockSeminarRosters } from "@/lib/mock-data/seminar-rosters";
 import {
   filterRostersForEventCatalog,
   upsertSeminarRosterInList,
@@ -13,10 +12,9 @@ const DATA_DIR = path.join(process.cwd(), "data");
 const STORE_PATH = path.join(DATA_DIR, "seminar-rosters-store.json");
 
 function seedStore(): SeminarSessionRoster[] {
-  const seed = mockSeminarRosters.map((roster) => structuredClone(roster));
   fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(STORE_PATH, JSON.stringify(seed, null, 2), "utf-8");
-  return seed;
+  fs.writeFileSync(STORE_PATH, "[]", "utf-8");
+  return [];
 }
 
 function syncRostersWithEventCatalog(
