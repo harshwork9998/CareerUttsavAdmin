@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Loader2, Minus, Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -9,6 +9,10 @@ import { toast } from "sonner";
 import { addDays, nextSaturday } from "date-fns";
 
 import { eventsService } from "@/services/api";
+import {
+  formatEventCitiesDescription,
+  getEventCities,
+} from "@/lib/event-cities";
 import { BRAND, INK, LINE, PAPER } from "@/features/dashboard/dashboard-ui";
 import {
   DateField,
@@ -179,6 +183,17 @@ export function CreateEventDialog({
 }: CreateEventDialogProps) {
   const queryClient = useQueryClient();
   const isEditing = Boolean(event);
+  const eventsQuery = useQuery({
+    queryKey: ["events"],
+    queryFn: () => eventsService.getAll(),
+    enabled: open,
+  });
+  const cityPlaceholder = useMemo(() => {
+    const cities = getEventCities(eventsQuery.data ?? []);
+    return cities.length > 0
+      ? `e.g. ${formatEventCitiesDescription(cities)}`
+      : "e.g. Bangalore, Mysore, Hubli";
+  }, [eventsQuery.data]);
 
   const [title, setTitle] = useState("");
   const [city, setCity] = useState("");
@@ -464,7 +479,7 @@ export function CreateEventDialog({
                     aria-invalid={Boolean(errors.city)}
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
-                    placeholder="e.g. Bangalore, Mysore, Hubli"
+                    placeholder={cityPlaceholder}
                   />
                   <FieldError message={errors.city} />
                 </div>

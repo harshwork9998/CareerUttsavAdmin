@@ -8,6 +8,7 @@ import { Breadcrumbs, type BreadcrumbItem } from "@/components/shared/breadcrumb
 export interface PageHeaderProps {
   title: string;
   description?: string;
+  descriptionClassName?: string;
   breadcrumbs?: BreadcrumbItem[];
   actions?: React.ReactNode;
   className?: string;
@@ -16,6 +17,7 @@ export interface PageHeaderProps {
 export function PageHeader({
   title,
   description,
+  descriptionClassName,
   breadcrumbs,
   actions,
   className,
@@ -37,7 +39,12 @@ export function PageHeader({
             {title}
           </h1>
           {description && (
-            <p className="max-w-2xl text-sm text-muted-foreground sm:text-base">
+            <p
+              className={cn(
+                "max-w-2xl text-sm text-muted-foreground sm:text-base",
+                descriptionClassName
+              )}
+            >
               {description}
             </p>
           )}

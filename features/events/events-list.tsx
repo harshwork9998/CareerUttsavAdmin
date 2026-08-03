@@ -17,6 +17,10 @@ import {
 import { toast } from "sonner";
 
 import { eventsService } from "@/services/api";
+import {
+  formatEventCitiesDescription,
+  getEventCities,
+} from "@/lib/event-cities";
 import { cn } from "@/lib/utils";
 import type { Event } from "@/types";
 import { CreateEventDialog } from "@/features/events/create-event-dialog";
@@ -248,6 +252,14 @@ export function EventsList() {
   });
 
   const events = useMemo(() => data ?? [], [data]);
+  const eventCities = useMemo(() => getEventCities(events), [events]);
+  const eventsDescription = useMemo(
+    () =>
+      eventCities.length > 0
+        ? `Plan and manage Career Uttsav events across ${formatEventCitiesDescription(eventCities)}.`
+        : "Plan and manage Career Uttsav events across your cities.",
+    [eventCities]
+  );
 
   const openCreate = () => {
     setEditingEvent(null);
@@ -268,7 +280,7 @@ export function EventsList() {
     <div className="space-y-8">
       <PageHeader
         title="Events"
-        description="Plan and manage Career Uttsav events across Bangalore, Mysore & Hubli."
+        description={eventsDescription}
         actions={
           <Button
             onClick={openCreate}

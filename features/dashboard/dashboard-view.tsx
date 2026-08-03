@@ -6,7 +6,11 @@ import { AnimatePresence, motion } from "framer-motion";
 
 import { dashboardService, eventsService, registrationsService } from "@/services/api";
 import { cn, formatNumber } from "@/lib/utils";
-import { citiesMatch } from "@/lib/event-cities";
+import {
+  citiesMatch,
+  formatEventCitiesList,
+  getEventCities,
+} from "@/lib/event-cities";
 import type {
   DashboardCityFilter,
   DashboardData,
@@ -34,17 +38,13 @@ function buildHeroTabs(
   ];
 }
 
-function formatCitySubtitle(eventCities: string[]): string {
-  return eventCities.length > 0 ? eventCities.join(" · ") : "No events yet";
-}
-
 function isValidCityFilter(
   filter: DashboardCityFilter,
-  dashboard: DashboardData
+  eventCities: string[]
 ): boolean {
   return (
     filter === "all" ||
-    dashboard.eventCities.some((city) => citiesMatch(city, filter))
+    eventCities.some((city) => citiesMatch(city, filter))
   );
 }
 function buildSupportFacts(
@@ -265,24 +265,21 @@ export function DashboardView() {
   const dashboard = dashboardQuery.data;
   const events = eventsQuery.data ?? [];
   const registrations = registrationsQuery.data ?? [];
+  const eventCities = useMemo(() => getEventCities(events), [events]);
 
   useEffect(() => {
-    if (!dashboard) return;
-    if (!isValidCityFilter(studentCityFilter, dashboard)) {
+    if (!isValidCityFilter(studentCityFilter, eventCities)) {
       setStudentCityFilter("all");
     }
-    if (!isValidCityFilter(partnerCityFilter, dashboard)) {
+    if (!isValidCityFilter(partnerCityFilter, eventCities)) {
       setPartnerCityFilter("all");
     }
-  }, [dashboard, studentCityFilter, partnerCityFilter]);
+  }, [eventCities, studentCityFilter, partnerCityFilter]);
 
-  const heroTabs = useMemo(
-    () => (dashboard ? buildHeroTabs(dashboard.eventCities) : []),
-    [dashboard]
-  );
+  const heroTabs = useMemo(() => buildHeroTabs(eventCities), [eventCities]);
   const citySubtitle = useMemo(
-    () => (dashboard ? formatCitySubtitle(dashboard.eventCities) : ""),
-    [dashboard]
+    () => formatEventCitiesList(eventCities),
+    [eventCities]
   );
 
   const studentView = useMemo(
@@ -344,7 +341,12 @@ export function DashboardView() {
       <PageHeader
         className="mb-8 sm:mb-10"
         title="Dashboard"
-        description="Track student registrations and university partner performance across Career Uttsav cities."
+        descriptionClassName="max-w-none whitespace-nowrap"
+        description={
+          eventCities.length > 0
+            ? `Track student registrations and university partners across ${citySubtitle}.`
+            : "Track student registrations and university partners across Career Uttsav cities."
+        }
       />
 
       <header className="mb-6 sm:mb-7">
@@ -373,7 +375,7 @@ export function DashboardView() {
             data={studentView.studentRegistration}
             cityLabel={studentView.cityLabel}
             isAllCities={studentView.isAllCities}
-            eventCities={dashboard.eventCities}
+            eventCities={eventCities}
             registrations={registrations}
             events={events}
           />
