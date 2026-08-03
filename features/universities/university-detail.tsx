@@ -517,7 +517,7 @@ export function UniversityDetail({ id }: UniversityDetailProps) {
         open={pendingAction === "approve"}
         onOpenChange={(open) => !open && setPendingAction(null)}
         title="Approve university"
-        description={`Approve ${university.name} as an official Career Utsav partner? They will be notified and assigned booth privileges.`}
+        description={`Approve ${university.name} as an official Career Uttsav partner? They will be notified and assigned booth privileges.`}
         confirmLabel="Approve"
         onConfirm={() => handleStatusUpdate("Approved")}
         loading={updateMutation.isPending}

@@ -268,7 +268,7 @@ export function EventsList() {
     <div className="space-y-8">
       <PageHeader
         title="Events"
-        description="Plan and manage Career Utsav events across Bangalore, Mysore & Hubli."
+        description="Plan and manage Career Uttsav events across Bangalore, Mysore & Hubli."
         actions={
           <Button
             onClick={openCreate}
@@ -327,7 +327,7 @@ export function EventsList() {
               Create your first event
             </p>
             <p className="text-sm" style={{ color: INK.muted }}>
-              Tap + to set up a Career Utsav fair
+              Tap + to set up a Career Uttsav fair
             </p>
           </div>
         </motion.button>

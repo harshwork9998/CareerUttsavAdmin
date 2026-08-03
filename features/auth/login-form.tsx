@@ -93,7 +93,7 @@ export function LoginForm() {
               <Input
                 id="email"
                 type="email"
-                placeholder="admin@careerutsav.com"
+                placeholder="admin@careeruttsav.com"
                 autoComplete="email"
                 className="pl-9"
                 {...register("email")}

@@ -430,7 +430,7 @@ export function CreateEventDialog({
               {isEditing ? "Edit event" : "Create event"}
             </DialogTitle>
             <DialogDescription className="sr-only">
-              {isEditing ? "Edit Career Utsav event" : "Create a Career Utsav event"}
+              {isEditing ? "Edit Career Uttsav event" : "Create a Career Uttsav event"}
             </DialogDescription>
           </DialogHeader>
 

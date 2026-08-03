@@ -234,7 +234,7 @@ function DashboardSkeleton() {
     <div className="space-y-8">
       <PageHeader
         title="Dashboard"
-        description="Track student registrations and university partners across Career Utsav cities."
+        description="Track student registrations and university partners across Career Uttsav cities."
       />
       <Skeleton className="h-72 rounded-2xl" />
       <Skeleton className="h-48 rounded-xl" />
@@ -331,7 +331,7 @@ export function DashboardView() {
       <div className="space-y-6">
         <PageHeader title="Dashboard" />
         <ErrorState
-          title="Couldn't load Career Utsav"
+          title="Couldn't load Career Uttsav"
           message="Please check your connection and try again."
           onRetry={() => void dashboardQuery.refetch()}
         />
@@ -344,7 +344,7 @@ export function DashboardView() {
       <PageHeader
         className="mb-8 sm:mb-10"
         title="Dashboard"
-        description="Track student registrations and university partner performance across Career Utsav cities."
+        description="Track student registrations and university partner performance across Career Uttsav cities."
       />
 
       <header className="mb-6 sm:mb-7">

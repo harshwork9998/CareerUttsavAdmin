@@ -10,7 +10,7 @@ import {
   mockCitySlices,
   OPERATING_CITIES,
 } from "@/lib/mock-data/dashboard-city-slices";
-import { CAREER_UTSAV_SEMINARS, SEMINAR_POPULARITY } from "@/features/dashboard/seminars";
+import { CAREER_UTTSAV_SEMINARS, SEMINAR_POPULARITY } from "@/features/dashboard/seminars";
 
 function sumChart(
   pick: (city: (typeof mockCitySlices)[keyof typeof mockCitySlices]) => Array<{ name: string; value: number }>
@@ -31,7 +31,7 @@ function buildAllCitiesStudentRegistration(): StudentRegistrationAnalytics {
   const total = slices.reduce((s, x) => s + x.total, 0);
   const todayCount = slices.reduce((s, x) => s + x.todayCount, 0);
   const weightSum = Object.values(SEMINAR_POPULARITY).reduce((s, w) => s + w, 0) || 1;
-  const bySeminar = CAREER_UTSAV_SEMINARS.map((name) => ({
+  const bySeminar = CAREER_UTTSAV_SEMINARS.map((name) => ({
     name,
     value: Math.max(1, Math.round(((SEMINAR_POPULARITY[name] ?? 20) / weightSum) * total * 0.85)),
   })).sort((a, b) => b.value - a.value);
@@ -256,7 +256,7 @@ export const mockDashboardData: DashboardData = {
       id: "ra-002",
       type: "event",
       title: "Event live",
-      description: "Career Utsav Delhi NCR 2026 is now live",
+      description: "Career Uttsav Delhi NCR 2026 is now live",
       timestamp: "2026-07-05T08:00:00+05:30",
       link: "/events/evt-002",
     },
@@ -360,7 +360,7 @@ export const mockDashboardData: DashboardData = {
   upcomingEvents: [
     {
       id: "evt-002",
-      title: "Career Utsav Delhi NCR 2026",
+      title: "Career Uttsav Delhi NCR 2026",
       startDate: "2026-07-05T10:00:00+05:30",
       city: "New Delhi",
       status: "Live",
@@ -369,7 +369,7 @@ export const mockDashboardData: DashboardData = {
     },
     {
       id: "evt-001",
-      title: "Career Utsav Bengaluru 2026",
+      title: "Career Uttsav Bengaluru 2026",
       startDate: "2026-08-15T09:00:00+05:30",
       city: "Bengaluru",
       status: "Published",
@@ -378,7 +378,7 @@ export const mockDashboardData: DashboardData = {
     },
     {
       id: "evt-003",
-      title: "Career Utsav Hubli 2025",
+      title: "Career Uttsav Hubli 2025",
       startDate: "2025-12-10T09:30:00+05:30",
       city: "Hubli",
       status: "Completed",
@@ -387,7 +387,7 @@ export const mockDashboardData: DashboardData = {
     },
     {
       id: "evt-006",
-      title: "Career Utsav Chennai 2026",
+      title: "Career Uttsav Chennai 2026",
       startDate: "2026-11-08T09:00:00+05:30",
       city: "Chennai",
       status: "Draft",
@@ -495,8 +495,8 @@ export const mockReports: Report[] = [
 
 export const mockSettings: Settings = {
   general: {
-    siteName: "Career Utsav",
-    contactEmail: "info@careerutsav.com",
+    siteName: "Career Uttsav",
+    contactEmail: "info@careeruttsav.com",
     contactPhone: "+91 80 4567 8900",
     address: "K2 Group, 42 MG Road, Bengaluru, Karnataka 560001",
     defaultCity: "Bengaluru",

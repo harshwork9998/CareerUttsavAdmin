@@ -4,7 +4,7 @@ export const mockUsers: User[] = [
   {
     id: "usr-001",
     name: "Rajesh Kumar",
-    email: "rajesh.kumar@careerutsav.com",
+    email: "rajesh.kumar@careeruttsav.com",
     phone: "+91 98765 43210",
     avatar: "/avatars/rajesh-kumar.jpg",
     role: "Super Admin",
@@ -18,7 +18,7 @@ export const mockUsers: User[] = [
   {
     id: "usr-002",
     name: "Priya Sharma",
-    email: "priya.sharma@careerutsav.com",
+    email: "priya.sharma@careeruttsav.com",
     phone: "+91 98123 45678",
     avatar: "/avatars/priya-sharma.jpg",
     role: "Admin",
@@ -32,7 +32,7 @@ export const mockUsers: User[] = [
   {
     id: "usr-003",
     name: "Ananya Reddy",
-    email: "ananya.reddy@careerutsav.com",
+    email: "ananya.reddy@careeruttsav.com",
     phone: "+91 98480 12345",
     role: "Marketing",
     roleId: "role-003",
@@ -45,7 +45,7 @@ export const mockUsers: User[] = [
   {
     id: "usr-004",
     name: "Vikram Singh",
-    email: "vikram.singh@careerutsav.com",
+    email: "vikram.singh@careeruttsav.com",
     phone: "+91 99887 76655",
     avatar: "/avatars/vikram-singh.jpg",
     role: "Content Editor",
@@ -59,7 +59,7 @@ export const mockUsers: User[] = [
   {
     id: "usr-005",
     name: "Meera Nair",
-    email: "meera.nair@careerutsav.com",
+    email: "meera.nair@careeruttsav.com",
     phone: "+91 98470 98765",
     role: "Operations",
     roleId: "role-005",
@@ -72,7 +72,7 @@ export const mockUsers: User[] = [
   {
     id: "usr-006",
     name: "Arjun Patel",
-    email: "arjun.patel@careerutsav.com",
+    email: "arjun.patel@careeruttsav.com",
     phone: "+91 98250 33445",
     role: "Operations",
     roleId: "role-005",
@@ -85,7 +85,7 @@ export const mockUsers: User[] = [
   {
     id: "usr-007",
     name: "Kavita Desai",
-    email: "kavita.desai@careerutsav.com",
+    email: "kavita.desai@careeruttsav.com",
     phone: "+91 97654 32109",
     role: "Marketing",
     roleId: "role-003",
@@ -98,7 +98,7 @@ export const mockUsers: User[] = [
   {
     id: "usr-008",
     name: "Rahul Verma",
-    email: "rahul.verma@careerutsav.com",
+    email: "rahul.verma@careeruttsav.com",
     phone: "+91 99100 22334",
     role: "Read Only",
     roleId: "role-006",
@@ -111,7 +111,7 @@ export const mockUsers: User[] = [
   {
     id: "usr-009",
     name: "Sneha Iyer",
-    email: "sneha.iyer@careerutsav.com",
+    email: "sneha.iyer@careeruttsav.com",
     phone: "+91 94440 55667",
     role: "Content Editor",
     roleId: "role-004",
@@ -124,7 +124,7 @@ export const mockUsers: User[] = [
   {
     id: "usr-010",
     name: "Deepak Joshi",
-    email: "deepak.joshi@careerutsav.com",
+    email: "deepak.joshi@careeruttsav.com",
     phone: "+91 98760 11223",
     role: "Admin",
     roleId: "role-002",

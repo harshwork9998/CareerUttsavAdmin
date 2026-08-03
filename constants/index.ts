@@ -2,7 +2,7 @@ export const BRAND = {
   primary: "#1F3864",
   secondary: "#0E7C7B",
   accent: "#3B82F6",
-  name: "Career Utsav",
+  name: "Career Uttsav",
   org: "K2 Group",
 } as const;
 
@@ -93,6 +93,6 @@ export type {
 export const EVENT_STATUSES = ["Draft", "Published", "Live", "Completed", "Archived"] as const;
 
 export const MOCK_ADMIN = {
-  email: "admin@careerutsav.com",
+  email: "admin@careeruttsav.com",
   password: "admin123",
 };

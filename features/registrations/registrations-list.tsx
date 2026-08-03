@@ -414,7 +414,7 @@ export function RegistrationsList() {
       <div className="space-y-6">
         <PageHeader
           title="Registrations"
-          description="Manage student registrations across all Career Utsav events."
+          description="Manage student registrations across all Career Uttsav events."
         />
         <TableSkeleton rows={8} columns={12} />
       </div>
@@ -438,7 +438,7 @@ export function RegistrationsList() {
     <div className="space-y-6">
       <PageHeader
         title="Registrations"
-        description="Manage student registrations across all Career Utsav events."
+        description="Manage student registrations across all Career Uttsav events."
         actions={
           <Button
             variant="outline"

@@ -1,5 +1,5 @@
-/** Career Utsav seminar catalogue — used for registration interest analytics. */
-export const CAREER_UTSAV_SEMINARS = [
+/** Career Uttsav seminar catalogue — used for registration interest analytics. */
+export const CAREER_UTTSAV_SEMINARS = [
   "How to select a stream – Art – Science – Commerce?",
   "All about Overseas Education",
   "How to Choose the right Boarding School?",
@@ -22,7 +22,7 @@ export const CAREER_UTSAV_SEMINARS = [
   "In the Course of 'Law'",
 ] as const;
 
-export type CareerUtsavSeminar = (typeof CAREER_UTSAV_SEMINARS)[number];
+export type CareerUttsavSeminar = (typeof CAREER_UTTSAV_SEMINARS)[number];
 
 /** Popularity weights for mock seminar registration counts (relative). */
 export const SEMINAR_POPULARITY: Record<string, number> = {
@@ -50,7 +50,7 @@ export const SEMINAR_POPULARITY: Record<string, number> = {
 
 export function buildSeminarChartData(totalRegistrations: number) {
   const weightSum = Object.values(SEMINAR_POPULARITY).reduce((a, b) => a + b, 0);
-  return CAREER_UTSAV_SEMINARS.map((name) => {
+  return CAREER_UTTSAV_SEMINARS.map((name) => {
     const weight = SEMINAR_POPULARITY[name] ?? 20;
     return {
       name,

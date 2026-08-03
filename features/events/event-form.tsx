@@ -282,7 +282,7 @@ export function EventForm({ eventId }: EventFormProps) {
         description={
           isEditing
             ? `Update details for ${eventQuery.data?.title}`
-            : "Set up a new Career Utsav event"
+            : "Set up a new Career Uttsav event"
         }
         breadcrumbs={[
           { label: "Events", href: "/events" },
@@ -303,7 +303,7 @@ export function EventForm({ eventId }: EventFormProps) {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="title">Event Title *</Label>
-                <Input id="title" {...form.register("title")} placeholder="Career Utsav Bengaluru 2026" />
+                <Input id="title" {...form.register("title")} placeholder="Career Uttsav Bengaluru 2026" />
                 {form.formState.errors.title && (
                   <p className="text-xs text-destructive">{form.formState.errors.title.message}</p>
                 )}
@@ -311,7 +311,7 @@ export function EventForm({ eventId }: EventFormProps) {
 
               <div className="space-y-2">
                 <Label htmlFor="slug">URL Slug *</Label>
-                <Input id="slug" {...form.register("slug")} placeholder="career-utsav-bengaluru-2026" />
+                <Input id="slug" {...form.register("slug")} placeholder="career-uttsav-bengaluru-2026" />
                 {form.formState.errors.slug && (
                   <p className="text-xs text-destructive">{form.formState.errors.slug.message}</p>
                 )}

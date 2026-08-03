@@ -30,16 +30,16 @@ const DEFAULT_EMAIL_SUBJECT = "Reminder: {{seminarTitle}} — {{eventTitle}}";
 
 const DEFAULT_EMAIL_BODY = `Hi {{studentName}},
 
-Thank you for registering for Career Utsav. This is a reminder about your selected seminar:
+Thank you for registering for Career Uttsav. This is a reminder about your selected seminar:
 
 {{seminarTitle}}
 Time: {{seminarTime}} · Audi {{seminarHall}}
 
 Please arrive 10 minutes early. See you at {{eventTitle}}!
 
-— Career Utsav Team`;
+— Career Uttsav Team`;
 
-const DEFAULT_WHATSAPP_BODY = `Hi {{studentName}}! Reminder for {{seminarTitle}} at {{eventTitle}} — {{seminarTime}}, Audi {{seminarHall}}. Please arrive 10 mins early. — Career Utsav`;
+const DEFAULT_WHATSAPP_BODY = `Hi {{studentName}}! Reminder for {{seminarTitle}} at {{eventTitle}} — {{seminarTime}}, Audi {{seminarHall}}. Please arrive 10 mins early. — Career Uttsav`;
 
 function formatSeminarSlot(seminar?: EventSeminar): {
   seminarTime?: string;

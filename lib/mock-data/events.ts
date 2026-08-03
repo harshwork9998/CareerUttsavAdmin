@@ -3,8 +3,8 @@ import type { Event } from "@/types";
 export const mockEvents: Event[] = [
   {
     id: "evt-001",
-    title: "Career Utsav Bengaluru 2026",
-    slug: "career-utsav-bengaluru-2026",
+    title: "Career Uttsav Bengaluru 2026",
+    slug: "career-uttsav-bengaluru-2026",
     description:
       "India's largest career fair in Bengaluru featuring 150+ universities, industry leaders, and career counselling sessions. Connect with top institutions from Karnataka and across India.",
     shortDescription: "150+ universities, career counselling & industry sessions in Bengaluru.",
@@ -70,8 +70,8 @@ export const mockEvents: Event[] = [
   },
   {
     id: "evt-002",
-    title: "Career Utsav Mysore 2026",
-    slug: "career-utsav-mysore-2026",
+    title: "Career Uttsav Mysore 2026",
+    slug: "career-uttsav-mysore-2026",
     description:
       "Premier education expo in Mysore. Meet representatives from leading universities and career counsellors across Karnataka.",
     shortDescription: "Premier education expo in Mysore with career counselling sessions.",
@@ -119,8 +119,8 @@ export const mockEvents: Event[] = [
   },
   {
     id: "evt-003",
-    title: "Career Utsav Hubli 2025",
-    slug: "career-utsav-hubli-2025",
+    title: "Career Uttsav Hubli 2025",
+    slug: "career-uttsav-hubli-2025",
     description:
       "North Karnataka career fair connecting students with national education opportunities and workshops.",
     shortDescription: "North Karnataka fair with engineering & management workshops.",

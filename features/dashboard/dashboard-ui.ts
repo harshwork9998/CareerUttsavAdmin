@@ -1,5 +1,5 @@
 /**
- * Career Utsav color language
+ * Career Uttsav color language
  * Deep Navy + White brand, warm stone neutrals, soft brass accent, muted teal secondary.
  */
 

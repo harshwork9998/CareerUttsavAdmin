@@ -288,7 +288,7 @@ export function UsersList() {
                     type="email"
                     value={inviteEmail}
                     onChange={(e) => setInviteEmail(e.target.value)}
-                    placeholder="john@careerutsav.com"
+                    placeholder="john@careeruttsav.com"
                   />
                 </div>
                 <div className="space-y-2">

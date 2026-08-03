@@ -21,7 +21,7 @@ import {
   DASH_COLORS,
   surface,
 } from "@/features/dashboard/dashboard-ui";
-import { CAREER_UTSAV_SEMINARS } from "@/features/dashboard/seminars";
+import { CAREER_UTTSAV_SEMINARS } from "@/features/dashboard/seminars";
 import { SeminarBroadcastDialog } from "@/features/messaging/seminar-broadcast-dialog";
 import { citiesMatch } from "@/lib/event-cities";
 import {
@@ -554,12 +554,12 @@ export function SeminarProgram({
 }) {
   const uniformCards = uniformCardsProp ?? Boolean(seminarTitles);
   const catalog = useMemo(
-    () => seminarTitles ?? CAREER_UTSAV_SEMINARS,
+    () => seminarTitles ?? CAREER_UTTSAV_SEMINARS,
     [seminarTitles]
   );
   const catalogLabel =
     subtitle ??
-    (catalog.length === CAREER_UTSAV_SEMINARS.length
+    (catalog.length === CAREER_UTTSAV_SEMINARS.length
       ? "All 20 seminars · tap for registration breakdown"
       : `${catalog.length} seminar${catalog.length === 1 ? "" : "s"} · tap for registration breakdown`);
   const byName = useMemo(() => {

@@ -12,7 +12,7 @@ import type {
   UpcomingEventSummary,
   StudentRegistrationAnalytics,
 } from "@/types";
-import { CAREER_UTSAV_SEMINARS, SEMINAR_POPULARITY } from "@/features/dashboard/seminars";
+import { CAREER_UTTSAV_SEMINARS, SEMINAR_POPULARITY } from "@/features/dashboard/seminars";
 
 export type { OperatingCity, CityComparisonMetric, CityDashboardSlice };
 
@@ -20,7 +20,7 @@ export const OPERATING_CITIES: OperatingCity[] = ["Bangalore", "Mysore", "Hubli"
 
 function buildSeminarInterest(total: number): ChartDataPoint[] {
   const weightSum = Object.values(SEMINAR_POPULARITY).reduce((s, w) => s + w, 0) || 1;
-  return CAREER_UTSAV_SEMINARS.map((name) => ({
+  return CAREER_UTTSAV_SEMINARS.map((name) => ({
     name,
     value: Math.max(
       1,
@@ -673,7 +673,7 @@ const bangaloreSlice: CityDashboardSlice = {
   ],
   eventPerformance: [
     {
-      name: "Career Utsav Bangalore 2026",
+      name: "Career Uttsav Bangalore 2026",
       value: 22800,
       registrations: 22800,
       checkIns: 3550,
@@ -776,7 +776,7 @@ const bangaloreSlice: CityDashboardSlice = {
   upcomingEvents: [
     {
       id: "evt-blr-001",
-      title: "Career Utsav Bangalore 2026",
+      title: "Career Uttsav Bangalore 2026",
       startDate: "2026-08-15T09:00:00+05:30",
       city: "Bangalore",
       status: "Published",
@@ -1273,7 +1273,7 @@ const mysoreSlice: CityDashboardSlice = {
   ],
   eventPerformance: [
     {
-      name: "Career Utsav Mysore 2026",
+      name: "Career Uttsav Mysore 2026",
       value: 12000,
       registrations: 12000,
       checkIns: 1850,
@@ -1368,7 +1368,7 @@ const mysoreSlice: CityDashboardSlice = {
   upcomingEvents: [
     {
       id: "evt-mys-001",
-      title: "Career Utsav Mysore 2026",
+      title: "Career Uttsav Mysore 2026",
       startDate: "2026-09-12T09:00:00+05:30",
       city: "Mysore",
       status: "Published",
@@ -1865,7 +1865,7 @@ const hubliSlice: CityDashboardSlice = {
   ],
   eventPerformance: [
     {
-      name: "Career Utsav Hubli 2026",
+      name: "Career Uttsav Hubli 2026",
       value: 8820,
       registrations: 8820,
       checkIns: 1380,
@@ -1960,7 +1960,7 @@ const hubliSlice: CityDashboardSlice = {
   upcomingEvents: [
     {
       id: "evt-hbl-001",
-      title: "Career Utsav Hubli 2026",
+      title: "Career Uttsav Hubli 2026",
       startDate: "2026-10-10T09:00:00+05:30",
       city: "Hubli",
       status: "Published",
