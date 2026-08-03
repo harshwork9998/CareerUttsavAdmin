@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
+import { sendStudentWelcomeEmail } from "@/lib/email";
 import { resolveRegistration } from "@/lib/enrich-registration";
+import { isStudentRegistration } from "@/lib/registration-kinds";
 import {
   buildRegistrationFromInput,
   validateRegistrationCreate,
@@ -58,5 +60,34 @@ export async function POST(request: Request) {
   );
   saveEvents(nextEvents);
 
-  return NextResponse.json(resolveRegistration(created, nextEvents));
+  const resolved = resolveRegistration(created, nextEvents);
+
+  // Email must not block or fail the registration response.
+  if (isStudentRegistration(resolved)) {
+    void sendStudentWelcomeEmail({
+      to: resolved.email,
+      name: resolved.studentName,
+      registrationId: resolved.registrationNumber,
+    })
+      .then((result) => {
+        if (!result.ok) {
+          console.error(
+            `[email] Student welcome failed for ${resolved.registrationNumber}:`,
+            result.error
+          );
+          return;
+        }
+        console.info(
+          `[email] Student welcome sent for ${resolved.registrationNumber} (${result.id})`
+        );
+      })
+      .catch((error) => {
+        console.error(
+          `[email] Student welcome unexpected error for ${resolved.registrationNumber}:`,
+          error
+        );
+      });
+  }
+
+  return NextResponse.json(resolved);
 }
