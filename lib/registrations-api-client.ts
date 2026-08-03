@@ -1,3 +1,4 @@
+import type { CreateRegistrationInput } from "@/lib/registration-validation";
 import type { Registration } from "@/types";
 
 async function parseJson<T>(res: Response): Promise<T> {
@@ -20,6 +21,17 @@ export async function fetchRegistrationById(
 ): Promise<Registration | null> {
   const res = await fetch(`/api/registrations/${id}`, { cache: "no-store" });
   if (res.status === 404) return null;
+  return parseJson<Registration>(res);
+}
+
+export async function createRegistrationApi(
+  data: CreateRegistrationInput
+): Promise<Registration> {
+  const res = await fetch("/api/registrations", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
   return parseJson<Registration>(res);
 }
 

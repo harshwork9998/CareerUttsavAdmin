@@ -149,17 +149,34 @@ export interface Event {
   updatedAt: string;
 }
 
-export interface Registration {
+/** Discriminator for the four independent registration pipelines. */
+export type RegistrationKind =
+  | "student"
+  | "school"
+  | "partner_registration"
+  | "student_ambassador";
+
+interface RegistrationBase {
   id: string;
   registrationNumber: string;
+  kind: RegistrationKind;
   eventId: string;
   eventTitle: string;
+  status: RegistrationStatus;
+  paymentStatus: PaymentStatus;
+  registeredAt: string;
+  updatedAt: string;
+  amount?: number;
+  checkInTime?: string;
+}
+
+/** Student fair registration — seminar picks, class, stream, etc. */
+export interface StudentRegistration extends RegistrationBase {
+  kind: "student";
   studentName: string;
   email: string;
-  /** Student mobile number */
   phone: string;
   parentPhone?: string;
-  /** School / college name */
   college: string;
   classLabel?: string;
   interestedStream?: string;
@@ -167,17 +184,8 @@ export interface Registration {
   gender?: "Male" | "Female" | "Other";
   city: string;
   state: string;
-  status: RegistrationStatus;
-  paymentStatus: PaymentStatus;
-  amount?: number;
-  checkInTime?: string;
-  registeredAt: string;
-  updatedAt: string;
-  /** Seminar sessions selected at registration (catalog titles). */
   seminarInterests?: string[];
-  /** Legacy — prefer interestedStream */
   course?: string;
-  /** Legacy — prefer classLabel */
   year?:
     | "1st Year"
     | "2nd Year"
@@ -186,6 +194,43 @@ export interface Registration {
     | "Final Year"
     | "Graduate";
 }
+
+/** School group registration — own field set, no student fields. */
+export interface SchoolRegistration extends RegistrationBase {
+  kind: "school";
+  schoolContactName: string;
+  schoolName: string;
+  schoolCity: string;
+  schoolContactNumber: string;
+  schoolContactEmail: string;
+}
+
+/** Institution partner registration — distinct from Partner sponsor records. */
+export interface PartnerRegistrationEntry extends RegistrationBase {
+  kind: "partner_registration";
+  partnerRegContactName: string;
+  partnerRegInstitutionName: string;
+  partnerRegCity: string;
+  partnerRegContactNumber: string;
+  partnerRegContactEmail: string;
+}
+
+/** Student ambassador registration — own ambassador-specific fields. */
+export interface StudentAmbassadorRegistration extends RegistrationBase {
+  kind: "student_ambassador";
+  ambassadorName: string;
+  ambassadorClass: string;
+  ambassadorSchoolCollege: string;
+  ambassadorAge: number;
+  ambassadorPhone: string;
+  ambassadorEmail: string;
+}
+
+export type Registration =
+  | StudentRegistration
+  | SchoolRegistration
+  | PartnerRegistrationEntry
+  | StudentAmbassadorRegistration;
 
 export type BroadcastChannel = "email" | "whatsapp";
 

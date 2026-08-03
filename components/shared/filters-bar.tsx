@@ -30,6 +30,7 @@ interface FilterConfigBase {
   label: string;
   placeholder?: string;
   options: FilterOption[];
+  className?: string;
 }
 
 export interface SingleFilterConfig extends FilterConfigBase {
@@ -42,6 +43,8 @@ export interface MultiFilterConfig extends FilterConfigBase {
   mode: "multi";
   values: string[];
   onChange: (values: string[]) => void;
+  /** Shown at the bottom of the multi-select popover. */
+  hint?: string;
 }
 
 export type FilterConfig = SingleFilterConfig | MultiFilterConfig;
@@ -151,6 +154,7 @@ export function FilterMultiSelect({
   options,
   values,
   onChange,
+  hint,
   className,
 }: MultiFilterConfig & { className?: string }) {
   const [open, setOpen] = React.useState(false);
@@ -245,6 +249,11 @@ export function FilterMultiSelect({
           </div>
           {values.length > 0 && (
             <div className="border-t p-1">
+              {hint ? (
+                <p className="px-2 py-1.5 text-xs leading-relaxed text-muted-foreground">
+                  {hint}
+                </p>
+              ) : null}
               <Button
                 type="button"
                 variant="ghost"

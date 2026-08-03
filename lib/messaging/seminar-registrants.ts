@@ -1,4 +1,5 @@
-import type { Registration } from "@/types";
+import { isStudentRegistration } from "@/lib/registration-kinds";
+import type { Registration, StudentRegistration } from "@/types";
 
 function hash01(input: string): number {
   let h = 0;
@@ -10,7 +11,7 @@ function hash01(input: string): number {
 
 /** Deterministic seminar picks when explicit interests are not stored yet. */
 export function resolveSeminarInterests(
-  registration: Registration,
+  registration: StudentRegistration,
   eventSeminarTitles: readonly string[]
 ): string[] {
   if (registration.seminarInterests?.length) {
@@ -33,11 +34,14 @@ export function filterRegistrantsForSeminar(
   registrations: Registration[],
   seminarTitle: string,
   eventSeminarTitles: readonly string[]
-): Registration[] {
-  return registrations.filter((registration) =>
-    resolveSeminarInterests(registration, eventSeminarTitles).includes(
-      seminarTitle
-    )
+): StudentRegistration[] {
+  return registrations.filter(
+    (registration): registration is StudentRegistration => {
+      if (!isStudentRegistration(registration)) return false;
+      return resolveSeminarInterests(registration, eventSeminarTitles).includes(
+        seminarTitle
+      );
+    }
   );
 }
 

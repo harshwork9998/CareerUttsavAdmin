@@ -1,12 +1,14 @@
+import { isStudentRegistration } from "@/lib/registration-kinds";
+import { MAX_SEMINAR_INTERESTS } from "@/lib/registration-validation";
 import { normalizeRegistration } from "@/features/registrations/normalize-registration";
-import type { Event, Registration } from "@/types";
+import type { Event, Registration, StudentRegistration } from "@/types";
 
 function pickSeminarInterests(
-  registration: Registration,
+  registration: StudentRegistration,
   event: Event | undefined
 ): string[] {
   if (registration.seminarInterests?.length) {
-    return registration.seminarInterests;
+    return registration.seminarInterests.slice(0, MAX_SEMINAR_INTERESTS);
   }
   if (!event?.seminars.length) return [];
 
@@ -56,6 +58,10 @@ export function resolveRegistration(
   registration: Registration,
   events: Event[]
 ): Registration {
+  if (!isStudentRegistration(registration)) {
+    return registration;
+  }
+
   const normalized = normalizeRegistration(registration);
   const event = events.find((item) => item.id === normalized.eventId);
   const seminarInterests = pickSeminarInterests(normalized, event);
@@ -74,5 +80,13 @@ export function resolveRegistrations(
 }
 
 export function getPrimarySeminar(registration: Registration): string {
+  if (!isStudentRegistration(registration)) return "—";
   return registration.seminarInterests?.[0] ?? "—";
+}
+
+export function formatSeminarInterests(registration: Registration): string {
+  if (!isStudentRegistration(registration)) return "—";
+  const items = (registration.seminarInterests ?? []).filter(Boolean);
+  if (items.length === 0) return "—";
+  return items.join(" · ");
 }

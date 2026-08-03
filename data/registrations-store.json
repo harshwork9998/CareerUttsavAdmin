@@ -1,5 +1,32 @@
 [
   {
+    "id": "reg-i72tpr7bc",
+    "registrationNumber": "CU-BLR-2026-00010",
+    "eventId": "evt-001",
+    "eventTitle": "Career Uttsav Bengaluru 2026",
+    "studentName": "Harsh",
+    "email": "harsh@gmail.com",
+    "phone": "9900186555",
+    "parentPhone": "9901220908",
+    "college": "Nitte",
+    "classLabel": "Class 9",
+    "interestedStream": "Commerce",
+    "board": "PUC",
+    "gender": "Male",
+    "city": "Bangalore",
+    "state": "Karnataka",
+    "seminarInterests": [
+      "Real Careers with Artificial Intelligence",
+      "How to select a stream – Art – Science – Commerce?",
+      "All about Overseas Education"
+    ],
+    "status": "Confirmed",
+    "paymentStatus": "Waived",
+    "amount": 0,
+    "registeredAt": "2026-08-03T06:06:06.375Z",
+    "updatedAt": "2026-08-03T06:06:06.375Z"
+  },
+  {
     "id": "reg-001",
     "registrationNumber": "CU-DEL-2026-00001",
     "eventId": "evt-002",

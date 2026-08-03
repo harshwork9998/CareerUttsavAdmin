@@ -56,7 +56,7 @@
     ],
     "registrationDeadline": "2026-08-10T23:59:59+05:30",
     "maxCapacity": 15000,
-    "registrationCount": 8420,
+    "registrationCount": 8421,
     "checkInCount": 0,
     "bannerImage": "/images/events/bengaluru-2026.jpg",
     "isFeatured": true,
@@ -68,7 +68,7 @@
     ],
     "createdBy": "usr-001",
     "createdAt": "2025-11-01T10:00:00+05:30",
-    "updatedAt": "2026-06-20T14:30:00+05:30"
+    "updatedAt": "2026-08-03T06:06:06.375Z"
   },
   {
     "id": "evt-002",

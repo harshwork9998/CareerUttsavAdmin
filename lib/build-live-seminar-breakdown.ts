@@ -1,6 +1,7 @@
 import { citiesMatch, getEventCities } from "@/lib/event-cities";
+import { isStudentRegistration } from "@/lib/registration-kinds";
 import { resolveEventCity } from "@/lib/resolve-event-city";
-import type { ChartDataPoint, Event, Registration } from "@/types";
+import type { ChartDataPoint, Event, Registration, StudentRegistration } from "@/types";
 
 export interface LiveSeminarCityBreakdown {
   city: string;
@@ -25,8 +26,8 @@ export interface LiveSeminarCityProfile {
 }
 
 function countBy(
-  registrations: Registration[],
-  getter: (registration: Registration) => string | undefined
+  registrations: StudentRegistration[],
+  getter: (registration: StudentRegistration) => string | undefined
 ): ChartDataPoint[] {
   const map = new Map<string, number>();
   for (const registration of registrations) {
@@ -39,7 +40,7 @@ function countBy(
     .sort((a, b) => b.value - a.value);
 }
 
-function buildByClass(registrations: Registration[]): ChartDataPoint[] {
+function buildByClass(registrations: StudentRegistration[]): ChartDataPoint[] {
   const map = new Map<string, number>();
   for (const registration of registrations) {
     const name = registration.classLabel?.trim();
@@ -56,12 +57,12 @@ function buildByClass(registrations: Registration[]): ChartDataPoint[] {
 }
 
 function registrationHasSeminar(
-  registration: Registration,
+  registration: StudentRegistration,
   seminarName: string
 ): boolean {
   const target = seminarName.trim().toLowerCase();
   return (registration.seminarInterests ?? []).some(
-    (seminar) => seminar.trim().toLowerCase() === target
+    (seminar: string) => seminar.trim().toLowerCase() === target
   );
 }
 
@@ -70,17 +71,20 @@ function filterRegistrationsForSeminar(
   events: Event[],
   seminarName: string,
   city?: string
-): Registration[] {
+): StudentRegistration[] {
   const eventIds = new Set(events.map((event) => event.id));
   const eventCityById = new Map(events.map((event) => [event.id, event.city]));
 
-  return registrations.filter((registration) => {
-    if (!eventIds.has(registration.eventId)) return false;
-    if (!registrationHasSeminar(registration, seminarName)) return false;
-    if (!city) return true;
-    const eventCity = resolveEventCity(registration, eventCityById);
-    return eventCity ? citiesMatch(eventCity, city) : false;
-  });
+  return registrations.filter(
+    (registration): registration is StudentRegistration => {
+      if (!isStudentRegistration(registration)) return false;
+      if (!eventIds.has(registration.eventId)) return false;
+      if (!registrationHasSeminar(registration, seminarName)) return false;
+      if (!city) return true;
+      const eventCity = resolveEventCity(registration, eventCityById);
+      return eventCity ? citiesMatch(eventCity, city) : false;
+    }
+  );
 }
 
 export function buildLiveSeminarBreakdown(

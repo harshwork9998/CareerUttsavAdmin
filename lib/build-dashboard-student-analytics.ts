@@ -1,3 +1,4 @@
+import { isStudentRegistration } from "@/lib/registration-kinds";
 import { resolveEventCity } from "@/lib/resolve-event-city";
 import { citiesMatch, getEventCities } from "@/lib/event-cities";
 import type {
@@ -6,12 +7,13 @@ import type {
   InstitutionRanking,
   LiveRegistrationItem,
   Registration,
+  StudentRegistration,
   StudentRegistrationAnalytics,
 } from "@/types";
 
 function countBy(
-  registrations: Registration[],
-  getter: (registration: Registration) => string | undefined
+  registrations: StudentRegistration[],
+  getter: (registration: StudentRegistration) => string | undefined
 ): ChartDataPoint[] {
   const map = new Map<string, number>();
   for (const registration of registrations) {
@@ -33,7 +35,7 @@ function classSegment(classLabel: string): "lower" | "core" | undefined {
   return undefined;
 }
 
-function buildByClass(registrations: Registration[]): ChartDataPoint[] {
+function buildByClass(registrations: StudentRegistration[]): ChartDataPoint[] {
   const map = new Map<string, { value: number; segment?: "lower" | "core" }>();
   for (const registration of registrations) {
     const name = registration.classLabel?.trim();
@@ -57,7 +59,7 @@ function buildByClass(registrations: Registration[]): ChartDataPoint[] {
     });
 }
 
-function buildBySeminar(registrations: Registration[]): ChartDataPoint[] {
+function buildBySeminar(registrations: StudentRegistration[]): ChartDataPoint[] {
   const map = new Map<string, number>();
   for (const registration of registrations) {
     for (const seminar of registration.seminarInterests ?? []) {
@@ -102,7 +104,7 @@ function parseWeekLabel(label: string): number {
   return new Date(2026, month, day).getTime();
 }
 
-function buildWeeklyTrend(registrations: Registration[]): ChartDataPoint[] {
+function buildWeeklyTrend(registrations: StudentRegistration[]): ChartDataPoint[] {
   const map = new Map<string, number>();
   for (const registration of registrations) {
     const label = weekStartMonday(new Date(registration.registeredAt)).toLocaleDateString(
@@ -117,7 +119,7 @@ function buildWeeklyTrend(registrations: Registration[]): ChartDataPoint[] {
 }
 
 function buildTopSchools(
-  registrations: Registration[],
+  registrations: StudentRegistration[],
   city?: string
 ): InstitutionRanking[] {
   return countBy(registrations, (registration) => registration.college)
@@ -129,7 +131,7 @@ function buildTopSchools(
     }));
 }
 
-function buildLiveFeed(registrations: Registration[]): LiveRegistrationItem[] {
+function buildLiveFeed(registrations: StudentRegistration[]): LiveRegistrationItem[] {
   return [...registrations]
     .sort(
       (a, b) =>
@@ -156,10 +158,10 @@ function startOfToday(): Date {
 }
 
 function filterRegistrationsForScope(
-  registrations: Registration[],
+  registrations: StudentRegistration[],
   events: Event[],
   city: string | "all"
-): Registration[] {
+): StudentRegistration[] {
   const eventIds = new Set(events.map((event) => event.id));
   const eventCityById = new Map(events.map((event) => [event.id, event.city]));
 
@@ -182,7 +184,8 @@ export function buildStudentRegistrationAnalytics(
   events: Event[],
   city: string | "all"
 ): StudentRegistrationAnalytics {
-  const filtered = filterRegistrationsForScope(registrations, events, city);
+  const studentRegistrations = registrations.filter(isStudentRegistration);
+  const filtered = filterRegistrationsForScope(studentRegistrations, events, city);
   const eventCities = getEventCities(events);
   const today = startOfToday();
 
@@ -197,7 +200,7 @@ export function buildStudentRegistrationAnalytics(
       ? eventCities.map((eventCity) => ({
           name: eventCity,
           value: filterRegistrationsForScope(
-            registrations,
+            studentRegistrations,
             events,
             eventCity
           ).length,

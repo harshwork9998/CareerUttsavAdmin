@@ -1,4 +1,4 @@
-import type { Registration } from "@/types";
+import type { StudentRegistration } from "@/types";
 
 const FEMALE_FIRST_NAMES = new Set([
   "ishita",
@@ -52,7 +52,7 @@ const SCHOOL_CLASSES = [
   "Class 12",
 ] as const;
 
-function inferClass(r: Registration): string {
+function inferClass(r: StudentRegistration): string {
   if (SCHOOL_CLASSES.includes(r.classLabel as (typeof SCHOOL_CLASSES)[number])) {
     return r.classLabel as (typeof SCHOOL_CLASSES)[number];
   }
@@ -60,13 +60,13 @@ function inferClass(r: Registration): string {
   return SCHOOL_CLASSES[(r.college?.length || 0) % SCHOOL_CLASSES.length];
 }
 
-function inferGender(r: Registration): "Male" | "Female" | "Other" {
+function inferGender(r: StudentRegistration): "Male" | "Female" | "Other" {
   if (r.gender) return r.gender;
   const first = (r.studentName.split(" ")[0] || "").toLowerCase();
   return FEMALE_FIRST_NAMES.has(first) ? "Female" : "Male";
 }
 
-function inferBoard(r: Registration): string {
+function inferBoard(r: StudentRegistration): string {
   if (r.board) return r.board;
   const boards = ["CBSE", "State Board", "ICSE", "PUC", "IB / IGCSE"];
   let h = 0;
@@ -74,7 +74,7 @@ function inferBoard(r: Registration): string {
   return boards[h];
 }
 
-function inferParentPhone(r: Registration): string {
+function inferParentPhone(r: StudentRegistration): string {
   if (r.parentPhone) return r.parentPhone;
   const digits = r.phone.replace(/\D/g, "").slice(-10) || "9876500000";
   const n = (Number(digits) + 13579) % 10000000000;
@@ -83,7 +83,7 @@ function inferParentPhone(r: Registration): string {
 }
 
 /** Fills school-fair fields used by the registrations table. */
-export function normalizeRegistration(r: Registration): Registration {
+export function normalizeRegistration(r: StudentRegistration): StudentRegistration {
   return {
     ...r,
     classLabel: inferClass(r),

@@ -1,6 +1,7 @@
+import { migrateLegacyRegistration } from "@/lib/registration-kinds";
 import type { Registration } from "@/types";
 
-export const mockRegistrations: Registration[] = [
+const rawMockRegistrations = [
   {
     id: "reg-001",
     registrationNumber: "CU-DEL-2026-00001",
@@ -640,3 +641,7 @@ export const mockRegistrations: Registration[] = [
     updatedAt: "2026-07-04T13:00:00+05:30",
   },
 ];
+
+export const mockRegistrations: Registration[] = rawMockRegistrations.map(
+  (registration) => migrateLegacyRegistration(registration)
+);

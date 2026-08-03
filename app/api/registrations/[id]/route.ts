@@ -33,12 +33,14 @@ export async function PATCH(request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const updated: Registration = {
-    ...registrations[idx],
+  const existing = registrations[idx];
+  const updated = {
+    ...existing,
     ...patch,
-    id: registrations[idx].id,
+    id: existing.id,
+    kind: existing.kind,
     updatedAt: new Date().toISOString(),
-  };
+  } as Registration;
 
   const next = [...registrations];
   next[idx] = updated;

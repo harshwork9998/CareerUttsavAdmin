@@ -2,17 +2,31 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Download, Users } from "lucide-react";
+import { ChevronDown, Download, Plus, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { eventsService, registrationsService } from "@/services/api";
 import { getPrimarySeminar } from "@/lib/enrich-registration";
 import {
+  filterRegistrationsByKind,
+  isPartnerRegistrationEntry,
+  isSchoolRegistration,
+  isStudentRegistration,
+  REGISTRATION_KIND_LABELS,
+  REGISTRATION_KIND_SHORT_LABELS,
+  REGISTRATION_KINDS,
+} from "@/lib/registration-kinds";
+import {
   filterRegistrationsForEventCatalog,
   registrationMatchesEventFilter,
 } from "@/lib/registration-event-links";
-import { formatNumber } from "@/lib/utils";
-import type { Registration } from "@/types";
+import {
+  registrationMatchesAllSeminars,
+  slugifySeminarFilters,
+} from "@/lib/registration-seminar-filters";
+import { cn, formatNumber } from "@/lib/utils";
+import type { Registration, RegistrationKind } from "@/types";
+import type { FilterConfig } from "@/components/shared";
 import {
   DataTable,
   EmptyState,
@@ -22,45 +36,40 @@ import {
   Pagination,
   SearchBar,
   TableSkeleton,
-  type ColumnDef,
 } from "@/components/shared";
 import { Button } from "@/components/ui/button";
-import { StudentDrawer } from "./student-drawer";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AddStudentDialog } from "./add-student-dialog";
+import { AddKindRegistrationDialog } from "./add-kind-registration-dialog";
+import { RegistrationDetailDrawer } from "./registration-detail-drawer";
+import {
+  buildRegistrationColumns,
+  exportHeadersForKind,
+  exportRowForKind,
+  registrationMatchesSearch,
+} from "./registration-table-config";
 
 const PAGE_SIZE = 10;
 
-function exportToCsv(registrations: Registration[], filename: string) {
-  const headers = [
-    "Student Name",
-    "School/College",
-    "Class",
-    "Stream",
-    "Board",
-    "Seminar",
-    "City",
-    "Gender",
-    "Student Mobile Number",
-    "Parent Mobile Number",
-    "Email Address",
-  ];
-
-  const rows = registrations.map((r) => [
-    r.studentName,
-    r.college,
-    r.classLabel ?? "",
-    r.interestedStream ?? "",
-    r.board ?? "",
-    getPrimarySeminar(r),
-    r.city,
-    r.gender ?? "",
-    r.phone,
-    r.parentPhone ?? "",
-    r.email,
-  ]);
-
+function exportToCsv(
+  registrations: Registration[],
+  filename: string,
+  kind: RegistrationKind,
+  eventTitleById: Map<string, string>
+) {
+  const headers = exportHeadersForKind(kind);
+  const rows = registrations.map((registration) =>
+    exportRowForKind(registration, eventTitleById)
+  );
   const csv = [headers, ...rows]
     .map((row) =>
-      row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")
+      row.map((cell: string) => `"${String(cell).replace(/"/g, '""')}"`).join(",")
     )
     .join("\n");
 
@@ -81,28 +90,44 @@ function uniqueSorted(
     .map((value) => ({ label: value, value }));
 }
 
-function registrationMatchesSeminar(
-  registration: Registration,
-  seminar: string
-): boolean {
-  const interests = registration.seminarInterests?.filter(Boolean) ?? [];
-  if (interests.some((entry) => entry === seminar)) return true;
-  return interests.length === 0 && getPrimarySeminar(registration) === seminar;
+function registrationCity(registration: Registration): string | undefined {
+  if (isStudentRegistration(registration)) return registration.city;
+  if (isSchoolRegistration(registration)) return registration.schoolCity;
+  if (isPartnerRegistrationEntry(registration)) return registration.partnerRegCity;
+  return undefined;
+}
+
+function searchPlaceholderForKind(kind: RegistrationKind): string {
+  switch (kind) {
+    case "student":
+      return "Search by name, school, email, or mobile…";
+    case "school":
+      return "Search by contact name, school, city, or email…";
+    case "partner_registration":
+      return "Search by name, institution, city, or email…";
+    case "student_ambassador":
+      return "Search by name, school/college, class, or email…";
+  }
 }
 
 export function RegistrationsList() {
+  const [activeKind, setActiveKind] = useState<RegistrationKind>("student");
   const [search, setSearch] = useState("");
   const [eventFilter, setEventFilter] = useState<string[]>([]);
   const [classFilter, setClassFilter] = useState("all");
   const [streamFilter, setStreamFilter] = useState("all");
   const [boardFilter, setBoardFilter] = useState("all");
-  const [seminarFilter, setSeminarFilter] = useState("all");
+  const [seminarFilter, setSeminarFilter] = useState<string[]>([]);
   const [cityFilter, setCityFilter] = useState("all");
   const [genderFilter, setGenderFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [selectedRegistration, setSelectedRegistration] =
     useState<Registration | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [addKindDialog, setAddKindDialog] = useState<
+    "school" | "partner_registration" | "student_ambassador" | null
+  >(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["registrations"],
@@ -136,6 +161,21 @@ export function RegistrationsList() {
     return filterRegistrationsForEventCatalog(registrations, validIds);
   }, [registrations, catalogEvents]);
 
+  const kindCounts = useMemo(() => {
+    const counts = Object.fromEntries(
+      REGISTRATION_KINDS.map((kind) => [kind, 0])
+    ) as Record<RegistrationKind, number>;
+    for (const registration of linkedRegistrations) {
+      counts[registration.kind] += 1;
+    }
+    return counts;
+  }, [linkedRegistrations]);
+
+  const kindRegistrations = useMemo(
+    () => filterRegistrationsByKind(linkedRegistrations, activeKind),
+    [linkedRegistrations, activeKind]
+  );
+
   const eventOptions = useMemo(() => {
     return [...catalogEvents]
       .sort(
@@ -156,6 +196,14 @@ export function RegistrationsList() {
     return map;
   }, [catalogEvents]);
 
+  const studentRegistrations = useMemo(
+    () =>
+      activeKind === "student"
+        ? kindRegistrations.filter(isStudentRegistration)
+        : [],
+    [activeKind, kindRegistrations]
+  );
+
   const classOptions = useMemo(() => {
     const order = [
       "Class 4",
@@ -169,31 +217,33 @@ export function RegistrationsList() {
       "Class 12",
     ];
     const present = new Set(
-      linkedRegistrations.map((r) => r.classLabel).filter(Boolean)
+      studentRegistrations.map((r) => r.classLabel).filter(Boolean)
     );
     return order
       .filter((value) => present.has(value))
       .map((value) => ({ label: value, value }));
-  }, [linkedRegistrations]);
+  }, [studentRegistrations]);
+
   const streamOptions = useMemo(
-    () => uniqueSorted(linkedRegistrations.map((r) => r.interestedStream)),
-    [linkedRegistrations]
+    () =>
+      uniqueSorted(studentRegistrations.map((r) => r.interestedStream)),
+    [studentRegistrations]
   );
   const boardOptions = useMemo(
-    () => uniqueSorted(linkedRegistrations.map((r) => r.board)),
-    [linkedRegistrations]
+    () => uniqueSorted(studentRegistrations.map((r) => r.board)),
+    [studentRegistrations]
   );
   const cityOptions = useMemo(
-    () => uniqueSorted(linkedRegistrations.map((r) => r.city)),
-    [linkedRegistrations]
+    () => uniqueSorted(kindRegistrations.map((r) => registrationCity(r))),
+    [kindRegistrations]
   );
   const genderOptions = useMemo(
-    () => uniqueSorted(linkedRegistrations.map((r) => r.gender)),
-    [linkedRegistrations]
+    () => uniqueSorted(studentRegistrations.map((r) => r.gender)),
+    [studentRegistrations]
   );
   const seminarOptions = useMemo(() => {
     const titles = new Set<string>();
-    for (const registration of linkedRegistrations) {
+    for (const registration of studentRegistrations) {
       for (const seminar of registration.seminarInterests ?? []) {
         const trimmed = seminar.trim();
         if (trimmed) titles.add(trimmed);
@@ -210,43 +260,42 @@ export function RegistrationsList() {
     return [...titles]
       .sort((a, b) => a.localeCompare(b))
       .map((value) => ({ label: value, value }));
-  }, [linkedRegistrations, catalogEvents]);
+  }, [studentRegistrations, catalogEvents]);
+
+  useEffect(() => {
+    setClassFilter("all");
+    setStreamFilter("all");
+    setBoardFilter("all");
+    setSeminarFilter([]);
+    setCityFilter("all");
+    setGenderFilter("all");
+    setPage(1);
+  }, [activeKind]);
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
 
-    return linkedRegistrations.filter((r) => {
+    return kindRegistrations.filter((r) => {
       if (!registrationMatchesEventFilter(r, eventFilter)) return false;
-      if (classFilter !== "all" && r.classLabel !== classFilter) return false;
-      if (streamFilter !== "all" && r.interestedStream !== streamFilter)
-        return false;
-      if (boardFilter !== "all" && r.board !== boardFilter) return false;
-      if (
-        seminarFilter !== "all" &&
-        !registrationMatchesSeminar(r, seminarFilter)
-      ) {
-        return false;
+
+      if (isStudentRegistration(r)) {
+        if (classFilter !== "all" && r.classLabel !== classFilter) return false;
+        if (streamFilter !== "all" && r.interestedStream !== streamFilter)
+          return false;
+        if (boardFilter !== "all" && r.board !== boardFilter) return false;
+        if (!registrationMatchesAllSeminars(r, seminarFilter)) return false;
+        if (cityFilter !== "all" && r.city !== cityFilter) return false;
+        if (genderFilter !== "all" && r.gender !== genderFilter) return false;
+      } else if (cityFilter !== "all") {
+        const city = registrationCity(r);
+        if (city !== cityFilter) return false;
       }
-      if (cityFilter !== "all" && r.city !== cityFilter) return false;
-      if (genderFilter !== "all" && r.gender !== genderFilter) return false;
 
       if (!query) return true;
-
-      return (
-        r.studentName.toLowerCase().includes(query) ||
-        r.email.toLowerCase().includes(query) ||
-        r.phone.includes(query) ||
-        (r.parentPhone ?? "").includes(query) ||
-        r.college.toLowerCase().includes(query) ||
-        (r.classLabel ?? "").toLowerCase().includes(query) ||
-        (r.interestedStream ?? "").toLowerCase().includes(query) ||
-        (r.board ?? "").toLowerCase().includes(query) ||
-        getPrimarySeminar(r).toLowerCase().includes(query) ||
-        r.city.toLowerCase().includes(query)
-      );
+      return registrationMatchesSearch(r, query);
     });
   }, [
-    linkedRegistrations,
+    kindRegistrations,
     search,
     eventFilter,
     classFilter,
@@ -263,6 +312,11 @@ export function RegistrationsList() {
     return filtered.slice(start, start + PAGE_SIZE);
   }, [filtered, page]);
 
+  const columns = useMemo(
+    () => buildRegistrationColumns(activeKind, eventTitleById),
+    [activeKind, eventTitleById]
+  );
+
   const handleView = (registration: Registration) => {
     setSelectedRegistration(registration);
     setDrawerOpen(true);
@@ -273,10 +327,14 @@ export function RegistrationsList() {
       toast.error("No registrations to export");
       return;
     }
-    exportToCsv(
-      items,
-      `registrations-${new Date().toISOString().slice(0, 10)}.csv`
-    );
+    const date = new Date().toISOString().slice(0, 10);
+    const kindSlug =
+      activeKind === "partner_registration" ? "partners" : activeKind;
+    const filename =
+      activeKind === "student" && seminarFilter.length > 0
+        ? `registrations-${slugifySeminarFilters(seminarFilter)}-${date}.csv`
+        : `registrations-${kindSlug}-${date}.csv`;
+    exportToCsv(items, filename, activeKind, eventTitleById);
     toast.success(`Exported ${items.length} registration(s)`);
   };
 
@@ -285,7 +343,7 @@ export function RegistrationsList() {
     setClassFilter("all");
     setStreamFilter("all");
     setBoardFilter("all");
-    setSeminarFilter("all");
+    setSeminarFilter([]);
     setCityFilter("all");
     setGenderFilter("all");
     setSearch("");
@@ -298,123 +356,129 @@ export function RegistrationsList() {
     classFilter !== "all" ||
     streamFilter !== "all" ||
     boardFilter !== "all" ||
-    seminarFilter !== "all" ||
+    seminarFilter.length > 0 ||
     cityFilter !== "all" ||
     genderFilter !== "all";
 
-  const columns: ColumnDef<Registration, unknown>[] = [
-    {
-      accessorKey: "studentName",
-      header: "Student Name",
-      cell: ({ row }) => (
-        <span className="font-medium whitespace-nowrap">
-          {row.original.studentName}
-        </span>
-      ),
-    },
-    {
-      accessorKey: "college",
-      header: "School/College",
-      cell: ({ row }) => (
-        <span className="line-clamp-2 max-w-[200px] text-sm">
-          {row.original.college}
-        </span>
-      ),
-    },
-    {
-      id: "eventTitle",
-      header: "Event",
-      cell: ({ row }) => (
-        <span className="line-clamp-2 max-w-[220px] text-sm">
-          {eventTitleById.get(row.original.eventId) ?? row.original.eventTitle}
-        </span>
-      ),
-    },
-    {
-      accessorKey: "classLabel",
-      header: "Class",
-      cell: ({ row }) => (
-        <span className="whitespace-nowrap text-sm">
-          {row.original.classLabel ?? "—"}
-        </span>
-      ),
-    },
-    {
-      accessorKey: "interestedStream",
-      header: "Stream",
-      cell: ({ row }) => (
-        <span className="whitespace-nowrap text-sm">
-          {row.original.interestedStream ?? "—"}
-        </span>
-      ),
-    },
-    {
-      accessorKey: "board",
-      header: "Board",
-      cell: ({ row }) => (
-        <span className="whitespace-nowrap text-sm">
-          {row.original.board ?? "—"}
-        </span>
-      ),
-    },
-    {
-      id: "seminarInterests",
-      header: "Seminar",
-      cell: ({ row }) => (
-        <span className="line-clamp-2 max-w-[220px] text-sm">
-          {getPrimarySeminar(row.original)}
-        </span>
-      ),
-    },
-    {
-      accessorKey: "city",
-      header: "City",
-      cell: ({ row }) => (
-        <span className="whitespace-nowrap text-sm">{row.original.city}</span>
-      ),
-    },
-    {
-      accessorKey: "gender",
-      header: "Gender",
-      cell: ({ row }) => (
-        <span className="whitespace-nowrap text-sm">
-          {row.original.gender ?? "—"}
-        </span>
-      ),
-    },
-    {
-      accessorKey: "phone",
-      header: "Student Mobile Number",
-      cell: ({ row }) => (
-        <span className="whitespace-nowrap text-sm">{row.original.phone}</span>
-      ),
-    },
-    {
-      accessorKey: "parentPhone",
-      header: "Parent Mobile Number",
-      cell: ({ row }) => (
-        <span className="whitespace-nowrap text-sm">
-          {row.original.parentPhone ?? "—"}
-        </span>
-      ),
-    },
-    {
-      accessorKey: "email",
-      header: "Email Address",
-      cell: ({ row }) => (
-        <span className="max-w-[200px] truncate text-sm">
-          {row.original.email}
-        </span>
-      ),
-    },
-  ];
+  const filterConfig = useMemo((): FilterConfig[] => {
+    const filters: FilterConfig[] = [
+      {
+        id: "event",
+        label: "Event",
+        mode: "multi" as const,
+        values: eventFilter,
+        onChange: (v: string[]) => {
+          setEventFilter(v);
+          setPage(1);
+        },
+        options: eventOptions,
+        placeholder: "All events",
+      },
+    ];
+
+    if (activeKind === "student") {
+      filters.push(
+        {
+          id: "class",
+          label: "Class",
+          value: classFilter,
+          onChange: (v: string) => {
+            setClassFilter(v);
+            setPage(1);
+          },
+          options: classOptions,
+        },
+        {
+          id: "stream",
+          label: "Stream",
+          value: streamFilter,
+          onChange: (v: string) => {
+            setStreamFilter(v);
+            setPage(1);
+          },
+          options: streamOptions,
+        },
+        {
+          id: "board",
+          label: "Board",
+          value: boardFilter,
+          onChange: (v: string) => {
+            setBoardFilter(v);
+            setPage(1);
+          },
+          options: boardOptions,
+        },
+        {
+          id: "seminar",
+          label: "Seminar",
+          mode: "multi" as const,
+          values: seminarFilter,
+          onChange: (v: string[]) => {
+            setSeminarFilter(v);
+            setPage(1);
+          },
+          options: seminarOptions,
+          placeholder: "All seminars",
+          hint:
+            seminarFilter.length > 1
+              ? "Showing students registered for ALL selected seminars."
+              : "Select multiple seminars to find students common to every choice.",
+          className: "min-w-[220px] sm:min-w-[260px]",
+        }
+      );
+    }
+
+    if (activeKind !== "student_ambassador") {
+      filters.push({
+        id: "city",
+        label: "City",
+        value: cityFilter,
+        onChange: (v: string) => {
+          setCityFilter(v);
+          setPage(1);
+        },
+        options: cityOptions,
+      });
+    }
+
+    if (activeKind === "student") {
+      filters.push({
+        id: "gender",
+        label: "Gender",
+        value: genderFilter,
+        onChange: (v: string) => {
+          setGenderFilter(v);
+          setPage(1);
+        },
+        options: genderOptions,
+      });
+    }
+
+    return filters;
+  }, [
+    activeKind,
+    eventFilter,
+    eventOptions,
+    classFilter,
+    classOptions,
+    streamFilter,
+    streamOptions,
+    boardFilter,
+    boardOptions,
+    seminarFilter,
+    seminarOptions,
+    cityFilter,
+    cityOptions,
+    genderFilter,
+    genderOptions,
+  ]);
 
   if (isLoading) {
     return (
       <div className="space-y-6">
         <PageHeader
           title="Registrations"
-          description="Manage student registrations across all Career Uttsav events."
+          description="Manage all registration types across Career Uttsav events."
         />
         <TableSkeleton rows={8} columns={12} />
       </div>
@@ -438,18 +502,70 @@ export function RegistrationsList() {
     <div className="space-y-6">
       <PageHeader
         title="Registrations"
-        description="Manage student registrations across all Career Uttsav events."
+        description="Manage student, school, partner, and ambassador registrations across all Career Uttsav events."
         actions={
-          <Button
-            variant="outline"
-            onClick={() => handleExport(filtered)}
-            className="gap-2"
-          >
-            <Download className="h-4 w-4" />
-            Export CSV
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  className="gap-2"
+                  disabled={catalogEvents.length === 0}
+                >
+                  <Plus className="h-4 w-4" />
+                  Add registration
+                  <ChevronDown className="h-4 w-4 opacity-70" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                {REGISTRATION_KINDS.map((kind) => (
+                  <DropdownMenuItem
+                    key={kind}
+                    onClick={() => {
+                      if (kind === "student") {
+                        setAddDialogOpen(true);
+                      } else {
+                        setAddKindDialog(kind);
+                      }
+                    }}
+                  >
+                    {REGISTRATION_KIND_LABELS[kind]}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button
+              variant="outline"
+              onClick={() => handleExport(filtered)}
+              className="gap-2"
+            >
+              <Download className="h-4 w-4" />
+              Export CSV
+            </Button>
+          </div>
         }
       />
+
+      <Tabs
+        value={activeKind}
+        onValueChange={(value) => setActiveKind(value as RegistrationKind)}
+      >
+        <TabsList className="h-auto flex-wrap justify-start gap-1 bg-transparent p-0">
+          {REGISTRATION_KINDS.map((kind) => (
+            <TabsTrigger
+              key={kind}
+              value={kind}
+              className={cn(
+                "rounded-lg border border-transparent px-3 py-2 data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:shadow-sm"
+              )}
+            >
+              {REGISTRATION_KIND_SHORT_LABELS[kind]}
+              <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs tabular-nums text-muted-foreground">
+                {formatNumber(kindCounts[kind])}
+              </span>
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <SearchBar
@@ -458,102 +574,40 @@ export function RegistrationsList() {
             setSearch(value);
             setPage(1);
           }}
-          placeholder="Search by name, school, email, or mobile…"
+          placeholder={searchPlaceholderForKind(activeKind)}
           containerClassName="max-w-xl"
         />
         <p className="text-sm text-muted-foreground">
-          {formatNumber(filtered.length)} registration
+          {formatNumber(filtered.length)} {REGISTRATION_KIND_SHORT_LABELS[activeKind].toLowerCase()}
+          {filtered.length !== 1 ? "" : ""} registration
           {filtered.length !== 1 ? "s" : ""}
         </p>
       </div>
 
-      <FiltersBar
-        filters={[
-          {
-            id: "event",
-            label: "Event",
-            mode: "multi",
-            values: eventFilter,
-            onChange: (v) => {
-              setEventFilter(v);
-              setPage(1);
-            },
-            options: eventOptions,
-            placeholder: "All events",
-          },
-          {
-            id: "class",
-            label: "Class",
-            value: classFilter,
-            onChange: (v) => {
-              setClassFilter(v);
-              setPage(1);
-            },
-            options: classOptions,
-          },
-          {
-            id: "stream",
-            label: "Stream",
-            value: streamFilter,
-            onChange: (v) => {
-              setStreamFilter(v);
-              setPage(1);
-            },
-            options: streamOptions,
-          },
-          {
-            id: "board",
-            label: "Board",
-            value: boardFilter,
-            onChange: (v) => {
-              setBoardFilter(v);
-              setPage(1);
-            },
-            options: boardOptions,
-          },
-          {
-            id: "seminar",
-            label: "Seminar",
-            value: seminarFilter,
-            onChange: (v) => {
-              setSeminarFilter(v);
-              setPage(1);
-            },
-            options: seminarOptions,
-            placeholder: "All seminars",
-          },
-          {
-            id: "city",
-            label: "City",
-            value: cityFilter,
-            onChange: (v) => {
-              setCityFilter(v);
-              setPage(1);
-            },
-            options: cityOptions,
-          },
-          {
-            id: "gender",
-            label: "Gender",
-            value: genderFilter,
-            onChange: (v) => {
-              setGenderFilter(v);
-              setPage(1);
-            },
-            options: genderOptions,
-          },
-        ]}
-        onClearAll={clearFilters}
-      />
+      <FiltersBar filters={filterConfig} onClearAll={clearFilters} />
+
+      {activeKind === "student" && seminarFilter.length >= 2 ? (
+        <div className="rounded-xl border border-brand-700/15 bg-brand-50/50 px-4 py-3 text-sm text-brand-950">
+          <p className="font-medium">
+            Common students across {seminarFilter.length} seminars
+          </p>
+          <p className="mt-1 text-brand-900/75">
+            Showing {formatNumber(filtered.length)} student
+            {filtered.length === 1 ? "" : "s"} registered for{" "}
+            <span className="font-medium">all</span> of:{" "}
+            {seminarFilter.join(" · ")}
+          </p>
+        </div>
+      ) : null}
 
       {filtered.length === 0 ? (
         <EmptyState
           icon={Users}
-          title="No registrations found"
+          title={`No ${REGISTRATION_KIND_SHORT_LABELS[activeKind].toLowerCase()} found`}
           description={
             hasActiveFilters
               ? "Try adjusting your search or filters to find registrations."
-              : "Student registrations will appear here once events are live."
+              : `${REGISTRATION_KIND_LABELS[activeKind]} entries will appear here once events are live.`
           }
           action={
             hasActiveFilters
@@ -582,7 +636,24 @@ export function RegistrationsList() {
         </>
       )}
 
-      <StudentDrawer
+      <AddStudentDialog
+        open={addDialogOpen}
+        onOpenChange={setAddDialogOpen}
+        events={catalogEvents}
+      />
+
+      {addKindDialog ? (
+        <AddKindRegistrationDialog
+          kind={addKindDialog}
+          open={Boolean(addKindDialog)}
+          onOpenChange={(open) => {
+            if (!open) setAddKindDialog(null);
+          }}
+          events={catalogEvents}
+        />
+      ) : null}
+
+      <RegistrationDetailDrawer
         registration={selectedRegistration}
         open={drawerOpen}
         onOpenChange={setDrawerOpen}

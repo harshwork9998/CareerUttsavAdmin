@@ -23,10 +23,12 @@ import {
   mockSettings,
 } from "@/lib/mock-data";
 import {
+  createRegistrationApi,
   fetchAllRegistrations,
   fetchRegistrationById,
   updateRegistrationApi,
 } from "@/lib/registrations-api-client";
+import type { CreateRegistrationInput } from "@/lib/registration-validation";
 import {
   fetchAllSeminarRosters,
   upsertSeminarRosterApi,
@@ -89,6 +91,8 @@ export const registrationsService = {
         (registration) => registration.eventId === eventId
       )
     ),
+  create: (data: CreateRegistrationInput) =>
+    simulate(createRegistrationApi(data)),
   update: (id: string, data: Partial<Registration>) =>
     simulate(updateRegistrationApi(id, data)),
 };

@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 
+import { migrateLegacyRegistration } from "@/lib/registration-kinds";
 import { resolveRegistrations } from "@/lib/enrich-registration";
 import { filterRegistrationsForEventCatalog } from "@/lib/registration-event-links";
 import { mockRegistrations } from "@/lib/mock-data/registrations";
@@ -15,7 +16,9 @@ function enrichStoredRegistrations(registrations: Registration[]): Registration[
 }
 
 function seedStore(): Registration[] {
-  const seed = mockRegistrations.map((registration) => structuredClone(registration));
+  const seed = mockRegistrations.map((registration) =>
+    migrateLegacyRegistration(registration as unknown as Record<string, unknown>)
+  );
   fs.mkdirSync(DATA_DIR, { recursive: true });
   fs.writeFileSync(STORE_PATH, JSON.stringify(seed, null, 2), "utf-8");
   return seed;
@@ -43,11 +46,15 @@ export function loadRawRegistrations(): Registration[] {
       return syncRawRegistrationsWithEventCatalog(seedStore());
     }
     const raw = fs.readFileSync(STORE_PATH, "utf-8");
-    const parsed = JSON.parse(raw) as Registration[];
+    const parsed = JSON.parse(raw) as unknown[];
     if (!Array.isArray(parsed)) {
       return syncRawRegistrationsWithEventCatalog(seedStore());
     }
-    return syncRawRegistrationsWithEventCatalog(parsed);
+    return syncRawRegistrationsWithEventCatalog(
+      parsed.map((entry) =>
+        migrateLegacyRegistration(entry as Record<string, unknown>)
+      )
+    );
   } catch {
     return syncRawRegistrationsWithEventCatalog(seedStore());
   }
