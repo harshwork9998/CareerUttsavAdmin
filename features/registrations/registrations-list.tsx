@@ -132,6 +132,9 @@ export function RegistrationsList() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["registrations"],
     queryFn: () => registrationsService.getAll(),
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 
   const eventsQuery = useQuery({

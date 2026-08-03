@@ -133,7 +133,7 @@ function resolveEvent(
 
 function validateStudentCreate(
   body: Partial<CreateStudentRegistrationInput>,
-  event: Event
+  _event: Event
 ):
   | { ok: true; data: CreateStudentRegistrationInput }
   | { ok: false; error: string } {
@@ -216,19 +216,7 @@ function validateStudentCreate(
     };
   }
 
-  const eventSeminarTitles = new Set(
-    (event.seminars ?? [])
-      .map((seminar) => seminar.title?.trim())
-      .filter(Boolean) as string[]
-  );
-  for (const title of seminarInterests) {
-    if (eventSeminarTitles.size > 0 && !eventSeminarTitles.has(title)) {
-      return {
-        ok: false,
-        error: `"${title}" is not a seminar on this event`,
-      };
-    }
-  }
+  // Public site may offer the full seminar catalogue; accept any titles (max 3).
 
   return {
     ok: true,
