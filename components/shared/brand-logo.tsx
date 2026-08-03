@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 const VARIANTS = {
   icon: "h-12 w-12 object-contain object-center",
   sidebar: "h-16 w-full max-w-[232px] object-contain object-center",
-  login: "h-24 w-auto max-w-[320px] object-contain sm:h-28 sm:max-w-[360px]",
+  login: "h-[4.5rem] w-auto max-w-[280px] object-contain sm:h-24 sm:max-w-[320px]",
 } as const;
 
 export type BrandLogoVariant = keyof typeof VARIANTS;

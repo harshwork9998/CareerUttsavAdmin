@@ -4,7 +4,7 @@ export const BRAND = {
   accent: "#3B82F6",
   name: "Career Uttsav",
   org: "K2 Group",
-  logo: "/images/career-uttsav-logo.png?v=2",
+  logo: "/images/career-uttsav-logo.png?v=3",
 } as const;
 
 export const NAV_ITEMS = [
