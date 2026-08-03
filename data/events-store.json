@@ -56,7 +56,7 @@
     ],
     "registrationDeadline": "2026-08-10T23:59:59+05:30",
     "maxCapacity": 15000,
-    "registrationCount": 8423,
+    "registrationCount": 8425,
     "checkInCount": 0,
     "bannerImage": "/images/events/bengaluru-2026.jpg",
     "isFeatured": true,
@@ -68,7 +68,7 @@
     ],
     "createdBy": "usr-001",
     "createdAt": "2025-11-01T10:00:00+05:30",
-    "updatedAt": "2026-08-03T18:54:19.003Z"
+    "updatedAt": "2026-08-03T19:04:05.321Z"
   },
   {
     "id": "evt-002",
@@ -109,7 +109,7 @@
     ],
     "registrationDeadline": "2026-07-04T23:59:59+05:30",
     "maxCapacity": 8000,
-    "registrationCount": 4250,
+    "registrationCount": 4252,
     "checkInCount": 2180,
     "bannerImage": "/images/events/delhi-ncr-2026.jpg",
     "isFeatured": true,
@@ -120,7 +120,7 @@
     ],
     "createdBy": "usr-002",
     "createdAt": "2025-10-15T09:00:00+05:30",
-    "updatedAt": "2026-07-05T08:00:00+05:30"
+    "updatedAt": "2026-08-03T19:06:50.400Z"
   },
   {
     "id": "evt-003",
@@ -161,7 +161,7 @@
     ],
     "registrationDeadline": "2025-12-08T23:59:59+05:30",
     "maxCapacity": 6000,
-    "registrationCount": 5890,
+    "registrationCount": 5892,
     "checkInCount": 4340,
     "bannerImage": "/images/events/mumbai-2025.jpg",
     "isFeatured": false,
@@ -172,6 +172,6 @@
     ],
     "createdBy": "usr-002",
     "createdAt": "2025-06-01T11:00:00+05:30",
-    "updatedAt": "2025-12-12T10:00:00+05:30"
+    "updatedAt": "2026-08-03T19:05:38.146Z"
   }
 ]
