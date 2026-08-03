@@ -363,6 +363,8 @@ export interface Partner {
   portalSmsContent?: string;
   /** Panelist / speaker details per allotted seminar */
   portalSeminarSpeakers?: PartnerSeminarSpeakerSubmission[];
+  /** On-ground representatives attending Career Uttsav */
+  portalRepresentatives?: PartnerRepresentativesSubmission;
   /** Set after partner changes temp password */
   portalPasswordChangedAt?: string;
   /** First outreach */
@@ -463,6 +465,17 @@ export interface PartnerSeminarSpeakerSubmission {
   eventId: string;
   seminarId: string;
   speakers: PartnerSeminarSpeakerDetail[];
+  updatedAt: string;
+}
+
+export interface PartnerRepresentative {
+  name: string;
+  phone: string;
+}
+
+export interface PartnerRepresentativesSubmission {
+  count: number;
+  representatives: PartnerRepresentative[];
   updatedAt: string;
 }
 

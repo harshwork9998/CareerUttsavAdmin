@@ -40,6 +40,11 @@ export const PORTAL_SUBMISSION_ITEMS = [
     label: "Speaker details for each seminar",
     type: "speakers" as const,
   },
+  {
+    key: "representatives" as const,
+    label: "Event representatives",
+    type: "representatives" as const,
+  },
 ] as const;
 
 export type PortalSubmissionKey = (typeof PORTAL_SUBMISSION_ITEMS)[number]["key"];
@@ -50,7 +55,7 @@ export type PortalSubmissionChecklistItem = {
   complete: boolean;
   /** @deprecated use complete */
   uploaded: boolean;
-  kind: "text" | "url" | "file" | "textarea" | "speakers" | "logo";
+  kind: "text" | "url" | "file" | "textarea" | "speakers" | "logo" | "representatives";
   file?: PartnerPortalDocument;
 };
 
@@ -104,6 +109,7 @@ export function getPartnerPortalUploadStatus(
     | "portalWebsiteUrl"
     | "portalSmsContent"
     | "portalSeminarSpeakers"
+    | "portalRepresentatives"
     | "seminarSlotAssignments"
   >
 ): PartnerPortalUploadStatus {
@@ -123,6 +129,17 @@ export function getPartnerPortalUploadStatus(
           row.speakers.some((s) => s.name.trim())
       )
     );
+
+  const reps = partner.portalRepresentatives;
+  const representativesComplete = Boolean(
+    reps &&
+      reps.count >= 1 &&
+      reps.representatives.length === reps.count &&
+      reps.representatives.every(
+        (r) =>
+          r.name.trim().length > 0 && /^[6-9]\d{9}$/.test(r.phone.replace(/\D/g, "").slice(-10))
+      )
+  );
 
   const checklist: PortalSubmissionChecklistItem[] = [
     {
@@ -177,6 +194,13 @@ export function getPartnerPortalUploadStatus(
       uploaded: speakersComplete,
       kind: "speakers",
     },
+    {
+      key: "representatives",
+      label: "Event representatives",
+      complete: representativesComplete,
+      uploaded: representativesComplete,
+      kind: "representatives",
+    },
   ];
 
   const missing = checklist.filter((c) => !c.complete);
@@ -187,6 +211,7 @@ export function getPartnerPortalUploadStatus(
   for (const row of partner.portalSeminarSpeakers ?? []) {
     if (row.updatedAt) timestamps.push(row.updatedAt);
   }
+  if (reps?.updatedAt) timestamps.push(reps.updatedAt);
 
   let lastUpdatedAt: string | null = null;
   for (const iso of timestamps) {

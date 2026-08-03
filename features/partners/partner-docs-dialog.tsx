@@ -14,6 +14,7 @@ import {
   MessageSquare,
   Mic2,
   Type,
+  Users,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -89,6 +90,7 @@ function checklistIcon(item: PortalSubmissionChecklistItem) {
   if (item.kind === "url") return Link2;
   if (item.kind === "textarea") return MessageSquare;
   if (item.kind === "speakers") return Mic2;
+  if (item.kind === "representatives") return Users;
   return Type;
 }
 
@@ -390,6 +392,67 @@ function SubmissionPreview({
                 </div>
               );
             })
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (item.kind === "representatives") {
+    const reps = partner.portalRepresentatives;
+    const people = reps?.representatives ?? [];
+
+    return (
+      <div className="min-h-0 flex-1 overflow-auto p-5">
+        <div
+          className="rounded-2xl border p-5"
+          style={{ borderColor: LINE.subtle, background: PAPER.surface }}
+        >
+          <p
+            className="text-[11px] font-semibold tracking-[0.14em] uppercase"
+            style={{ color: INK.muted }}
+          >
+            {item.label}
+          </p>
+          <p
+            className="mt-3 text-lg font-semibold"
+            style={{ color: INK.primary }}
+          >
+            {reps?.count
+              ? `${reps.count} representative${reps.count === 1 ? "" : "s"}`
+              : "Not submitted yet"}
+          </p>
+
+          {people.length === 0 ? (
+            <p className="mt-3 text-sm" style={{ color: INK.muted }}>
+              No contact details yet.
+            </p>
+          ) : (
+            <ul className="mt-4 space-y-3">
+              {people.map((person, index) => (
+                <li
+                  key={`${person.name}-${person.phone}-${index}`}
+                  className="rounded-xl border px-3 py-2.5"
+                  style={{ borderColor: LINE.subtle }}
+                >
+                  <p
+                    className="text-[11px] font-extrabold uppercase tracking-wide"
+                    style={{ color: BRAND[700] }}
+                  >
+                    Representative {index + 1}
+                  </p>
+                  <p
+                    className="mt-1.5 text-sm font-semibold"
+                    style={{ color: INK.primary }}
+                  >
+                    {person.name || "—"}
+                  </p>
+                  <p className="text-xs" style={{ color: INK.secondary }}>
+                    {person.phone || "—"}
+                  </p>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       </div>
