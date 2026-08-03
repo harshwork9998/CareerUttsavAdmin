@@ -30,6 +30,7 @@ yarn-error.log*
 
 # local persisted stores (dev — survives restarts)
 /data/partners-store.json
+/data/users-store.json
 
 # typescript
 *.tsbuildinfo

@@ -3,8 +3,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { User } from "@/types";
-import { mockUsers } from "@/lib/mock-data";
-import { MOCK_ADMIN } from "@/constants";
+import { login as loginRequest } from "@/services/auth-service";
 
 interface AuthState {
   user: User | null;
@@ -21,13 +20,17 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       rememberMe: false,
       login: async (email, password, rememberMe = false) => {
-        await new Promise((r) => setTimeout(r, 800));
-        if (email === MOCK_ADMIN.email && password === MOCK_ADMIN.password) {
-          const user = mockUsers.find((u) => u.email === email) ?? mockUsers[0];
-          set({ user, isAuthenticated: true, rememberMe });
+        const result = await loginRequest({ email, password, rememberMe });
+
+        if (result.success && result.user) {
+          set({ user: result.user, isAuthenticated: true, rememberMe });
           return { success: true };
         }
-        return { success: false, error: "Invalid email or password" };
+
+        return {
+          success: false,
+          error: result.error ?? "Invalid email or password",
+        };
       },
       logout: () => set({ user: null, isAuthenticated: false, rememberMe: false }),
     }),

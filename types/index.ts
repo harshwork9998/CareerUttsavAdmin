@@ -14,7 +14,12 @@ export type UniversityStatus = (typeof UNIVERSITY_STATUSES)[number];
 export type PartnerCategory = (typeof PARTNER_CATEGORIES)[number];
 export type EventStatus = (typeof EVENT_STATUSES)[number];
 
-export type UserStatus = "Active" | "Inactive" | "Suspended";
+export type UserStatus =
+  | "Active"
+  | "Inactive"
+  | "Suspended"
+  | "Pending Approval"
+  | "Rejected";
 export type PaymentStatus = "Paid" | "Pending" | "Waived";
 export type UniversityType = "Government" | "Private" | "Deemed" | "Autonomous";
 export type BlogStatus = "Draft" | "Published" | "Archived";

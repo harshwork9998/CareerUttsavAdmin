@@ -6,8 +6,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CalendarDays,
-  ChevronLeft,
-  ChevronRight,
   GraduationCap,
   Handshake,
   LayoutDashboard,
@@ -19,6 +17,7 @@ import {
 } from "lucide-react";
 
 import { NAV_ITEMS } from "@/constants";
+import { getNavItemsForRole } from "@/lib/access-control";
 import { BrandLogo } from "@/components/shared/brand-logo";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth-store";
@@ -61,7 +60,7 @@ interface SidebarProps {
 export function Sidebar({ className, onNavigate }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { collapsed, toggle } = useSidebarStore();
+  const { collapsed } = useSidebarStore();
   const { user, logout } = useAuthStore();
   const [hoverExpanded, setHoverExpanded] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -71,9 +70,10 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
   const forceExpanded = Boolean(onNavigate);
   const isPinnedOpen = forceExpanded || !collapsed;
   const showExpanded = isPinnedOpen || hoverExpanded;
+  const navItems = user ? getNavItemsForRole(user.role) : [];
   const railWidth = 72;
   const expandedWidth = 260;
-  const shellWidth = isPinnedOpen ? expandedWidth : railWidth;
+  const sidebarWidth = showExpanded ? expandedWidth : railWidth;
 
   const initials =
     user?.name
@@ -133,20 +133,20 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
 
   return (
     <TooltipProvider delayDuration={0}>
-      <div
-        className={cn("relative h-full shrink-0", className)}
-        style={{ width: shellWidth }}
+      <motion.div
+        initial={false}
+        animate={{ width: sidebarWidth }}
+        transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+        className={cn("relative h-full shrink-0 overflow-hidden", className)}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
-        <motion.aside
-          initial={false}
-          animate={{ width: showExpanded ? expandedWidth : railWidth }}
-          transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+        <aside
           className={cn(
-            "flex h-full flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground",
-            !isPinnedOpen && "absolute inset-y-0 left-0 z-50",
-            !isPinnedOpen && hoverExpanded && "shadow-2xl ring-1 ring-sidebar-border/80"
+            "flex h-full w-full flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground",
+            !isPinnedOpen &&
+              hoverExpanded &&
+              "shadow-2xl ring-1 ring-sidebar-border/80"
           )}
         >
         <div
@@ -162,7 +162,7 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
 
         <ScrollArea className="flex-1 px-3 py-4">
           <nav className="flex flex-col gap-1">
-            {NAV_ITEMS.map((item) => {
+            {navItems.map((item) => {
               const Icon = ICON_MAP[item.icon] ?? LayoutDashboard;
               const isActive =
                 pathname === item.href ||
@@ -277,31 +277,9 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-
-          {!forceExpanded ? (
-            <Button
-              variant="ghost"
-              size={showExpanded && !collapsed ? "default" : "icon"}
-              onClick={toggle}
-              className={cn(
-                "w-full text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground",
-                !showExpanded && "h-9 w-9"
-              )}
-              aria-label={collapsed ? "Pin sidebar open" : "Collapse sidebar"}
-            >
-              {collapsed ? (
-                <ChevronRight className="h-4 w-4" />
-              ) : (
-                <>
-                  <ChevronLeft className="h-4 w-4" />
-                  <span className="text-sm">Collapse</span>
-                </>
-              )}
-            </Button>
-          ) : null}
         </div>
-        </motion.aside>
-      </div>
+        </aside>
+      </motion.div>
     </TooltipProvider>
   );
 }

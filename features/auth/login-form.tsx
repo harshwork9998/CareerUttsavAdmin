@@ -1,64 +1,35 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { motion } from "framer-motion";
-import { Eye, EyeOff, Loader2, Lock, Mail } from "lucide-react";
+import { Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { toast } from "sonner";
 
+import {
+  AUTH_CARD_CLASS,
+  AUTH_LINK_CLASS,
+  AUTH_SECONDARY_BUTTON_CLASS,
+  AuthFormField,
+  AuthPrimaryButton,
+  AuthTextInput,
+} from "@/features/auth/auth-form-primitives";
+import { ForgotPasswordDialog } from "@/features/auth/forgot-password-dialog";
+import { RegisterDialog } from "@/features/auth/register-dialog";
+import { loginSchema, type LoginFormValues } from "@/lib/auth-validation";
+import { getDefaultRouteForRole } from "@/lib/access-control";
 import { useAuthStore } from "@/store/auth-store";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-
-const loginSchema = z.object({
-  email: z
-    .string()
-    .min(1, "Email is required")
-    .email("Please enter a valid email address"),
-  password: z
-    .string()
-    .min(1, "Password is required")
-    .min(6, "Password must be at least 6 characters"),
-});
-
-type LoginFormValues = z.infer<typeof loginSchema>;
-
-const inputStyles = cn(
-  "h-[46px] rounded-[11px] border-[#E2E5EB] bg-white pl-10 pr-10 text-sm shadow-none",
-  "transition-[border-color,box-shadow] duration-200 ease-out",
-  "focus-visible:border-[#1F3864] focus-visible:ring-0 focus-visible:outline-none",
-  "focus-visible:shadow-[0_0_0_3px_rgba(31,56,100,0.1)]"
-);
-
-function FieldShell({
-  children,
-  className,
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div
-      className={cn(
-        "relative transition-transform duration-200 ease-out focus-within:scale-[1.008]",
-        className
-      )}
-    >
-      {children}
-    </div>
-  );
-}
 
 export function LoginForm() {
   const router = useRouter();
   const login = useAuthStore((s) => s.login);
   const [showPassword, setShowPassword] = useState(false);
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [registerOpen, setRegisterOpen] = useState(false);
 
   const {
     register,
@@ -76,7 +47,8 @@ export function LoginForm() {
     const result = await login(values.email, values.password, false);
 
     if (result.success) {
-      router.push("/dashboard");
+      const role = useAuthStore.getState().user?.role ?? "user";
+      router.push(getDefaultRouteForRole(role));
       return;
     }
 
@@ -86,47 +58,40 @@ export function LoginForm() {
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-      className={cn(
-        "w-full rounded-[18px] border border-[#E8EAED] bg-white",
-        "px-7 py-7 sm:px-9 sm:py-8",
-        "shadow-[0_1px_2px_rgba(16,24,40,0.04),0_6px_20px_rgba(16,24,40,0.05)]"
-      )}
-    >
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-        <div className="space-y-1.5">
-          <Label htmlFor="email" className="text-sm font-medium text-foreground">
-            Email
-          </Label>
-          <FieldShell>
-            <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-muted-foreground/55" />
-            <Input
+    <>
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+        className={AUTH_CARD_CLASS}
+      >
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+          <AuthFormField
+            id="email"
+            label="Email"
+            icon={Mail}
+            error={errors.email?.message}
+          >
+            <AuthTextInput
               id="email"
               type="email"
               autoComplete="email"
-              className={inputStyles}
+              invalid={Boolean(errors.email)}
               {...register("email")}
             />
-          </FieldShell>
-          {errors.email && (
-            <p className="text-xs text-destructive">{errors.email.message}</p>
-          )}
-        </div>
+          </AuthFormField>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="password" className="text-sm font-medium text-foreground">
-            Password
-          </Label>
-          <FieldShell>
-            <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-muted-foreground/55" />
-            <Input
+          <AuthFormField
+            id="password"
+            label="Password"
+            icon={Lock}
+            error={errors.password?.message}
+          >
+            <AuthTextInput
               id="password"
               type={showPassword ? "text" : "password"}
               autoComplete="current-password"
-              className={inputStyles}
+              invalid={Boolean(errors.password)}
               {...register("password")}
             />
             <Button
@@ -143,45 +108,41 @@ export function LoginForm() {
                 <Eye className="h-[18px] w-[18px]" />
               )}
             </Button>
-          </FieldShell>
-          <div className="flex justify-end pt-0.5">
-            <Link
-              href="/forgot-password"
-              className="text-xs font-medium text-[#1F3864]/75 transition-colors hover:text-[#1F3864]"
+          </AuthFormField>
+
+          <div className="-mt-1 flex justify-end">
+            <button
+              type="button"
+              className={AUTH_LINK_CLASS}
+              onClick={() => setForgotOpen(true)}
             >
               Forgot password?
-            </Link>
+            </button>
           </div>
-          {errors.password && (
-            <p className="text-xs text-destructive">{errors.password.message}</p>
-          )}
-        </div>
 
-        <motion.div
-          whileHover={{ y: -1 }}
-          whileTap={{ y: 0 }}
-          transition={{ duration: 0.18, ease: "easeOut" }}
-        >
-          <Button
-            type="submit"
-            disabled={isSubmitting}
-            className={cn(
-              "h-[46px] w-full rounded-[11px] text-sm font-medium text-white",
-              "bg-[#1F3864] shadow-none transition-colors duration-200",
-              "hover:bg-[#182E52] hover:shadow-[0_4px_12px_rgba(31,56,100,0.18)]"
-            )}
+          <motion.div
+            whileHover={{ y: -1 }}
+            whileTap={{ y: 0 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
           >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Signing in...
-              </>
-            ) : (
-              "Sign in"
-            )}
+            <AuthPrimaryButton loading={isSubmitting} loadingLabel="Signing in...">
+              Sign in
+            </AuthPrimaryButton>
+          </motion.div>
+
+          <Button
+            type="button"
+            variant="outline"
+            className={cn(AUTH_SECONDARY_BUTTON_CLASS, "mt-1")}
+            onClick={() => setRegisterOpen(true)}
+          >
+            Create Account
           </Button>
-        </motion.div>
-      </form>
-    </motion.div>
+        </form>
+      </motion.div>
+
+      <ForgotPasswordDialog open={forgotOpen} onOpenChange={setForgotOpen} />
+      <RegisterDialog open={registerOpen} onOpenChange={setRegisterOpen} />
+    </>
   );
 }

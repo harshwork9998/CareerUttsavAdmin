@@ -15,7 +15,6 @@ import {
 } from "@/lib/events-api-client";
 import {
   mockUniversities,
-  mockUsers,
   mockDashboardData,
 } from "@/lib/mock-data";
 import {
@@ -24,6 +23,12 @@ import {
   fetchRegistrationById,
   updateRegistrationApi,
 } from "@/lib/registrations-api-client";
+import {
+  createUserApi,
+  fetchAllUsers,
+  reviewUserApi,
+  updateUserApi,
+} from "@/lib/users-api-client";
 import type { CreateRegistrationInput } from "@/lib/registration-validation";
 import {
   fetchAllSeminarRosters,
@@ -125,17 +130,17 @@ export const seminarsService = {
 };
 
 export const usersService = {
-  getAll: () => simulate([...mockUsers]),
-  getById: (id: string) => simulate(mockUsers.find((u) => u.id === id) ?? null),
+  getAll: () => simulate(fetchAllUsers()),
+  getById: async (id: string) =>
+    simulate((await fetchAllUsers()).find((u) => u.id === id) ?? null),
   create: (user: Omit<User, "id" | "createdAt" | "updatedAt">) =>
-    simulate({
-      ...user,
-      id: generateId(),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    } as User),
+    simulate(createUserApi(user)),
   update: (id: string, data: Partial<User>) =>
-    simulate({ ...mockUsers.find((u) => u.id === id)!, ...data, updatedAt: new Date().toISOString() }),
+    simulate(updateUserApi(id, data)),
+  review: (
+    id: string,
+    payload: { action: "approve" | "reject"; role?: "user" | "superuser" }
+  ) => simulate(reviewUserApi(id, payload)),
 };
 
 export const dashboardService = {

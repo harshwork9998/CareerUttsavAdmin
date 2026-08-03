@@ -26,6 +26,7 @@ const STATUS_VARIANT_MAP: Record<string, StatusVariant> = {
   canceled: "destructive",
   archived: "muted",
   inactive: "muted",
+  "pending approval": "pending",
   failed: "destructive",
   error: "destructive",
 };

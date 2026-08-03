@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 import { BRAND } from "@/constants";
 import { BrandLogo } from "@/components/shared/brand-logo";
 import { LoginForm } from "@/features/auth/login-form";
@@ -12,27 +10,28 @@ export const metadata = {
 export default function LoginPage() {
   return (
     <div
-      className="dash-apple relative flex min-h-screen flex-col items-center justify-center px-4 py-16 sm:py-20"
+      className="dash-apple relative min-h-screen"
       style={{
-        backgroundColor: "#F7F8FA",
+        backgroundColor: "#F0C8C4",
         backgroundImage:
-          "radial-gradient(ellipse 70% 45% at 50% 0%, rgba(31, 56, 100, 0.045), transparent 72%)",
+          "radial-gradient(ellipse 80% 55% at 50% 0%, rgba(190, 38, 32, 0.38), transparent 68%), linear-gradient(180deg, #F8E2DF 0%, #E8B0AA 100%)",
       }}
     >
-      <div className="flex w-[90%] max-w-[440px] flex-col items-center">
-        <header className="mb-6 flex flex-col items-center text-center sm:mb-7">
-          <BrandLogo variant="login" priority />
-        </header>
+      <div className="absolute left-5 top-5 z-10 sm:left-8 sm:top-8">
+        <BrandLogo
+          variant="login"
+          priority
+          className="h-12 max-w-[200px] sm:h-14 sm:max-w-[240px]"
+        />
+      </div>
 
-        <LoginForm />
+      <div className="flex min-h-screen flex-col items-center justify-center px-4 py-20 sm:py-24">
+        <h1 className="mb-6 whitespace-nowrap text-center text-[clamp(1.35rem,4.2vw,3rem)] font-bold leading-none tracking-tight text-[#1F3864] sm:mb-8">
+          Behind the scenes starts here.
+        </h1>
 
-        <div className="mt-4 flex w-full justify-end">
-          <Link
-            href="/register"
-            className="text-sm font-medium text-[#1F3864]/75 transition-colors hover:text-[#1F3864]"
-          >
-            New User?
-          </Link>
+        <div className="flex w-[90%] max-w-[440px] flex-col">
+          <LoginForm />
         </div>
       </div>
     </div>

@@ -16,14 +16,17 @@ export const NAV_ITEMS = [
   { title: "Users", href: "/users", icon: "UserCog" },
 ] as const;
 
-export const ROLES = [
-  "Super Admin",
-  "Admin",
-  "Marketing",
-  "Content Editor",
-  "Operations",
-  "Read Only",
-] as const;
+export const ROLES = ["user", "superuser"] as const;
+
+export const ROLE_ID_BY_NAME: Record<(typeof ROLES)[number], string> = {
+  user: "role-user",
+  superuser: "role-superuser",
+};
+
+export const ROLE_LABELS: Record<(typeof ROLES)[number], string> = {
+  user: "User",
+  superuser: "Superuser",
+};
 
 export const REGISTRATION_STATUSES = [
   "Pending",
