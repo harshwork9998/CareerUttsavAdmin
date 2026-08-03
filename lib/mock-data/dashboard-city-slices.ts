@@ -1916,7 +1916,6 @@ const hubliSlice: CityDashboardSlice = {
       title: "WhatsApp follow-up enabled",
       description: "Pending registration WhatsApp nudges enabled for Hubli",
       timestamp: "2026-07-03T10:00:00+05:30",
-      link: "/settings",
     },
   ],
   upcomingTasks: [

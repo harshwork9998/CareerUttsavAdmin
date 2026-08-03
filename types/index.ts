@@ -41,15 +41,6 @@ export type NotificationAudience =
   | "Admins";
 export type NotificationChannel = "Email" | "SMS" | "Push" | "In-App";
 export type NotificationStatus = "Draft" | "Scheduled" | "Sent" | "Failed";
-export type ReportType =
-  | "Registration"
-  | "Event Performance"
-  | "University"
-  | "Partner"
-  | "Revenue"
-  | "Engagement";
-export type ReportFormat = "PDF" | "Excel" | "CSV";
-export type ReportStatus = "Generating" | "Ready" | "Failed";
 export type TaskPriority = "High" | "Medium" | "Low";
 export type TaskStatus = "Pending" | "In Progress" | "Completed";
 export type ActivityResourceType =
@@ -74,21 +65,6 @@ export type RecentActivityType =
   | "system";
 
 // ─── Core entities ──────────────────────────────────────────────────────────
-
-export interface Permission {
-  resource: string;
-  actions: ("create" | "read" | "update" | "delete")[];
-}
-
-export interface Role {
-  id: string;
-  name: RoleName;
-  description: string;
-  permissions: Permission[];
-  userCount: number;
-  createdAt: string;
-  updatedAt: string;
-}
 
 export interface User {
   id: string;
@@ -549,75 +525,6 @@ export interface Notification {
   readCount?: number;
   createdBy: string;
   createdAt: string;
-}
-
-export interface ActivityLog {
-  id: string;
-  userId: string;
-  userName: string;
-  action: string;
-  resource: ActivityResourceType;
-  resourceId?: string;
-  details?: string;
-  ipAddress?: string;
-  userAgent?: string;
-  timestamp: string;
-}
-
-export interface Report {
-  id: string;
-  name: string;
-  type: ReportType;
-  description?: string;
-  dateRange: { from: string; to: string };
-  format: ReportFormat;
-  status: ReportStatus;
-  generatedAt?: string;
-  downloadUrl?: string;
-  generatedBy: string;
-  createdAt: string;
-}
-
-// ─── Settings ───────────────────────────────────────────────────────────────
-
-export interface GeneralSettings {
-  siteName: string;
-  contactEmail: string;
-  contactPhone: string;
-  address: string;
-  defaultCity: string;
-  timezone: string;
-  registrationFee: number;
-}
-
-export interface NotificationSettings {
-  emailEnabled: boolean;
-  smsEnabled: boolean;
-  pushEnabled: boolean;
-  registrationConfirmation: boolean;
-  eventReminders: boolean;
-  marketingEmails: boolean;
-}
-
-export interface IntegrationSettings {
-  razorpayEnabled: boolean;
-  whatsappEnabled: boolean;
-  googleAnalyticsId?: string;
-  mailchimpListId?: string;
-}
-
-export interface AppearanceSettings {
-  primaryColor: string;
-  secondaryColor: string;
-  logoUrl?: string;
-  faviconUrl?: string;
-}
-
-export interface Settings {
-  general: GeneralSettings;
-  notifications: NotificationSettings;
-  integrations: IntegrationSettings;
-  appearance: AppearanceSettings;
 }
 
 // ─── Dashboard ──────────────────────────────────────────────────────────────

@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { KeyRound, Mail, UserCog, UserPlus, UserX } from "lucide-react";
 import { toast } from "sonner";
 
-import { rolesService, usersService } from "@/services/api";
+import { usersService } from "@/services/api";
 import { ROLES } from "@/constants";
 import { formatDateTime } from "@/lib/utils";
 import type { RoleName, User, UserStatus } from "@/types";
@@ -51,6 +51,15 @@ import { MoreHorizontal } from "lucide-react";
 
 const PAGE_SIZE = 8;
 
+const ROLE_ID_BY_NAME: Record<RoleName, string> = {
+  "Super Admin": "role-001",
+  Admin: "role-002",
+  Marketing: "role-003",
+  "Content Editor": "role-004",
+  Operations: "role-005",
+  "Read Only": "role-006",
+};
+
 type DialogType = "deactivate" | "reset" | null;
 
 export function UsersList() {
@@ -71,18 +80,13 @@ export function UsersList() {
     queryFn: () => usersService.getAll(),
   });
 
-  const { data: roles } = useQuery({
-    queryKey: ["roles"],
-    queryFn: () => rolesService.getAll(),
-  });
-
   const inviteMutation = useMutation({
     mutationFn: () =>
       usersService.create({
         name: inviteName,
         email: inviteEmail,
         role: inviteRole,
-        roleId: roles?.find((r) => r.name === inviteRole)?.id ?? "role-006",
+        roleId: ROLE_ID_BY_NAME[inviteRole],
         status: "Active",
       }),
     onSuccess: () => {
@@ -121,7 +125,7 @@ export function UsersList() {
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const handleRoleChange = async (user: User, role: RoleName) => {
-    const roleId = roles?.find((r) => r.name === role)?.id ?? user.roleId;
+    const roleId = ROLE_ID_BY_NAME[role];
     await updateMutation.mutateAsync({ id: user.id, data: { role, roleId } });
     toast.success(`Role updated to ${role}`);
   };
@@ -258,7 +262,7 @@ export function UsersList() {
     <div className="space-y-6">
       <PageHeader
         title="Users"
-        description="Manage admin users, roles, and access."
+        description="Manage admin users and access."
         actions={
           <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
             <DialogTrigger asChild>

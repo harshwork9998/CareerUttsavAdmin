@@ -1,4 +1,5 @@
 import { BRAND } from "@/constants";
+import { BrandLogo } from "@/components/shared/brand-logo";
 import { LoginForm } from "@/features/auth/login-form";
 
 export const metadata = {
@@ -26,13 +27,11 @@ export default function LoginPage() {
       <div className="relative z-10 w-full max-w-md space-y-8">
         {/* Branding */}
         <div className="text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-secondary text-secondary-foreground shadow-soft">
-            <span className="text-xl font-bold">CU</span>
+          <div className="mx-auto mb-4 flex justify-center px-4 py-3">
+            <BrandLogo variant="login" priority />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight text-white">
-            {BRAND.name}
-          </h1>
-          <p className="mt-1 text-sm text-white/70">{BRAND.org} Admin Portal</p>
+          <h1 className="sr-only">{BRAND.name} Admin Portal</h1>
+          <p className="text-sm text-white/70">{BRAND.org} Admin Portal</p>
         </div>
 
         <LoginForm />

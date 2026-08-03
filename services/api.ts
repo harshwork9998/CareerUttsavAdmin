@@ -16,11 +16,7 @@ import {
 import {
   mockUniversities,
   mockUsers,
-  mockRoles,
-  mockActivityLogs,
   mockDashboardData,
-  mockReports,
-  mockSettings,
 } from "@/lib/mock-data";
 import {
   createRegistrationApi,
@@ -41,11 +37,7 @@ import type {
   Partner,
   SeminarSessionRoster,
   User,
-  Role,
-  ActivityLog,
   DashboardData,
-  Report,
-  Settings,
   SeminarBroadcastRequest,
   SeminarBroadcastResult,
 } from "@/types";
@@ -146,14 +138,6 @@ export const usersService = {
     simulate({ ...mockUsers.find((u) => u.id === id)!, ...data, updatedAt: new Date().toISOString() }),
 };
 
-export const rolesService = {
-  getAll: () => simulate([...mockRoles]),
-};
-
-export const activityLogsService = {
-  getAll: () => simulate([...mockActivityLogs]),
-};
-
 export const dashboardService = {
   getData: async () => {
     const [registrations, events, partners] = await Promise.all([
@@ -170,16 +154,6 @@ export const dashboardService = {
       )
     );
   },
-};
-
-export const reportsService = {
-  getAll: () => simulate([...mockReports]),
-};
-
-export const settingsService = {
-  get: () => simulate({ ...mockSettings }),
-  update: (data: Partial<Settings>) =>
-    simulate({ ...mockSettings, ...data }),
 };
 
 export const messagingService = {

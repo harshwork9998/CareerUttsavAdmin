@@ -1,4 +1,4 @@
-import type { Role, User } from "@/types";
+import type { User } from "@/types";
 
 export const mockUsers: User[] = [
   {
@@ -133,83 +133,5 @@ export const mockUsers: User[] = [
     lastLogin: "2026-04-10T16:30:00+05:30",
     createdAt: "2024-11-05T09:00:00+05:30",
     updatedAt: "2026-05-15T09:00:00+05:30",
-  },
-];
-
-export const mockRoles: Role[] = [
-  {
-    id: "role-001",
-    name: "Super Admin",
-    description: "Full system access including user management and settings.",
-    permissions: [{ resource: "*", actions: ["create", "read", "update", "delete"] }],
-    userCount: 1,
-    createdAt: "2024-01-01T00:00:00+05:30",
-    updatedAt: "2024-01-01T00:00:00+05:30",
-  },
-  {
-    id: "role-002",
-    name: "Admin",
-    description: "Manage events, registrations, universities, and partners.",
-    permissions: [
-      { resource: "events", actions: ["create", "read", "update", "delete"] },
-      { resource: "registrations", actions: ["create", "read", "update", "delete"] },
-      { resource: "universities", actions: ["create", "read", "update", "delete"] },
-      { resource: "partners", actions: ["create", "read", "update", "delete"] },
-      { resource: "reports", actions: ["read"] },
-    ],
-    userCount: 2,
-    createdAt: "2024-01-01T00:00:00+05:30",
-    updatedAt: "2024-01-01T00:00:00+05:30",
-  },
-  {
-    id: "role-003",
-    name: "Marketing",
-    description: "Manage partner outreach and promotional campaigns.",
-    permissions: [
-      { resource: "partners", actions: ["create", "read", "update"] },
-      { resource: "events", actions: ["read"] },
-      { resource: "reports", actions: ["read"] },
-    ],
-    userCount: 2,
-    createdAt: "2024-01-01T00:00:00+05:30",
-    updatedAt: "2024-01-01T00:00:00+05:30",
-  },
-  {
-    id: "role-004",
-    name: "Content Editor",
-    description: "Update event content and partner-facing materials.",
-    permissions: [
-      { resource: "events", actions: ["read", "update"] },
-      { resource: "partners", actions: ["read", "update"] },
-    ],
-    userCount: 2,
-    createdAt: "2024-01-01T00:00:00+05:30",
-    updatedAt: "2024-01-01T00:00:00+05:30",
-  },
-  {
-    id: "role-005",
-    name: "Operations",
-    description: "Handle registrations, check-ins, and on-ground event operations.",
-    permissions: [
-      { resource: "registrations", actions: ["read", "update"] },
-      { resource: "events", actions: ["read"] },
-      { resource: "universities", actions: ["read"] },
-    ],
-    userCount: 2,
-    createdAt: "2024-01-01T00:00:00+05:30",
-    updatedAt: "2024-01-01T00:00:00+05:30",
-  },
-  {
-    id: "role-006",
-    name: "Read Only",
-    description: "View-only access to dashboard and reports.",
-    permissions: [
-      { resource: "dashboard", actions: ["read"] },
-      { resource: "reports", actions: ["read"] },
-      { resource: "events", actions: ["read"] },
-    ],
-    userCount: 1,
-    createdAt: "2024-01-01T00:00:00+05:30",
-    updatedAt: "2024-01-01T00:00:00+05:30",
   },
 ];

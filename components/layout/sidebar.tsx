@@ -1,11 +1,10 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Activity,
-  BarChart3,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
@@ -14,15 +13,13 @@ import {
   LayoutDashboard,
   LogOut,
   Mic2,
-  Settings,
-  Shield,
-  User,
   UserCog,
   Users,
   type LucideIcon,
 } from "lucide-react";
 
-import { BRAND, NAV_ITEMS } from "@/constants";
+import { NAV_ITEMS } from "@/constants";
+import { BrandLogo } from "@/components/shared/brand-logo";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth-store";
 import { useSidebarStore } from "@/store/sidebar-store";
@@ -51,12 +48,10 @@ const ICON_MAP: Record<string, LucideIcon> = {
   GraduationCap,
   Handshake,
   Mic2,
-  BarChart3,
   UserCog,
-  Shield,
-  Activity,
-  Settings,
 };
+
+const HOVER_COLLAPSE_DELAY_MS = 220;
 
 interface SidebarProps {
   className?: string;
@@ -68,8 +63,17 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
   const router = useRouter();
   const { collapsed, toggle } = useSidebarStore();
   const { user, logout } = useAuthStore();
+  const [hoverExpanded, setHoverExpanded] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuOpenRef = useRef(false);
+  const collapseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const width = collapsed ? 72 : 260;
+  const forceExpanded = Boolean(onNavigate);
+  const isPinnedOpen = forceExpanded || !collapsed;
+  const showExpanded = isPinnedOpen || hoverExpanded;
+  const railWidth = 72;
+  const expandedWidth = 260;
+  const shellWidth = isPinnedOpen ? expandedWidth : railWidth;
 
   const initials =
     user?.name
@@ -85,40 +89,75 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
     router.push("/login");
   };
 
+  const clearCollapseTimer = () => {
+    if (collapseTimerRef.current !== null) {
+      clearTimeout(collapseTimerRef.current);
+      collapseTimerRef.current = null;
+    }
+  };
+
+  const scheduleHoverCollapse = () => {
+    if (userMenuOpenRef.current || forceExpanded || !collapsed) return;
+    clearCollapseTimer();
+    collapseTimerRef.current = setTimeout(() => {
+      setHoverExpanded(false);
+      collapseTimerRef.current = null;
+    }, HOVER_COLLAPSE_DELAY_MS);
+  };
+
+  useEffect(() => clearCollapseTimer, []);
+
+  const handleMouseEnter = () => {
+    clearCollapseTimer();
+    if (!forceExpanded && collapsed) {
+      setHoverExpanded(true);
+    }
+  };
+
+  const handleMouseLeave = () => {
+    scheduleHoverCollapse();
+  };
+
+  const handleUserMenuOpenChange = (open: boolean) => {
+    userMenuOpenRef.current = open;
+    setUserMenuOpen(open);
+    if (open) {
+      clearCollapseTimer();
+      if (!forceExpanded && collapsed) {
+        setHoverExpanded(true);
+      }
+      return;
+    }
+    scheduleHoverCollapse();
+  };
+
   return (
     <TooltipProvider delayDuration={0}>
-      <motion.aside
-        initial={false}
-        animate={{ width }}
-        transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-        className={cn(
-          "flex h-full shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground",
-          className
-        )}
+      <div
+        className={cn("relative h-full shrink-0", className)}
+        style={{ width: shellWidth }}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
       >
-        <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-4">
-          <motion.div
-            layout
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary text-secondary-foreground shadow-soft"
-          >
-            <span className="text-sm font-bold">CU</span>
+        <motion.aside
+          initial={false}
+          animate={{ width: showExpanded ? expandedWidth : railWidth }}
+          transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+          className={cn(
+            "flex h-full flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground",
+            !isPinnedOpen && "absolute inset-y-0 left-0 z-50",
+            !isPinnedOpen && hoverExpanded && "shadow-2xl ring-1 ring-sidebar-border/80"
+          )}
+        >
+        <div
+          className={cn(
+            "flex items-center justify-center border-b border-sidebar-border px-3",
+            showExpanded ? "h-24 py-4" : "h-[4.5rem] py-3"
+          )}
+        >
+          <motion.div layout className="flex w-full items-center justify-center">
+            <BrandLogo variant={showExpanded ? "sidebar" : "icon"} priority />
           </motion.div>
-          <AnimatePresence mode="wait">
-            {!collapsed && (
-              <motion.div
-                initial={{ opacity: 0, x: -8 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -8 }}
-                transition={{ duration: 0.2 }}
-                className="min-w-0 flex-1"
-              >
-                <p className="truncate text-sm font-semibold">{BRAND.name}</p>
-                <p className="truncate text-xs text-sidebar-foreground/60">
-                  {BRAND.org} Admin
-                </p>
-              </motion.div>
-            )}
-          </AnimatePresence>
         </div>
 
         <ScrollArea className="flex-1 px-3 py-4">
@@ -156,7 +195,7 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
                     )}
                   />
                   <AnimatePresence mode="wait">
-                    {!collapsed && (
+                    {showExpanded && (
                       <motion.span
                         initial={{ opacity: 0, width: 0 }}
                         animate={{ opacity: 1, width: "auto" }}
@@ -171,7 +210,7 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
                 </Link>
               );
 
-              if (collapsed) {
+              if (!showExpanded) {
                 return (
                   <Tooltip key={item.href}>
                     <TooltipTrigger asChild>{linkContent}</TooltipTrigger>
@@ -188,27 +227,38 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
         </ScrollArea>
 
         <div className="space-y-2 border-t border-sidebar-border p-3">
-          <DropdownMenu>
+          <DropdownMenu open={userMenuOpen} onOpenChange={handleUserMenuOpenChange}>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
                 className={cn(
                   "h-auto w-full justify-start gap-3 px-2 py-2 text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground",
-                  collapsed && "justify-center px-0"
+                  !showExpanded && "justify-center px-0"
                 )}
               >
                 <Avatar className="h-8 w-8 shrink-0">
                   <AvatarImage src={user?.avatar} alt={user?.name} />
                   <AvatarFallback className="text-xs">{initials}</AvatarFallback>
                 </Avatar>
-                {!collapsed && (
+                {showExpanded && (
                   <span className="min-w-0 flex-1 truncate text-left text-sm font-medium">
                     {user?.name ?? "Admin"}
                   </span>
                 )}
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent side="right" align="end" className="w-56">
+            <DropdownMenuContent
+              side="right"
+              align="end"
+              className="w-56"
+              onMouseEnter={() => {
+                clearCollapseTimer();
+                if (collapsed && !forceExpanded) {
+                  setHoverExpanded(true);
+                }
+              }}
+              onMouseLeave={scheduleHoverCollapse}
+            >
               <DropdownMenuLabel>
                 <div className="flex flex-col gap-0.5">
                   <span>{user?.name ?? "Admin User"}</span>
@@ -217,19 +267,6 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
                   </span>
                 </div>
               </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <Link href="/settings" onClick={onNavigate}>
-                  <User className="mr-2 h-4 w-4" />
-                  Profile
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/settings" onClick={onNavigate}>
-                  <Settings className="mr-2 h-4 w-4" />
-                  Settings
-                </Link>
-              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={handleLogout}
@@ -241,27 +278,30 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <Button
-            variant="ghost"
-            size={collapsed ? "icon" : "default"}
-            onClick={toggle}
-            className={cn(
-              "w-full text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground",
-              collapsed && "h-9 w-9"
-            )}
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            {collapsed ? (
-              <ChevronRight className="h-4 w-4" />
-            ) : (
-              <>
-                <ChevronLeft className="h-4 w-4" />
-                <span className="text-sm">Collapse</span>
-              </>
-            )}
-          </Button>
+          {!forceExpanded ? (
+            <Button
+              variant="ghost"
+              size={showExpanded && !collapsed ? "default" : "icon"}
+              onClick={toggle}
+              className={cn(
+                "w-full text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground",
+                !showExpanded && "h-9 w-9"
+              )}
+              aria-label={collapsed ? "Pin sidebar open" : "Collapse sidebar"}
+            >
+              {collapsed ? (
+                <ChevronRight className="h-4 w-4" />
+              ) : (
+                <>
+                  <ChevronLeft className="h-4 w-4" />
+                  <span className="text-sm">Collapse</span>
+                </>
+              )}
+            </Button>
+          ) : null}
         </div>
-      </motion.aside>
+        </motion.aside>
+      </div>
     </TooltipProvider>
   );
 }

@@ -1,8 +1,6 @@
 import type {
   DashboardData,
   PartnerSalesAnalytics,
-  Report,
-  Settings,
   StudentRegistrationAnalytics,
 } from "@/types";
 import {
@@ -295,10 +293,9 @@ export const mockDashboardData: DashboardData = {
     {
       id: "ra-007",
       type: "system",
-      title: "Settings updated",
+      title: "Registration fee updated",
       description: "Registration fee updated to ₹299",
       timestamp: "2026-06-01T11:00:00+05:30",
-      link: "/settings",
     },
   ],
   upcomingTasks: [
@@ -425,102 +422,4 @@ export const mockDashboardData: DashboardData = {
   partnerSales: buildAllCitiesPartnerSales(),
   eventCities: [...OPERATING_CITIES],
   citySlices: mockCitySlices,
-};
-
-export const mockReports: Report[] = [
-  {
-    id: "rpt-001",
-    name: "Delhi NCR 2026 Registration Summary",
-    type: "Registration",
-    description: "Complete registration breakdown by status, city, and payment method.",
-    dateRange: { from: "2026-06-01", to: "2026-07-09" },
-    format: "PDF",
-    status: "Ready",
-    generatedAt: "2026-07-09T08:00:00+05:30",
-    downloadUrl: "/reports/delhi-ncr-2026-registrations.pdf",
-    generatedBy: "usr-008",
-    createdAt: "2026-07-09T07:55:00+05:30",
-  },
-  {
-    id: "rpt-002",
-    name: "Q2 2026 Event Performance",
-    type: "Event Performance",
-    description: "Cross-event comparison of registrations, check-ins, and capacity utilisation.",
-    dateRange: { from: "2026-04-01", to: "2026-06-30" },
-    format: "Excel",
-    status: "Ready",
-    generatedAt: "2026-07-01T10:00:00+05:30",
-    downloadUrl: "/reports/q2-2026-event-performance.xlsx",
-    generatedBy: "usr-001",
-    createdAt: "2026-07-01T09:30:00+05:30",
-  },
-  {
-    id: "rpt-003",
-    name: "Mumbai 2025 Registration Report",
-    type: "Registration",
-    description: "Final registration and check-in data for Mumbai 2025 edition.",
-    dateRange: { from: "2025-11-01", to: "2025-12-15" },
-    format: "PDF",
-    status: "Ready",
-    generatedAt: "2025-12-15T11:00:00+05:30",
-    downloadUrl: "/reports/mumbai-2025-registrations.pdf",
-    generatedBy: "usr-008",
-    createdAt: "2025-12-15T10:30:00+05:30",
-  },
-  {
-    id: "rpt-004",
-    name: "Partner Sponsorship Revenue",
-    type: "Revenue",
-    description: "Sponsorship amounts and ROI metrics across all partner categories.",
-    dateRange: { from: "2025-04-01", to: "2026-06-30" },
-    format: "Excel",
-    status: "Generating",
-    generatedBy: "usr-001",
-    createdAt: "2026-07-09T09:00:00+05:30",
-  },
-  {
-    id: "rpt-005",
-    name: "University Engagement Analysis",
-    type: "University",
-    description: "Stall footfall estimates and enquiry conversion rates by university.",
-    dateRange: { from: "2025-09-01", to: "2026-06-30" },
-    format: "CSV",
-    status: "Ready",
-    generatedAt: "2026-06-20T14:00:00+05:30",
-    downloadUrl: "/reports/university-engagement.csv",
-    generatedBy: "usr-002",
-    createdAt: "2026-06-20T13:30:00+05:30",
-  },
-];
-
-export const mockSettings: Settings = {
-  general: {
-    siteName: "Career Uttsav",
-    contactEmail: "info@careeruttsav.com",
-    contactPhone: "+91 80 4567 8900",
-    address: "K2 Group, 42 MG Road, Bengaluru, Karnataka 560001",
-    defaultCity: "Bengaluru",
-    timezone: "Asia/Kolkata",
-    registrationFee: 299,
-  },
-  notifications: {
-    emailEnabled: true,
-    smsEnabled: true,
-    pushEnabled: true,
-    registrationConfirmation: true,
-    eventReminders: true,
-    marketingEmails: false,
-  },
-  integrations: {
-    razorpayEnabled: true,
-    whatsappEnabled: true,
-    googleAnalyticsId: "G-XXXXXXXXXX",
-    mailchimpListId: "a1b2c3d4e5",
-  },
-  appearance: {
-    primaryColor: "#1F3864",
-    secondaryColor: "#0E7C7B",
-    logoUrl: "/images/logo.png",
-    faviconUrl: "/favicon.ico",
-  },
 };

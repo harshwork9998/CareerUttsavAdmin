@@ -4,6 +4,7 @@ export const BRAND = {
   accent: "#3B82F6",
   name: "Career Uttsav",
   org: "K2 Group",
+  logo: "/images/career-uttsav-logo.png?v=2",
 } as const;
 
 export const NAV_ITEMS = [
@@ -12,11 +13,7 @@ export const NAV_ITEMS = [
   { title: "Registrations", href: "/registrations", icon: "Users" },
   { title: "Partners", href: "/partners", icon: "Handshake" },
   { title: "Seminars", href: "/seminars", icon: "Mic2" },
-  { title: "Reports", href: "/reports", icon: "BarChart3" },
   { title: "Users", href: "/users", icon: "UserCog" },
-  { title: "Roles & Permissions", href: "/roles", icon: "Shield" },
-  { title: "Activity Logs", href: "/activity-logs", icon: "Activity" },
-  { title: "Settings", href: "/settings", icon: "Settings" },
 ] as const;
 
 export const ROLES = [
