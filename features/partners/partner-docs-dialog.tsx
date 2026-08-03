@@ -336,30 +336,53 @@ function SubmissionPreview({
                           className="rounded-xl border px-3 py-2.5"
                           style={{ borderColor: LINE.subtle }}
                         >
-                          <p
-                            className="text-sm font-semibold"
-                            style={{ color: INK.primary }}
-                          >
-                            {speaker.name}
-                          </p>
-                          {speaker.designation ? (
-                            <p className="text-xs" style={{ color: INK.secondary }}>
-                              {speaker.designation}
-                            </p>
-                          ) : null}
-                          {speaker.contact || speaker.phone || speaker.email ? (
-                            <p className="mt-1 text-xs" style={{ color: INK.muted }}>
-                              {speaker.contact ?? speaker.phone ?? speaker.email}
-                            </p>
-                          ) : null}
-                          {speaker.introduction ? (
-                            <p
-                              className="mt-2 whitespace-pre-wrap text-xs leading-relaxed"
-                              style={{ color: INK.secondary }}
-                            >
-                              {speaker.introduction}
-                            </p>
-                          ) : null}
+                          <div className="flex items-start gap-3">
+                            {speaker.photoUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={speaker.photoUrl}
+                                alt={speaker.name}
+                                className="h-10 w-10 shrink-0 rounded-full object-cover"
+                                style={{ border: `1px solid ${LINE.subtle}` }}
+                              />
+                            ) : null}
+                            <div className="min-w-0 flex-1">
+                              <p
+                                className="text-sm font-semibold"
+                                style={{ color: INK.primary }}
+                              >
+                                {speaker.name}
+                              </p>
+                              {speaker.designation ? (
+                                <p
+                                  className="text-xs"
+                                  style={{ color: INK.secondary }}
+                                >
+                                  {speaker.designation}
+                                </p>
+                              ) : null}
+                              {speaker.contact ||
+                              speaker.phone ||
+                              speaker.email ? (
+                                <p
+                                  className="mt-1 text-xs"
+                                  style={{ color: INK.muted }}
+                                >
+                                  {speaker.contact ??
+                                    speaker.phone ??
+                                    speaker.email}
+                                </p>
+                              ) : null}
+                              {speaker.introduction ? (
+                                <p
+                                  className="mt-2 whitespace-pre-wrap text-xs leading-relaxed"
+                                  style={{ color: INK.secondary }}
+                                >
+                                  {speaker.introduction}
+                                </p>
+                              ) : null}
+                            </div>
+                          </div>
                         </li>
                       ))}
                     </ul>

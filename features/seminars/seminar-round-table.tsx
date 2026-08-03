@@ -209,7 +209,7 @@ export function SeminarRoundTable({
               }}
             >
               <span
-                className="flex h-9 w-9 items-center justify-center rounded-full"
+                className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full"
                 style={{
                   background: empty && !blocked ? "#fff" : palette.bg,
                   color: empty && !blocked ? INK.muted : palette.icon,
@@ -223,7 +223,16 @@ export function SeminarRoundTable({
                           : `1.5px solid ${palette.border}`,
                 }}
               >
-                <User className="h-4 w-4" strokeWidth={2} />
+                {speaker?.photoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={speaker.photoUrl}
+                    alt={speaker.name || "Speaker"}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <User className="h-4 w-4" strokeWidth={2} />
+                )}
               </span>
               <span
                 className="max-w-[80px] truncate text-center text-[10px] font-medium leading-tight"

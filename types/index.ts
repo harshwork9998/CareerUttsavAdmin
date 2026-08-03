@@ -385,6 +385,8 @@ export interface SeminarSpeaker {
   contact?: string;
   /** Speaker bio / intro from partner portal */
   introduction?: string;
+  /** Headshot URL (data URL or hosted) from partner portal */
+  photoUrl?: string;
   organization: string;
   partnerId?: string;
   /** 0-based panel seat index within the seminar */
@@ -425,8 +427,10 @@ export interface PartnerSeminarSpeakerDetail {
   designation?: string;
   /** Phone or email */
   contact?: string;
-  /** Speaker bio / intro for seminar programme (max 1000 chars) */
+  /** Speaker bio / intro for seminar programme (max 500 chars) */
   introduction?: string;
+  /** Headshot from partner portal */
+  photoUrl?: string;
   /** @deprecated use contact */
   phone?: string;
   /** @deprecated use contact */
