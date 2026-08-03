@@ -4,6 +4,12 @@ import path from "path";
 import QRCode from "qrcode";
 import { Resend } from "resend";
 
+export type EmailAttachment = {
+  filename: string;
+  content: string;
+  contentId: string;
+};
+
 export type SendEmailInput = {
   to: string | string[];
   subject: string;
@@ -11,6 +17,7 @@ export type SendEmailInput = {
   from?: string;
   replyTo?: string;
   tags?: { name: string; value: string }[];
+  attachments?: EmailAttachment[];
 };
 
 export type SendEmailResult =
@@ -56,9 +63,32 @@ export async function loadEmailTemplate(
 }
 
 /**
- * Generate a PNG data-URL QR code from a registration ID
- * (suitable for embedding directly in email HTML).
+ * Generate a PNG QR code as base64 (for Resend CID inline attachments).
+ * Data URLs in img src are blocked by most email clients (Gmail, Outlook, etc.).
  */
+export async function generateRegistrationQrPngBase64(
+  registrationId: string
+): Promise<string> {
+  const value = registrationId.trim();
+  if (!value) {
+    throw new Error("Registration ID is required for QR generation");
+  }
+
+  const buffer = await QRCode.toBuffer(value, {
+    errorCorrectionLevel: "M",
+    margin: 1,
+    width: 280,
+    type: "png",
+    color: {
+      dark: "#111111",
+      light: "#FFFFFF",
+    },
+  });
+
+  return buffer.toString("base64");
+}
+
+/** @deprecated Prefer generateRegistrationQrPngBase64 + CID attachments for email. */
 export async function generateRegistrationQrDataUrl(
   registrationId: string
 ): Promise<string> {
@@ -89,6 +119,11 @@ export async function sendEmail(
       html: input.html,
       replyTo: input.replyTo,
       tags: input.tags,
+      attachments: input.attachments?.map((attachment) => ({
+        filename: attachment.filename,
+        content: attachment.content,
+        contentId: attachment.contentId,
+      })),
     });
 
     if (error) {
@@ -121,20 +156,26 @@ export type StudentWelcomeEmailInput = {
 export async function sendStudentWelcomeEmail(
   input: StudentWelcomeEmailInput
 ): Promise<SendEmailResult> {
-  const [template, qrCode] = await Promise.all([
+  const [template, qrContent] = await Promise.all([
     loadEmailTemplate("emails/student-welcome.html"),
-    generateRegistrationQrDataUrl(input.registrationId),
+    generateRegistrationQrPngBase64(input.registrationId),
   ]);
 
   const html = applyTemplatePlaceholders(template, {
     name: input.name.trim() || "there",
-    qrCode,
   });
 
   return sendEmail({
     to: input.to,
     subject: "Welcome to Career Uttsav — your registration is confirmed",
     html,
+    attachments: [
+      {
+        filename: "registration-qr.png",
+        content: qrContent,
+        contentId: "registration-qr",
+      },
+    ],
     tags: [
       { name: "category", value: "student-welcome" },
       { name: "registration_id", value: input.registrationId.slice(0, 64) },

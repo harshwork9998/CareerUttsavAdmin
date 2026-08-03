@@ -4,6 +4,10 @@ import { sendStudentWelcomeEmail } from "@/lib/email";
 import { resolveRegistration } from "@/lib/enrich-registration";
 import { isStudentRegistration } from "@/lib/registration-kinds";
 import {
+  DUPLICATE_STUDENT_REGISTRATION_MESSAGE,
+  findStudentRegistrationDuplicate,
+} from "@/lib/registration-duplicates";
+import {
   buildRegistrationFromInput,
   validateRegistrationCreate,
   type CreateRegistrationInput,
@@ -18,8 +22,12 @@ import { generateId } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
+const NO_STORE_HEADERS = {
+  "Cache-Control": "no-store, no-cache, must-revalidate",
+};
+
 export async function GET() {
-  return NextResponse.json(loadRegistrations());
+  return NextResponse.json(loadRegistrations(), { headers: NO_STORE_HEADERS });
 }
 
 export async function POST(request: Request) {
@@ -38,6 +46,22 @@ export async function POST(request: Request) {
   }
 
   const registrations = loadRawRegistrations();
+
+  if (validated.data.kind === "student") {
+    const duplicate = findStudentRegistrationDuplicate(registrations, {
+      eventId: validated.data.eventId,
+      email: validated.data.email,
+      phone: validated.data.phone,
+    });
+
+    if (duplicate) {
+      return NextResponse.json(
+        { error: DUPLICATE_STUDENT_REGISTRATION_MESSAGE, duplicate: true },
+        { status: 409, headers: NO_STORE_HEADERS }
+      );
+    }
+  }
+
   const now = new Date().toISOString();
   const created = buildRegistrationFromInput(
     validated.data,
@@ -89,5 +113,5 @@ export async function POST(request: Request) {
       });
   }
 
-  return NextResponse.json(resolved);
+  return NextResponse.json(resolved, { headers: NO_STORE_HEADERS });
 }

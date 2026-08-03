@@ -19,6 +19,7 @@ import {
 } from "@/lib/mock-data";
 import {
   createRegistrationApi,
+  deleteRegistrationApi,
   fetchAllRegistrations,
   fetchRegistrationById,
   updateRegistrationApi,
@@ -92,6 +93,7 @@ export const registrationsService = {
     simulate(createRegistrationApi(data)),
   update: (id: string, data: Partial<Registration>) =>
     simulate(updateRegistrationApi(id, data)),
+  delete: (id: string) => simulate(deleteRegistrationApi(id)),
 };
 
 export const universitiesService = {

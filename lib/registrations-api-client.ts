@@ -47,3 +47,8 @@ export async function updateRegistrationApi(
   if (res.status === 404) return null;
   return parseJson<Registration>(res);
 }
+
+export async function deleteRegistrationApi(id: string): Promise<void> {
+  const res = await fetch(`/api/registrations/${id}`, { method: "DELETE" });
+  await parseJson<{ success: boolean }>(res);
+}

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { resolveRegistration } from "@/lib/enrich-registration";
-import { loadEvents } from "@/lib/server/events-persistence";
+import { loadEvents, saveEvents } from "@/lib/server/events-persistence";
 import {
   loadRawRegistrations,
   saveRegistrations,
@@ -46,4 +46,34 @@ export async function PATCH(request: Request, context: RouteContext) {
   next[idx] = updated;
   saveRegistrations(next);
   return NextResponse.json(resolveRegistration(updated, loadEvents()));
+}
+
+export async function DELETE(_request: Request, context: RouteContext) {
+  const { id } = await context.params;
+  const registrations = loadRawRegistrations();
+  const removed = registrations.find((entry) => entry.id === id);
+  if (!removed) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  saveRegistrations(registrations.filter((entry) => entry.id !== id));
+
+  const events = loadEvents();
+  const eventId = removed.eventId;
+  if (events.some((event) => event.id === eventId)) {
+    const now = new Date().toISOString();
+    saveEvents(
+      events.map((event) =>
+        event.id === eventId
+          ? {
+              ...event,
+              registrationCount: Math.max(0, (event.registrationCount ?? 0) - 1),
+              updatedAt: now,
+            }
+          : event
+      )
+    );
+  }
+
+  return NextResponse.json({ success: true, id });
 }

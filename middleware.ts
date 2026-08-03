@@ -90,6 +90,7 @@ export const config = {
     "/api/partners/:path*",
     "/api/partner-portal/:path*",
     "/api/registrations",
+    "/api/registrations/check",
     "/api/registrations/:path*",
   ],
 };

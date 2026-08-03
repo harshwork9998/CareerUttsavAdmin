@@ -9,6 +9,7 @@ import {
   Phone,
   QrCode,
   Ticket,
+  Trash2,
 } from "lucide-react";
 
 import { formatSeminarInterests } from "@/lib/enrich-registration";
@@ -34,11 +35,13 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
 
 export interface RegistrationDetailDrawerProps {
   registration: Registration | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onDelete?: () => void;
 }
 
 function DetailRow({
@@ -85,6 +88,7 @@ export function RegistrationDetailDrawer({
   registration,
   open,
   onOpenChange,
+  onDelete,
 }: RegistrationDetailDrawerProps) {
   if (!registration) return null;
 
@@ -279,6 +283,20 @@ export function RegistrationDetailDrawer({
             )}
           </div>
         </ScrollArea>
+
+        {onDelete ? (
+          <div className="border-t px-6 py-4">
+            <Button
+              type="button"
+              variant="destructive"
+              className="w-full gap-2 sm:w-auto"
+              onClick={onDelete}
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete registration
+            </Button>
+          </div>
+        ) : null}
       </DialogContent>
     </Dialog>
   );

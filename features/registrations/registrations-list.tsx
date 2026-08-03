@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, Download, Plus, Users } from "lucide-react";
 import { toast } from "sonner";
 
@@ -28,6 +28,7 @@ import { cn, formatNumber } from "@/lib/utils";
 import type { Registration, RegistrationKind } from "@/types";
 import type { FilterConfig } from "@/components/shared";
 import {
+  ConfirmDialog,
   DataTable,
   EmptyState,
   ErrorState,
@@ -52,6 +53,7 @@ import {
   buildRegistrationColumns,
   exportHeadersForKind,
   exportRowForKind,
+  getRegistrationDisplayName,
   registrationMatchesSearch,
 } from "./registration-table-config";
 
@@ -111,6 +113,7 @@ function searchPlaceholderForKind(kind: RegistrationKind): string {
 }
 
 export function RegistrationsList() {
+  const queryClient = useQueryClient();
   const [activeKind, setActiveKind] = useState<RegistrationKind>("student");
   const [search, setSearch] = useState("");
   const [eventFilter, setEventFilter] = useState<string[]>([]);
@@ -128,6 +131,7 @@ export function RegistrationsList() {
   const [addKindDialog, setAddKindDialog] = useState<
     "school" | "partner_registration" | "student_ambassador" | null
   >(null);
+  const [pendingDelete, setPendingDelete] = useState<Registration | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["registrations"],
@@ -140,6 +144,20 @@ export function RegistrationsList() {
   const eventsQuery = useQuery({
     queryKey: ["events"],
     queryFn: () => eventsService.getAll(),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => registrationsService.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["registrations"] });
+      queryClient.invalidateQueries({ queryKey: ["events"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      toast.success("Registration deleted");
+      setPendingDelete(null);
+      setDrawerOpen(false);
+      setSelectedRegistration(null);
+    },
+    onError: () => toast.error("Failed to delete registration"),
   });
 
   const registrations = data ?? [];
@@ -660,6 +678,32 @@ export function RegistrationsList() {
         registration={selectedRegistration}
         open={drawerOpen}
         onOpenChange={setDrawerOpen}
+        onDelete={() => {
+          if (selectedRegistration) {
+            setPendingDelete(selectedRegistration);
+          }
+        }}
+      />
+
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        onOpenChange={(open) => {
+          if (!open) setPendingDelete(null);
+        }}
+        title="Delete registration?"
+        description={
+          pendingDelete
+            ? `${getRegistrationDisplayName(pendingDelete)} (${pendingDelete.registrationNumber}) will be permanently removed. This cannot be undone.`
+            : undefined
+        }
+        confirmLabel="Delete registration"
+        variant="destructive"
+        loading={deleteMutation.isPending}
+        onConfirm={async () => {
+          if (pendingDelete) {
+            await deleteMutation.mutateAsync(pendingDelete.id);
+          }
+        }}
       />
     </div>
   );
