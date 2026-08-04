@@ -62,8 +62,9 @@ export function ChapterPartnerInvite(props: {
         </h3>
         <p className="mt-2 text-sm leading-relaxed" style={{ color: INK.secondary }}>
           Use <strong>Send email &amp; finish</strong> below to open Gmail with the
-          welcome message pre-filled — send from the Google account you use for
-          partner outreach.
+          recipient and subject pre-filled. The formatted HTML email is copied to
+          your clipboard — click in the message body and press <strong>Ctrl+V</strong> to
+          paste it before sending.
         </p>
 
         <div className="mt-6 grid gap-4 lg:grid-cols-2">

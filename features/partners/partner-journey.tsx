@@ -79,7 +79,7 @@ import {
   generateTempPassword,
   buildPartnerWelcomeEmail,
   isPartnerPortalEmail,
-  openGmailCompose,
+  openPartnerWelcomeGmailCompose,
   resolvePortalLogin,
 } from "@/lib/partner-invite";
 import {
@@ -1277,54 +1277,55 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     if (applyFormErrors(setErrors, next)) return;
 
     const login = resolvePortalLogin(partner, email);
-    const activePartnerships = eventPartnerships.filter((ep) =>
-      eventIds.includes(ep.eventId)
-    );
-    const eventPackages = buildEventPackageSummaries(
-      activePartnerships,
-      slotAssignments,
-      eventsQuery.data ?? []
-    );
-    const welcomeEmail = buildPartnerWelcomeEmail({
-      partnerName: partner.name,
-      login,
-      temporaryPassword: tempPassword,
-      hasSeminarSlots: slotAssignments.some((a) => a.slots > 0),
-      eventPackages: eventPackages.map((pkg) => ({
-        title: pkg.title,
-        city: pkg.city,
-        tier: pkg.tier ?? "Not set",
-        deliverables: pkg.deliverables,
-        seminars: pkg.seminars,
-        seatsAssigned: pkg.seatsAssigned,
-        slotBudget: pkg.slotBudget,
-      })),
-    });
 
-    openGmailCompose({
-      to: email,
-      subject: welcomeEmail.subject,
-      body: welcomeEmail.body,
-    });
+    void (async () => {
+      try {
+        const welcomeEmail = await buildPartnerWelcomeEmail({
+          partnerName: partner.name,
+          login,
+          temporaryPassword: tempPassword,
+        });
 
-    saveMutation.mutate({
-      create: false,
-      advance: false,
-      isFinal: true,
-      data: {
-        ...partner,
-        portalLogin: login,
-        portalTempPassword: tempPassword,
-        portalInviteEmail: email,
-        portalInviteSentAt: new Date().toISOString(),
-        stage: partner.stage === "Not Proceeding" ? partner.stage : "Confirmed",
-        stageRemarks: pushRemark(
-          partner.stage,
-          partner.stage === "Not Proceeding" ? "Not Proceeding" : "Confirmed",
-          `Partner access email prepared for ${email}`
-        ),
-      },
-    });
+        const pasteMode = await openPartnerWelcomeGmailCompose({
+          to: email,
+          subject: welcomeEmail.subject,
+          html: welcomeEmail.html,
+          plainText: welcomeEmail.plainText,
+        });
+
+        toast.success(
+          pasteMode === "html"
+            ? "Gmail opened — press Ctrl+V in the message body to paste the formatted email"
+            : "Gmail opened — formatted email copied as plain text; paste into the message body"
+        );
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Could not prepare the welcome email"
+        );
+        return;
+      }
+
+      saveMutation.mutate({
+        create: false,
+        advance: false,
+        isFinal: true,
+        data: {
+          ...partner,
+          portalLogin: login,
+          portalTempPassword: tempPassword,
+          portalInviteEmail: email,
+          portalInviteSentAt: new Date().toISOString(),
+          stage: partner.stage === "Not Proceeding" ? partner.stage : "Confirmed",
+          stageRemarks: pushRemark(
+            partner.stage,
+            partner.stage === "Not Proceeding" ? "Not Proceeding" : "Confirmed",
+            `Partner access email prepared for ${email}`
+          ),
+        },
+      });
+    })();
   };
 
   const confirmNotProceeding = () => {
