@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { sendStudentWelcomeEmail } from "@/lib/email";
+import { consumePhoneVerification } from "@/lib/otp";
 import { resolveRegistration } from "@/lib/enrich-registration";
 import { isStudentRegistration } from "@/lib/registration-kinds";
 import {
@@ -48,6 +49,41 @@ export async function POST(request: Request) {
   const registrations = loadRawRegistrations();
 
   if (validated.data.kind === "student") {
+    const token = validated.data.phoneVerificationToken?.trim() ?? "";
+    const clientHint =
+      typeof (body as { client?: string }).client === "string"
+        ? (body as { client?: string }).client
+        : "";
+    const requirePhoneOtp =
+      clientHint === "public" ||
+      request.headers.get("x-cu-client") === "public" ||
+      Boolean(token);
+
+    if (requirePhoneOtp) {
+      if (!token) {
+        return NextResponse.json(
+          {
+            error:
+              "Please verify your mobile number with OTP before registering.",
+          },
+          { status: 400, headers: NO_STORE_HEADERS }
+        );
+      }
+
+      const verification = consumePhoneVerification({
+        phone: validated.data.phone,
+        purpose: "student_registration",
+        verificationToken: token,
+        consume: true,
+      });
+      if (!verification.ok) {
+        return NextResponse.json(
+          { error: verification.error },
+          { status: verification.status, headers: NO_STORE_HEADERS }
+        );
+      }
+    }
+
     const duplicate = findStudentRegistrationDuplicate(registrations, {
       eventId: validated.data.eventId,
       email: validated.data.email,

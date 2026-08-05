@@ -132,17 +132,6 @@ export function buildRegistrationColumns(
         ),
       },
       {
-        accessorKey: "parentPhone",
-        header: "Parent Mobile Number",
-        cell: ({ row }) => (
-          <span className="whitespace-nowrap text-sm">
-            {isStudentRegistration(row.original)
-              ? (row.original.parentPhone ?? "—")
-              : "—"}
-          </span>
-        ),
-      },
-      {
         accessorKey: "email",
         header: "Email Address",
         cell: ({ row }) => (
@@ -357,7 +346,6 @@ export function exportHeadersForKind(kind: RegistrationKind): string[] {
         "City",
         "Gender",
         "Student Mobile Number",
-        "Parent Mobile Number",
         "Email Address",
       ];
     case "school":
@@ -410,7 +398,6 @@ export function exportRowForKind(
       registration.city,
       registration.gender ?? "",
       registration.phone,
-      registration.parentPhone ?? "",
       registration.email,
     ];
   }
@@ -458,7 +445,6 @@ export function registrationMatchesSearch(
     haystack.push(
       registration.email,
       registration.phone,
-      registration.parentPhone ?? "",
       registration.college,
       registration.classLabel ?? "",
       registration.interestedStream ?? "",

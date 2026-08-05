@@ -227,15 +227,11 @@ export function RegistrationsList() {
 
   const classOptions = useMemo(() => {
     const order = [
-      "Class 4",
-      "Class 5",
-      "Class 6",
-      "Class 7",
-      "Class 8",
-      "Class 9",
-      "Class 10",
-      "Class 11",
-      "Class 12",
+      "Grade 9",
+      "Grade 10",
+      "Grade 11 (I PUC)",
+      "Grade 12 (II PUC)",
+      "Others",
     ];
     const present = new Set(
       studentRegistrations.map((r) => r.classLabel).filter(Boolean)

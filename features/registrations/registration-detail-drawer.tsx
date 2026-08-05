@@ -139,11 +139,6 @@ export function RegistrationDetailDrawer({
                     <DetailRow icon={Mail} label="Email" value={registration.email} />
                     <DetailRow icon={Phone} label="Student Mobile" value={registration.phone} />
                     <DetailRow
-                      icon={Phone}
-                      label="Parent Mobile"
-                      value={registration.parentPhone ?? "—"}
-                    />
-                    <DetailRow
                       icon={MapPin}
                       label="Location"
                       value={`${registration.city}, ${registration.state}`}

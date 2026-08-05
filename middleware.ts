@@ -29,7 +29,10 @@ function withCors(response: NextResponse, origin: string | null) {
     "Access-Control-Allow-Methods",
     "GET, POST, PATCH, DELETE, OPTIONS"
   );
-  response.headers.set("Access-Control-Allow-Headers", "Content-Type");
+  response.headers.set(
+    "Access-Control-Allow-Headers",
+    "Content-Type, x-cu-client"
+  );
   return response;
 }
 
@@ -39,6 +42,8 @@ function resolveAllowedOrigin(
 ): string | null {
   const origin = request.headers.get("origin");
   if (!origin) return allowed[0] ?? null;
+  // file:// pages send Origin: "null" — allow for local HTML testing
+  if (origin === "null") return "null";
   if (allowed.includes(origin) || allowed.includes("*")) return origin;
   // Local dev: allow any localhost / 127.0.0.1 port (Live Server, Python, Vite, etc.)
   if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin)) {
@@ -55,7 +60,11 @@ function isPartnerPortalApi(pathname: string) {
 }
 
 function isPublicRegistrationApi(pathname: string) {
-  return pathname.startsWith("/api/registrations");
+  return (
+    pathname.startsWith("/api/registrations") ||
+    pathname === "/api/send-otp" ||
+    pathname === "/api/verify-otp"
+  );
 }
 
 export function middleware(request: NextRequest) {
@@ -92,5 +101,7 @@ export const config = {
     "/api/registrations",
     "/api/registrations/check",
     "/api/registrations/:path*",
+    "/api/send-otp",
+    "/api/verify-otp",
   ],
 };

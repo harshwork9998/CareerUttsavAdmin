@@ -27,7 +27,7 @@ function countBy(
 }
 
 function classSegment(classLabel: string): "lower" | "core" | undefined {
-  const match = classLabel.match(/Class (\d+)/);
+  const match = classLabel.match(/(?:Class|Grade)\s*(\d+)/i);
   if (!match) return undefined;
   const grade = Number(match[1]);
   if (grade <= 8) return "lower";

@@ -12,15 +12,11 @@ import type {
 export const MAX_SEMINAR_INTERESTS = 3;
 
 export const REGISTRATION_CLASS_OPTIONS = [
-  "Class 4",
-  "Class 5",
-  "Class 6",
-  "Class 7",
-  "Class 8",
-  "Class 9",
-  "Class 10",
-  "Class 11",
-  "Class 12",
+  "Grade 9",
+  "Grade 10",
+  "Grade 11 (I PUC)",
+  "Grade 12 (II PUC)",
+  "Others",
 ] as const;
 
 export const REGISTRATION_STREAM_OPTIONS = [
@@ -49,6 +45,8 @@ export type CreateStudentRegistrationInput = {
   studentName: string;
   email: string;
   phone: string;
+  /** Issued by POST /api/verify-otp. Required for public student registration. */
+  phoneVerificationToken?: string;
   parentPhone?: string;
   college: string;
   classLabel: string;
@@ -153,6 +151,11 @@ function validateStudentCreate(
     return { ok: false, error: "Student mobile number is required" };
   }
 
+  const phoneVerificationToken =
+    typeof body.phoneVerificationToken === "string"
+      ? body.phoneVerificationToken.trim()
+      : "";
+
   const college = body.college?.trim() ?? "";
   if (college.length < 2) {
     return { ok: false, error: "School/college is required" };
@@ -226,6 +229,7 @@ function validateStudentCreate(
       studentName,
       email,
       phone,
+      phoneVerificationToken: phoneVerificationToken || undefined,
       parentPhone: parentPhone || undefined,
       college,
       classLabel,

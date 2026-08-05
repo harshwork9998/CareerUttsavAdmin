@@ -52,7 +52,6 @@ const EMPTY_FORM = {
   city: "",
   gender: "",
   phone: "",
-  parentPhone: "",
   email: "",
 };
 
@@ -147,9 +146,6 @@ export function AddStudentDialog({
     if (phoneDigits(form.phone).length < 10) {
       next.phone = "Student mobile number is required";
     }
-    if (form.parentPhone.trim() && phoneDigits(form.parentPhone).length < 10) {
-      next.parentPhone = "Enter at least 10 digits";
-    }
     if (!isValidEmail(form.email.trim())) {
       next.email = "Enter a valid email address";
     }
@@ -170,7 +166,6 @@ export function AddStudentDialog({
       city: form.city.trim(),
       gender: form.gender as CreateStudentRegistrationInput["gender"],
       phone: form.phone.trim(),
-      parentPhone: form.parentPhone.trim() || undefined,
       email: form.email.trim(),
       seminarInterests:
         form.seminarInterests.length > 0 ? form.seminarInterests : undefined,
@@ -472,21 +467,6 @@ export function AddStudentDialog({
                   aria-invalid={Boolean(errors.phone)}
                 />
                 <FieldError message={errors.phone} />
-              </div>
-
-              <div
-                className="space-y-2"
-                data-field-error={errors.parentPhone ? "true" : undefined}
-              >
-                <Label htmlFor="as-parent-phone">Parent Mobile Number</Label>
-                <Input
-                  id="as-parent-phone"
-                  value={form.parentPhone}
-                  onChange={(e) => patch({ parentPhone: e.target.value })}
-                  className={fieldErrorClass(errors.parentPhone)}
-                  aria-invalid={Boolean(errors.parentPhone)}
-                />
-                <FieldError message={errors.parentPhone} />
               </div>
 
               <div
