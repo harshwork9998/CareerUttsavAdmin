@@ -19,22 +19,23 @@ export function generatePartnerLogin(partner: Pick<Partner, "name" | "primaryCon
   return `${slug || "partner"}@partners.careeruttsav.in`;
 }
 
-/** Login shown in Chapter 8 and used by the partner portal. */
+/**
+ * Default portal login for Chapter 8:
+ * saved portalLogin → primary contact email → generated fallback.
+ * Invite/send-to email is separate and must not override login.
+ */
 export function resolvePortalLogin(
   partner: Pick<
     Partner,
     "name" | "primaryContact" | "portalLogin" | "portalInviteEmail"
   >,
-  inviteEmail?: string
+  _inviteEmail?: string
 ): string {
-  const invite = inviteEmail?.trim().toLowerCase() ?? "";
-  if (isPartnerPortalEmail(invite)) return invite;
-
   const stored = partner.portalLogin?.trim().toLowerCase() ?? "";
   if (isPartnerPortalEmail(stored)) return stored;
 
-  const sentTo = partner.portalInviteEmail?.trim().toLowerCase() ?? "";
-  if (isPartnerPortalEmail(sentTo)) return sentTo;
+  const primary = partner.primaryContact.email.trim().toLowerCase();
+  if (isPartnerPortalEmail(primary)) return primary;
 
   return generatePartnerLogin(partner);
 }

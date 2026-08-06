@@ -7,6 +7,12 @@ import {
   updatePartnerApi,
 } from "@/lib/partners-api-client";
 import {
+  createSpocApi,
+  deleteSpocApi,
+  fetchAllSpocs,
+  updateSpocApi,
+} from "@/lib/spocs-api-client";
+import {
   createEventApi,
   deleteEventApi,
   fetchAllEvents,
@@ -41,6 +47,7 @@ import type {
   Registration,
   University,
   Partner,
+  Spoc,
   SeminarSessionRoster,
   User,
   DashboardData,
@@ -115,6 +122,17 @@ export const partnersService = {
   update: async (id: string, data: Partial<Partner>) =>
     simulate(await updatePartnerApi(id, data)),
   delete: async (id: string) => simulate(await deletePartnerApi(id)),
+};
+
+export const spocsService = {
+  getAll: async () => simulate(await fetchAllSpocs()),
+  create: async (data: Pick<Spoc, "name" | "phone" | "email">) =>
+    simulate(await createSpocApi(data)),
+  update: async (
+    id: string,
+    data: Partial<Pick<Spoc, "name" | "phone" | "email">>
+  ) => simulate(await updateSpocApi(id, data)),
+  delete: async (id: string) => simulate(await deleteSpocApi(id)),
 };
 
 export const seminarsService = {

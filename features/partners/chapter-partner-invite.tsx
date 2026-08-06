@@ -24,6 +24,7 @@ export function ChapterPartnerInvite(props: {
   inviteEmail: string;
   setInviteEmail: (v: string) => void;
   login: string;
+  setLogin: (v: string) => void;
   temporaryPassword: string;
   onRegeneratePassword: () => void;
   errors: Record<string, string>;
@@ -63,8 +64,8 @@ export function ChapterPartnerInvite(props: {
         <p className="mt-2 text-sm leading-relaxed" style={{ color: INK.secondary }}>
           Use <strong>Send email &amp; finish</strong> below to open Gmail with the
           recipient and subject pre-filled. The formatted HTML email is copied to
-          your clipboard — click in the message body and press <strong>Ctrl+V</strong> to
-          paste it before sending.
+          your clipboard — click in the message body and press <strong>Ctrl+V</strong>{" "}
+          to paste it before sending.
         </p>
 
         <div className="mt-6 grid gap-4 lg:grid-cols-2">
@@ -79,10 +80,20 @@ export function ChapterPartnerInvite(props: {
               </p>
             </div>
             <div className="space-y-3">
-              <div className="space-y-1.5">
-                <Label>Login</Label>
+              <div
+                className="space-y-1.5"
+                data-field-error={props.errors.login ? "true" : undefined}
+              >
+                <Label>Login ID</Label>
                 <div className="flex gap-2">
-                  <Input value={props.login} readOnly className="bg-white" />
+                  <Input
+                    type="email"
+                    value={props.login}
+                    onChange={(e) => props.setLogin(e.target.value)}
+                    className={fieldErrorClass(props.errors.login, "bg-white")}
+                    aria-invalid={Boolean(props.errors.login)}
+                    placeholder="Defaults to primary contact email"
+                  />
                   <Button
                     type="button"
                     variant="outline"
@@ -93,6 +104,11 @@ export function ChapterPartnerInvite(props: {
                     <Copy className="h-4 w-4" />
                   </Button>
                 </div>
+                <FieldError message={props.errors.login} />
+                <p className="text-xs" style={{ color: INK.muted }}>
+                  Starts as the primary contact email from Partner details. Change
+                  it here if needed.
+                </p>
               </div>
               <div className="space-y-1.5">
                 <Label>Temporary password</Label>
@@ -150,6 +166,9 @@ export function ChapterPartnerInvite(props: {
                 aria-invalid={Boolean(props.errors.inviteEmail)}
               />
               <FieldError message={props.errors.inviteEmail} />
+              <p className="text-xs" style={{ color: INK.muted }}>
+                Where the welcome email is sent. Can differ from the login ID.
+              </p>
             </div>
             <div
               className="mt-4 flex items-start gap-2 rounded-xl px-3 py-2.5 text-xs"

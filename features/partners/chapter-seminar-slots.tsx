@@ -98,7 +98,7 @@ export function ChapterSeminarSlots(props: {
   ) => void;
   /** Per-event slot budget from deliverables step */
   slotBudgetByEvent?: Record<string, number>;
-  /** When true, pick individual seminar seats (0 or 1 each) up to budget */
+  /** When true, enforce per-event slot budget while assigning seats */
   seatPickMode?: boolean;
   errors: Record<string, string>;
 }) {
@@ -117,7 +117,7 @@ export function ChapterSeminarSlots(props: {
   const setSlots = (eventId: string, seminarId: string, slots: number) => {
     props.setAssignments((prev) => {
       const others = prev.filter((a) => a.seminarId !== seminarId);
-      const nextSlots = seatPickMode ? (slots > 0 ? 1 : 0) : slots;
+      const nextSlots = Math.max(0, Math.floor(slots));
       if (nextSlots <= 0) return others;
       return [...others, { eventId, seminarId, slots: nextSlots }];
     });
@@ -283,15 +283,13 @@ export function ChapterSeminarSlots(props: {
                 );
                 const taken = others.reduce((s, o) => s + o.slots, 0);
                 const open = Math.max(0, total - taken - mine);
-                const maxMine = seatPickMode
-                  ? mine > 0
-                    ? 1
-                    : Math.min(1, Math.max(0, total - taken))
-                  : Math.max(0, total - taken);
+                const capacityMax = Math.max(0, total - taken);
+                const budgetMax = seatPickMode
+                  ? Math.max(0, eventBudget - mineOnEvent + mine)
+                  : capacityMax;
+                const maxMine = Math.min(capacityMax, budgetMax);
                 const canPickMore =
-                  !seatPickMode ||
-                  mineOnEvent < eventBudget ||
-                  mine > 0;
+                  !seatPickMode || mineOnEvent < eventBudget || mine > 0;
 
                 return (
                   <SeminarCard
@@ -303,14 +301,20 @@ export function ChapterSeminarSlots(props: {
                     endTime={seminar.endTime}
                     hall={seminar.hall}
                     total={total}
-                    mine={seatPickMode ? (mine > 0 ? 1 : 0) : mine}
+                    mine={mine}
                     taken={taken}
                     open={open}
                     maxMine={maxMine}
                     others={others}
                     seatPickMode={seatPickMode}
                     canPickSeat={canPickMore && maxMine > 0}
-                    onAssign={(next) => setSlots(event.id, seminar.id, next)}
+                    onAssign={(next) =>
+                      setSlots(
+                        event.id,
+                        seminar.id,
+                        Math.min(Math.max(0, next), maxMine)
+                      )
+                    }
                   />
                 );
               })}
@@ -448,7 +452,7 @@ function SeminarCard({
               total={total}
               mine={mine}
               taken={taken}
-              onAssign={seatPickMode ? undefined : onAssign}
+              onAssign={onAssign}
             />
 
             {taken > 0 ? (
@@ -561,7 +565,11 @@ function SeminarCard({
               )}
               style={mine > 0 ? { backgroundColor: BRAND[700] } : undefined}
             >
-              {mine > 0 ? "Seat selected" : "Select this seat"}
+              {mine > 1
+                ? `${mine} seats selected`
+                : mine > 0
+                  ? "Seat selected"
+                  : "Select this seat"}
             </Button>
           ) : !fullyBooked ? (
             <div className="flex items-center gap-2">
@@ -628,9 +636,9 @@ function SeminarCard({
               {fullyBooked
                 ? "No seats left on this panel."
                 : mine > 0
-                  ? "1 seat reserved on this seminar"
+                  ? `${mine} seat${mine === 1 ? "" : "s"} reserved — tap the map to adjust`
                   : canPickSeat
-                    ? "Tap to reserve one seat"
+                    ? "Tap to reserve a seat, or pick seats on the map"
                     : "Slot budget reached for this event"}
             </p>
           ) : (

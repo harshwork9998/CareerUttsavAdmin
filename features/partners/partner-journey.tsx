@@ -23,7 +23,7 @@ import {
   normalizeDeliverableOptions,
 } from "@/constants";
 import { isIndianStateOrUt } from "@/lib/indian-states-uts";
-import { eventsService, partnersService } from "@/services/api";
+import { eventsService, partnersService, spocsService } from "@/services/api";
 import { DateField } from "@/features/events/event-datetime-fields";
 import {
   BRAND,
@@ -43,6 +43,7 @@ import type {
   PartnerEventPartnership,
   PartnerSeminarSlotAssignment,
   RelationshipOwner,
+  Spoc,
   SponsorshipTier,
 } from "@/types";
 import { ChapterSeminarSlots } from "@/features/partners/chapter-seminar-slots";
@@ -75,7 +76,6 @@ import {
   upsertEventPartnership,
 } from "@/lib/partner-event-config";
 import {
-  generatePartnerLogin,
   generateTempPassword,
   buildPartnerWelcomeEmail,
   isPartnerPortalEmail,
@@ -117,6 +117,7 @@ import {
 } from "@/components/ui/select";
 
 const CUSTOM_ORG = "__custom__";
+const NEW_SPOC = "__new__";
 const AUTO_SAVE_DELAY_MS = 1500;
 
 type DraftSaveStatus = "idle" | "pending" | "saved" | "error";
@@ -146,10 +147,26 @@ const emptyContact = (): PartnerContact => ({
 
 const emptyOwner = (): RelationshipOwner => ({
   organization: "",
+  spocId: undefined,
   managerName: "",
   managerPhone: "",
   managerEmail: "",
 });
+
+function resolveSpocChoice(
+  owner: RelationshipOwner | undefined,
+  spocs: Spoc[]
+): string {
+  if (owner?.spocId && spocs.some((s) => s.id === owner.spocId)) {
+    return owner.spocId;
+  }
+  const email = owner?.managerEmail?.trim().toLowerCase() ?? "";
+  if (email) {
+    const match = spocs.find((s) => s.email.trim().toLowerCase() === email);
+    if (match) return match.id;
+  }
+  return NEW_SPOC;
+}
 
 function canPersistNewPartner(name: string, city: string, state: string) {
   return (
@@ -241,7 +258,13 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     queryFn: () => partnersService.getAll(),
   });
 
+  const spocsQuery = useQuery({
+    queryKey: ["spocs"],
+    queryFn: () => spocsService.getAll(),
+  });
+
   const partner = partnerQuery.data ?? null;
+  const spocs = spocsQuery.data ?? [];
   const unlocked = maxUnlockedChapter(isNew ? null : partner);
   const [chapter, setChapter] = useState<ChapterId>(1);
 
@@ -321,6 +344,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
   // Chapter 4
   const [orgChoice, setOrgChoice] = useState<string>("K2");
   const [customOrg, setCustomOrg] = useState("");
+  const [spocChoice, setSpocChoice] = useState<string>(NEW_SPOC);
   const [managerName, setManagerName] = useState("");
   const [managerPhone, setManagerPhone] = useState("");
   const [managerEmail, setManagerEmail] = useState("");
@@ -380,6 +404,9 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     setManagerName(partner.relationshipOwner?.managerName ?? "");
     setManagerPhone(partner.relationshipOwner?.managerPhone ?? "");
     setManagerEmail(partner.relationshipOwner?.managerEmail ?? "");
+    setSpocChoice(
+      resolveSpocChoice(partner.relationshipOwner, spocsQuery.data ?? [])
+    );
     setEventIds([...partner.eventIds]);
     setEventPartnerships(resolveEventPartnerships(partner, generateId));
     setSponsorshipNotes(partner.sponsorshipNotes ?? "");
@@ -399,17 +426,21 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     setInviteEmail(
       partner.portalInviteEmail || partner.primaryContact.email || ""
     );
-    setPortalLogin(resolvePortalLogin(partner, partner.portalInviteEmail));
+    setPortalLogin(resolvePortalLogin(partner));
     setTempPassword((prev) => partner.portalTempPassword || prev || generateTempPassword());
-  }, [partner?.id, partnerQuery.isSuccess]);
+  }, [partner?.id, partnerQuery.isSuccess, spocsQuery.isSuccess, spocsQuery.data]);
 
+  // Once SPOCs load, resolve dropdown for an already-hydrated partner.
   useEffect(() => {
-    if (chapter !== 8) return;
-    const email = inviteEmail.trim().toLowerCase();
-    if (isPartnerPortalEmail(email)) {
-      setPortalLogin(email);
-    }
-  }, [chapter, inviteEmail]);
+    if (!partner || !spocsQuery.isSuccess) return;
+    if (formHydratedForRef.current !== partner.id) return;
+    setSpocChoice((current) => {
+      if (current !== NEW_SPOC && spocs.some((s) => s.id === current)) {
+        return current;
+      }
+      return resolveSpocChoice(partner.relationshipOwner, spocs);
+    });
+  }, [partner, spocs, spocsQuery.isSuccess]);
 
   const persistCache = (saved: Partner) => {
     queryClient.setQueryData(["partners", saved.id], saved);
@@ -525,6 +556,66 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     },
   });
 
+  const selectSpoc = (value: string) => {
+    setSpocChoice(value);
+    if (value === NEW_SPOC) {
+      setManagerName("");
+      setManagerPhone("");
+      setManagerEmail("");
+      return;
+    }
+    const selected = spocs.find((s) => s.id === value);
+    if (!selected) return;
+    setManagerName(selected.name);
+    setManagerPhone(selected.phone);
+    setManagerEmail(selected.email);
+  };
+
+  const ensureSpocLinked = async (options?: {
+    requireComplete?: boolean;
+  }): Promise<{ ok: true; spocId?: string } | { ok: false; error: string }> => {
+    const name = managerName.trim();
+    const phone = managerPhone.trim();
+    const email = managerEmail.trim();
+    const requireComplete = options?.requireComplete ?? false;
+    const complete = Boolean(name && phone && email);
+
+    if (!complete) {
+      if (requireComplete) {
+        return { ok: false, error: "SPOC name, phone, and email are required" };
+      }
+      return {
+        ok: true,
+        spocId: spocChoice !== NEW_SPOC ? spocChoice : undefined,
+      };
+    }
+
+    try {
+      let saved: Spoc;
+      if (spocChoice !== NEW_SPOC && spocs.some((s) => s.id === spocChoice)) {
+        saved = await spocsService.update(spocChoice, { name, phone, email });
+      } else {
+        saved = await spocsService.create({ name, phone, email });
+        setSpocChoice(saved.id);
+      }
+      queryClient.setQueryData<Spoc[]>(["spocs"], (old) => {
+        const list = old ?? [];
+        const exists = list.some((s) => s.id === saved.id);
+        const next = exists
+          ? list.map((s) => (s.id === saved.id ? saved : s))
+          : [saved, ...list];
+        return next.sort((a, b) => a.name.localeCompare(b.name));
+      });
+      void queryClient.invalidateQueries({ queryKey: ["spocs"] });
+      return { ok: true, spocId: saved.id };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "Could not save SPOC",
+      };
+    }
+  };
+
   const buildDraftData = ():
     | (Partial<Partner> &
         Pick<
@@ -600,6 +691,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
         eventPartnerships: activePartnerships,
         relationshipOwner: {
           organization,
+          spocId: spocChoice !== NEW_SPOC ? spocChoice : undefined,
           managerName: managerName.trim(),
           managerPhone: managerPhone.trim(),
           managerEmail: managerEmail.trim(),
@@ -641,12 +733,17 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       };
     }
     if (chapter === 8) {
-      const login = resolvePortalLogin(partner, inviteEmail);
+      const login = portalLogin.trim().toLowerCase();
+      const hasCredentials = Boolean(login && tempPassword.trim());
       return {
         ...partner,
-        portalLogin: login,
+        portalLogin: login || partner.portalLogin,
         portalTempPassword: tempPassword || partner.portalTempPassword,
         portalInviteEmail: inviteEmail.trim() || partner.portalInviteEmail,
+        // Activate portal access as soon as credentials exist (email send is separate).
+        portalInviteSentAt:
+          partner.portalInviteSentAt ??
+          (hasCredentials ? new Date().toISOString() : undefined),
       };
     }
     return null;
@@ -701,7 +798,26 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       return;
     }
 
-    const snapshot = JSON.stringify(data);
+    let payload: DraftPayload = data;
+    if (chapter === 4) {
+      const linked = await ensureSpocLinked({ requireComplete: false });
+      if (!linked.ok) {
+        setDraftStatus("error");
+        then?.();
+        return;
+      }
+      if (linked.spocId) {
+        payload = {
+          ...data,
+          relationshipOwner: {
+            ...data.relationshipOwner!,
+            spocId: linked.spocId,
+          },
+        };
+      }
+    }
+
+    const snapshot = JSON.stringify(payload);
     if (snapshot === lastSavedSnapshotRef.current) {
       then?.();
       return;
@@ -709,7 +825,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
 
     try {
       setDraftStatusBrief("pending");
-      const saved = await persistDraft(data, {
+      const saved = await persistDraft(payload, {
         create: isNew && chapter === 1 && !partnerId,
       });
       if (saved) {
@@ -738,6 +854,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
         contactedNotes,
         orgChoice,
         customOrg,
+        spocChoice,
         managerName,
         managerPhone,
         managerEmail,
@@ -762,6 +879,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       contactedNotes,
       orgChoice,
       customOrg,
+      spocChoice,
       managerName,
       managerPhone,
       managerEmail,
@@ -1073,7 +1191,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     toast.error("Mark a meeting as Deal won to continue");
   };
 
-  const submitChapter4 = () => {
+  const submitChapter4 = async () => {
     if (!partner) return;
     const organization =
       orgChoice === CUSTOM_ORG ? customOrg.trim() : orgChoice;
@@ -1094,6 +1212,12 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     }
     if (applyFormErrors(setErrors, next)) return;
 
+    const linked = await ensureSpocLinked({ requireComplete: true });
+    if (!linked.ok) {
+      toast.error(linked.error);
+      return;
+    }
+
     const activePartnerships = eventPartnerships.filter((ep) =>
       eventIds.includes(ep.eventId)
     );
@@ -1111,6 +1235,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
         ),
         relationshipOwner: {
           organization,
+          spocId: linked.spocId,
           managerName: managerName.trim(),
           managerPhone: managerPhone.trim(),
           managerEmail: managerEmail.trim(),
@@ -1266,17 +1391,16 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
   const submitChapter8 = () => {
     if (!partner) return;
     const email = inviteEmail.trim();
+    const login = portalLogin.trim().toLowerCase();
     const next: Record<string, string> = {};
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       next.inviteEmail = "Enter a valid email";
     }
-    if (!portalLogin.trim() || !isPartnerPortalEmail(portalLogin)) {
+    if (!login || !isPartnerPortalEmail(login)) {
       next.login = "Login must be a valid email";
     }
     if (!tempPassword.trim()) next.password = "Password required";
     if (applyFormErrors(setErrors, next)) return;
-
-    const login = resolvePortalLogin(partner, email);
 
     void (async () => {
       try {
@@ -1385,6 +1509,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       setManagerName(partner.relationshipOwner?.managerName ?? "");
       setManagerPhone(partner.relationshipOwner?.managerPhone ?? "");
       setManagerEmail(partner.relationshipOwner?.managerEmail ?? "");
+      setSpocChoice(resolveSpocChoice(partner.relationshipOwner, spocs));
       setEventIds([...partner.eventIds]);
       setEventPartnerships(resolveEventPartnerships(partner, generateId));
       setSponsorshipNotes(partner.sponsorshipNotes ?? "");
@@ -1404,7 +1529,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
             ? partner.primaryContact.email
             : "")
       );
-      setPortalLogin(resolvePortalLogin(partner, partner.portalInviteEmail));
+      setPortalLogin(resolvePortalLogin(partner));
       setTempPassword(generateTempPassword());
     }
 
@@ -1667,6 +1792,9 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
                     setOrgChoice={setOrgChoice}
                     customOrg={customOrg}
                     setCustomOrg={setCustomOrg}
+                    spocChoice={spocChoice}
+                    spocs={spocs}
+                    onSpocChoiceChange={selectSpoc}
                     managerName={managerName}
                     setManagerName={setManagerName}
                     managerPhone={managerPhone}
@@ -1734,6 +1862,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
                     inviteEmail={inviteEmail}
                     setInviteEmail={setInviteEmail}
                     login={portalLogin}
+                    setLogin={setPortalLogin}
                     temporaryPassword={tempPassword}
                     onRegeneratePassword={() =>
                       setTempPassword(generateTempPassword())
@@ -2092,6 +2221,9 @@ function ChapterPartnership(props: {
   setOrgChoice: (v: string) => void;
   customOrg: string;
   setCustomOrg: (v: string) => void;
+  spocChoice: string;
+  spocs: Spoc[];
+  onSpocChoiceChange: (v: string) => void;
   managerName: string;
   setManagerName: (v: string) => void;
   managerPhone: string;
@@ -2223,6 +2355,29 @@ function ChapterPartnership(props: {
               />
             </div>
           )}
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label>SPOC</Label>
+            <Select
+              value={props.spocChoice}
+              onValueChange={props.onSpocChoiceChange}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select or create a SPOC" />
+              </SelectTrigger>
+              <SelectContent>
+                {props.spocs.map((spoc) => (
+                  <SelectItem key={spoc.id} value={spoc.id}>
+                    {spoc.name}
+                    {spoc.email ? ` · ${spoc.email}` : ""}
+                  </SelectItem>
+                ))}
+                <SelectItem value={NEW_SPOC}>Create new SPOC…</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Pick a saved SPOC for this partner, or create one to reuse later.
+            </p>
+          </div>
           <div className="space-y-1.5" data-field-error={props.errors.mName ? "true" : undefined}>
             <Label>SPOC name</Label>
             <Input

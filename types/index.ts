@@ -260,9 +260,21 @@ export interface PartnerContact {
   email: string;
 }
 
+/** Reusable closing SPOC — one contact can be linked to many partners. */
+export interface Spoc {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface RelationshipOwner {
   /** K2, IES, or a custom company name */
   organization: string;
+  /** Shared SPOC record id when selected from the directory */
+  spocId?: string;
   managerName: string;
   managerPhone: string;
   managerEmail: string;
