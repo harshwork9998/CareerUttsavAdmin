@@ -114,6 +114,14 @@ export function ChapterSeminarSlots(props: {
     [props.assignments]
   );
 
+  const totalBudget = useMemo(() => {
+    if (!props.slotBudgetByEvent) return 0;
+    return props.eventIds.reduce(
+      (sum, eventId) => sum + (props.slotBudgetByEvent?.[eventId] ?? 0),
+      0
+    );
+  }, [props.eventIds, props.slotBudgetByEvent]);
+
   const setSlots = (eventId: string, seminarId: string, slots: number) => {
     props.setAssignments((prev) => {
       const others = prev.filter((a) => a.seminarId !== seminarId);
@@ -166,7 +174,7 @@ export function ChapterSeminarSlots(props: {
             </h3>
             <p className="text-sm leading-relaxed" style={{ color: INK.secondary }}>
               {seatPickMode
-                ? "Choose which seminars get a panelist seat. Slot count was set in deliverables."
+                ? "Pick seats to match the seminar slot count from deliverables — each event must be filled exactly."
                 : "Optional — leave at zero if this partner isn’t speaking. Seats already taken by other partners stay locked."}
             </p>
           </div>
@@ -178,16 +186,25 @@ export function ChapterSeminarSlots(props: {
               className="text-[11px] font-semibold tracking-[0.14em] uppercase"
               style={{ color: INK.muted }}
             >
-              Total reserved
+              {seatPickMode ? "Seats filled" : "Total reserved"}
             </p>
             <p
               className={cn(displayClass, "mt-0.5 text-3xl font-bold tabular-nums")}
-              style={{ color: BRAND[700] }}
+              style={{
+                color:
+                  seatPickMode && totalAssigned !== totalBudget
+                    ? STATUS.warning
+                    : BRAND[700],
+              }}
             >
-              {totalAssigned}
+              {seatPickMode ? `${totalAssigned} / ${totalBudget}` : totalAssigned}
             </p>
             <p className="text-xs" style={{ color: INK.muted }}>
-              seat{totalAssigned === 1 ? "" : "s"} across events
+              {seatPickMode
+                ? totalAssigned === totalBudget
+                  ? "Matches deliverables"
+                  : "Must match deliverables"
+                : `seat${totalAssigned === 1 ? "" : "s"} across events`}
             </p>
           </div>
         </div>
@@ -258,14 +275,36 @@ export function ChapterSeminarSlots(props: {
               <div
                 className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold"
                 style={{
-                  background: mineOnEvent > 0 ? STATUS.successSoft : PAPER.surface,
-                  color: mineOnEvent > 0 ? STATUS.success : INK.secondary,
-                  border: `1px solid ${mineOnEvent > 0 ? "transparent" : LINE.subtle}`,
+                  background: seatPickMode
+                    ? mineOnEvent === eventBudget
+                      ? STATUS.successSoft
+                      : STATUS.warningSoft
+                    : mineOnEvent > 0
+                      ? STATUS.successSoft
+                      : PAPER.surface,
+                  color: seatPickMode
+                    ? mineOnEvent === eventBudget
+                      ? STATUS.success
+                      : STATUS.warning
+                    : mineOnEvent > 0
+                      ? STATUS.success
+                      : INK.secondary,
+                  border: `1px solid ${
+                    seatPickMode
+                      ? mineOnEvent === eventBudget
+                        ? "transparent"
+                        : "rgba(176, 125, 42, 0.35)"
+                      : mineOnEvent > 0
+                        ? "transparent"
+                        : LINE.subtle
+                  }`,
                 }}
               >
                 <Users className="h-3.5 w-3.5" />
                 {seatPickMode
-                  ? `${mineOnEvent} / ${eventBudget} seat${eventBudget === 1 ? "" : "s"} picked`
+                  ? mineOnEvent === eventBudget
+                    ? `${mineOnEvent} / ${eventBudget} seats matched`
+                    : `${mineOnEvent} / ${eventBudget} seats — pick exactly ${eventBudget}`
                   : mineOnEvent === 0
                     ? "No seats yet"
                     : `${mineOnEvent} seat${mineOnEvent === 1 ? "" : "s"}`}

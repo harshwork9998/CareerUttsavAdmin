@@ -73,7 +73,7 @@ function buildBySeminar(registrations: StudentRegistration[]): ChartDataPoint[] 
     .sort((a, b) => b.value - a.value);
 }
 
-function weekStartMonday(date: Date): Date {
+export function weekStartMonday(date: Date): Date {
   const day = new Date(date);
   const weekday = day.getDay();
   const diff = day.getDate() - weekday + (weekday === 0 ? -6 : 1);
@@ -82,40 +82,44 @@ function weekStartMonday(date: Date): Date {
   return day;
 }
 
-const MONTH_INDEX: Record<string, number> = {
-  Jan: 0,
-  Feb: 1,
-  Mar: 2,
-  Apr: 3,
-  May: 4,
-  Jun: 5,
-  Jul: 6,
-  Aug: 7,
-  Sep: 8,
-  Oct: 9,
-  Nov: 10,
-  Dec: 11,
-};
+const MONTH_ABBR = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+] as const;
 
-function parseWeekLabel(label: string): number {
-  const [dayText, monthText] = label.split(" ");
-  const month = MONTH_INDEX[monthText] ?? 0;
-  const day = Number(dayText) || 1;
-  return new Date(2026, month, day).getTime();
+/** Locale-stable week label (avoids en-IN narrow-space / ordering quirks). */
+export function formatWeekLabel(date: Date): string {
+  return `${date.getDate()} ${MONTH_ABBR[date.getMonth()]} ${date.getFullYear()}`;
 }
 
 function buildWeeklyTrend(registrations: StudentRegistration[]): ChartDataPoint[] {
-  const map = new Map<string, number>();
+  const map = new Map<string, { value: number; sortKey: number }>();
   for (const registration of registrations) {
-    const label = weekStartMonday(new Date(registration.registeredAt)).toLocaleDateString(
-      "en-IN",
-      { day: "numeric", month: "short" }
-    );
-    map.set(label, (map.get(label) ?? 0) + 1);
+    const raw = registration.registeredAt;
+    if (!raw) continue;
+    const registeredOn = new Date(raw);
+    if (Number.isNaN(registeredOn.getTime())) continue;
+    const weekStart = weekStartMonday(registeredOn);
+    const label = formatWeekLabel(weekStart);
+    const prev = map.get(label);
+    map.set(label, {
+      value: (prev?.value ?? 0) + 1,
+      sortKey: weekStart.getTime(),
+    });
   }
   return Array.from(map.entries())
-    .sort((a, b) => parseWeekLabel(a[0]) - parseWeekLabel(b[0]))
-    .map(([name, value]) => ({ name, value }));
+    .sort((a, b) => a[1].sortKey - b[1].sortKey)
+    .map(([name, row]) => ({ name, value: row.value }));
 }
 
 function buildTopSchools(
@@ -177,6 +181,18 @@ function filterRegistrationsForScope(
     const eventCity = resolveEventCity(registration, eventCityById);
     return eventCity ? citiesMatch(eventCity, city) : false;
   });
+}
+
+/** ISO timestamps for student registrations in the same city/event scope as analytics. */
+export function getScopedStudentRegistrationDates(
+  registrations: Registration[],
+  events: Event[],
+  city: string | "all"
+): string[] {
+  const studentRegistrations = registrations.filter(isStudentRegistration);
+  return filterRegistrationsForScope(studentRegistrations, events, city)
+    .map((registration) => registration.registeredAt)
+    .filter((value): value is string => Boolean(value));
 }
 
 export function buildStudentRegistrationAnalytics(

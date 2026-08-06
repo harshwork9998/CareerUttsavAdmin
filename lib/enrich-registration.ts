@@ -1,5 +1,4 @@
 import { isStudentRegistration } from "@/lib/registration-kinds";
-import { MAX_SEMINAR_INTERESTS } from "@/lib/registration-validation";
 import { normalizeRegistration } from "@/features/registrations/normalize-registration";
 import type { Event, Registration, StudentRegistration } from "@/types";
 
@@ -8,7 +7,7 @@ function pickSeminarInterests(
   event: Event | undefined
 ): string[] {
   if (registration.seminarInterests?.length) {
-    return registration.seminarInterests.slice(0, MAX_SEMINAR_INTERESTS);
+    return registration.seminarInterests;
   }
   if (!event?.seminars.length) return [];
 

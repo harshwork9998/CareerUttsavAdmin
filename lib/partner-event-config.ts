@@ -292,6 +292,43 @@ export function assignedSlotsForEvent(
     .reduce((sum, a) => sum + a.slots, 0);
 }
 
+/**
+ * Keep seminar seat picks within each event's deliverables budget.
+ * Drops assignments for events with zero/missing budget; trims excess seats.
+ */
+export function clampSeminarSlotAssignmentsToBudget(
+  assignments: PartnerSeminarSlotAssignment[],
+  budgetByEvent: Record<string, number>
+): PartnerSeminarSlotAssignment[] {
+  const result: PartnerSeminarSlotAssignment[] = [];
+
+  for (const [eventId, rawBudget] of Object.entries(budgetByEvent)) {
+    const budget = Math.max(0, Math.floor(rawBudget ?? 0));
+    if (budget <= 0) continue;
+
+    let remaining = budget;
+    for (const assignment of assignments.filter((a) => a.eventId === eventId)) {
+      if (remaining <= 0) break;
+      const slots = Math.min(Math.max(0, Math.floor(assignment.slots)), remaining);
+      if (slots <= 0) continue;
+      result.push(slots === assignment.slots ? assignment : { ...assignment, slots });
+      remaining -= slots;
+    }
+  }
+
+  return result;
+}
+
+export function seminarSlotAssignmentsMatchBudget(
+  assignments: PartnerSeminarSlotAssignment[],
+  eventPartnerships: PartnerEventPartnership[]
+): boolean {
+  return eventPartnerships.every(
+    (ep) =>
+      assignedSlotsForEvent(assignments, ep.eventId) === (ep.seminarSlotCount ?? 0)
+  );
+}
+
 export function enrichSeminarSlotAssignments(
   assignments: PartnerSeminarSlotAssignment[],
   events: Event[]

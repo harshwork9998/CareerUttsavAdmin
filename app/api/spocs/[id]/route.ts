@@ -33,6 +33,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   const current = spocs[index];
   const validated = validateSpocInput({
     name: body.name ?? current.name,
+    organization: body.organization ?? current.organization,
     phone: body.phone ?? current.phone,
     email: body.email ?? current.email,
   });

@@ -30,12 +30,13 @@ import {
 import {
   formatDaysSinceUploadChip,
   getPartnerPortalUploadStatus,
+  normalizePortalRepresentatives,
   type PortalSubmissionChecklistItem,
 } from "@/lib/partner-portal-docs";
 import { enrichSeminarSlotAssignments } from "@/lib/partner-event-config";
 import { cn } from "@/lib/utils";
 import { eventsService, partnersService } from "@/services/api";
-import type { Partner, PartnerPortalDocument } from "@/types";
+import type { Event, Partner, PartnerPortalDocument } from "@/types";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -94,12 +95,20 @@ function checklistIcon(item: PortalSubmissionChecklistItem) {
   return Type;
 }
 
+function eventLabel(events: Event[], eventId: string) {
+  const event = events.find((e) => e.id === eventId);
+  if (!event) return "Event";
+  return event.city ? `${event.title} - ${event.city}` : event.title;
+}
+
 function SubmissionPreview({
   partner,
   item,
+  events = [],
 }: {
   partner: Partner;
   item: PortalSubmissionChecklistItem;
+  events?: Event[];
 }) {
   if ((item.kind === "file" || item.kind === "logo") && item.file) {
     const selected = item.file;
@@ -399,60 +408,91 @@ function SubmissionPreview({
   }
 
   if (item.kind === "representatives") {
-    const reps = partner.portalRepresentatives;
-    const people = reps?.representatives ?? [];
+    const repRows = normalizePortalRepresentatives(
+      partner.portalRepresentatives,
+      partner.eventIds ?? []
+    );
+    const totalPeople = repRows.reduce(
+      (sum, row) => sum + row.representatives.length,
+      0
+    );
 
     return (
       <div className="min-h-0 flex-1 overflow-auto p-5">
-        <div
-          className="rounded-2xl border p-5"
-          style={{ borderColor: LINE.subtle, background: PAPER.surface }}
-        >
-          <p
-            className="text-[11px] font-semibold tracking-[0.14em] uppercase"
-            style={{ color: INK.muted }}
+        <div className="space-y-4">
+          <div
+            className="rounded-2xl border p-5"
+            style={{ borderColor: LINE.subtle, background: PAPER.surface }}
           >
-            {item.label}
-          </p>
-          <p
-            className="mt-3 text-lg font-semibold"
-            style={{ color: INK.primary }}
-          >
-            {reps?.count
-              ? `${reps.count} representative${reps.count === 1 ? "" : "s"}`
-              : "Not submitted yet"}
-          </p>
+            <p
+              className="text-[11px] font-semibold tracking-[0.14em] uppercase"
+              style={{ color: INK.muted }}
+            >
+              {item.label}
+            </p>
+            <p
+              className="mt-3 text-lg font-semibold"
+              style={{ color: INK.primary }}
+            >
+              {totalPeople > 0
+                ? `${totalPeople} representative${totalPeople === 1 ? "" : "s"} across ${repRows.length} event${repRows.length === 1 ? "" : "s"}`
+                : "Not submitted yet"}
+            </p>
+          </div>
 
-          {people.length === 0 ? (
-            <p className="mt-3 text-sm" style={{ color: INK.muted }}>
+          {repRows.length === 0 ? (
+            <p className="px-1 text-sm" style={{ color: INK.muted }}>
               No contact details yet.
             </p>
           ) : (
-            <ul className="mt-4 space-y-3">
-              {people.map((person, index) => (
-                <li
-                  key={`${person.name}-${person.phone}-${index}`}
-                  className="rounded-xl border px-3 py-2.5"
-                  style={{ borderColor: LINE.subtle }}
+            repRows.map((row) => (
+              <div
+                key={row.eventId}
+                className="rounded-2xl border p-5"
+                style={{ borderColor: LINE.subtle, background: PAPER.surface }}
+              >
+                <p
+                  className="text-[11px] font-semibold tracking-[0.14em] uppercase"
+                  style={{ color: BRAND[700] }}
                 >
-                  <p
-                    className="text-[11px] font-extrabold uppercase tracking-wide"
-                    style={{ color: BRAND[700] }}
-                  >
-                    Representative {index + 1}
+                  {eventLabel(events, row.eventId)}
+                </p>
+                <p className="mt-1 text-sm" style={{ color: INK.secondary }}>
+                  {row.count} representative{row.count === 1 ? "" : "s"} submitted
+                </p>
+                {row.representatives.length === 0 ? (
+                  <p className="mt-3 text-sm" style={{ color: INK.muted }}>
+                    No contact details for this event.
                   </p>
-                  <p
-                    className="mt-1.5 text-sm font-semibold"
-                    style={{ color: INK.primary }}
-                  >
-                    {person.name || "—"}
-                  </p>
-                  <p className="text-xs" style={{ color: INK.secondary }}>
-                    {person.phone || "—"}
-                  </p>
-                </li>
-              ))}
-            </ul>
+                ) : (
+                  <ul className="mt-4 space-y-3">
+                    {row.representatives.map((person, index) => (
+                      <li
+                        key={`${row.eventId}-${person.name}-${person.phone}-${index}`}
+                        className="rounded-xl border px-3 py-2.5"
+                        style={{ borderColor: LINE.subtle }}
+                      >
+                        <p
+                          className="text-[11px] font-extrabold uppercase tracking-wide"
+                          style={{ color: BRAND[700] }}
+                        >
+                          Representative {index + 1}
+                        </p>
+                        <p
+                          className="mt-1.5 text-sm font-semibold"
+                          style={{ color: INK.primary }}
+                        >
+                          {person.name || "—"}
+                        </p>
+                        <p className="text-xs" style={{ color: INK.secondary }}>
+                          {person.phone || "—"}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))
           )}
         </div>
       </div>
@@ -768,11 +808,16 @@ export function PartnerDocsDialog({
                         kind: "logo",
                         file: doc,
                       }}
+                      events={eventsQuery.data ?? []}
                     />
                   );
                 })()
               ) : (
-                <SubmissionPreview partner={previewPartner} item={selectedItem} />
+                <SubmissionPreview
+                  partner={previewPartner}
+                  item={selectedItem}
+                  events={eventsQuery.data ?? []}
+                />
               )
             ) : (
               <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-16 text-center">

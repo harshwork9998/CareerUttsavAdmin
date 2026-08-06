@@ -1,4 +1,4 @@
-import { delay, generateId } from "@/lib/utils";
+import { generateId } from "@/lib/utils";
 import {
   createPartnerApi,
   deletePartnerApi,
@@ -55,10 +55,8 @@ import type {
   SeminarBroadcastResult,
 } from "@/types";
 
-const SIMULATED_DELAY = 400;
-
 async function simulate<T>(data: T | Promise<T>): Promise<T> {
-  await delay(SIMULATED_DELAY);
+  // Keep the helper for call-site compatibility, but do not add artificial lag.
   return await data;
 }
 
@@ -126,11 +124,12 @@ export const partnersService = {
 
 export const spocsService = {
   getAll: async () => simulate(await fetchAllSpocs()),
-  create: async (data: Pick<Spoc, "name" | "phone" | "email">) =>
-    simulate(await createSpocApi(data)),
+  create: async (
+    data: Pick<Spoc, "name" | "organization" | "phone" | "email">
+  ) => simulate(await createSpocApi(data)),
   update: async (
     id: string,
-    data: Partial<Pick<Spoc, "name" | "phone" | "email">>
+    data: Partial<Pick<Spoc, "name" | "organization" | "phone" | "email">>
   ) => simulate(await updateSpocApi(id, data)),
   delete: async (id: string) => simulate(await deleteSpocApi(id)),
 };

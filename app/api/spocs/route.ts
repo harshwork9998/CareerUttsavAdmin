@@ -28,6 +28,7 @@ export async function POST(request: Request) {
     const updated: Spoc = {
       ...existing,
       name: validated.data.name,
+      organization: validated.data.organization,
       phone: validated.data.phone,
       email: validated.data.email,
       updatedAt: new Date().toISOString(),

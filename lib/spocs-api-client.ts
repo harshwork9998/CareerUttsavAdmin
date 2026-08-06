@@ -16,7 +16,7 @@ export async function fetchAllSpocs(): Promise<Spoc[]> {
 }
 
 export async function createSpocApi(
-  data: Pick<Spoc, "name" | "phone" | "email">
+  data: Pick<Spoc, "name" | "organization" | "phone" | "email">
 ): Promise<Spoc> {
   const res = await fetch("/api/spocs", {
     method: "POST",
@@ -28,7 +28,7 @@ export async function createSpocApi(
 
 export async function updateSpocApi(
   id: string,
-  data: Partial<Pick<Spoc, "name" | "phone" | "email">>
+  data: Partial<Pick<Spoc, "name" | "organization" | "phone" | "email">>
 ): Promise<Spoc> {
   const res = await fetch(`/api/spocs/${id}`, {
     method: "PATCH",

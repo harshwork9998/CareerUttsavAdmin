@@ -211,15 +211,8 @@ function validateStudentCreate(
     };
   }
 
+  // Accept any number of seminar picks; public UI may still show "up to 3" copy.
   const seminarInterests = normalizeSeminarInterests(body.seminarInterests);
-  if (seminarInterests.length > MAX_SEMINAR_INTERESTS) {
-    return {
-      ok: false,
-      error: `Students can choose at most ${MAX_SEMINAR_INTERESTS} seminars`,
-    };
-  }
-
-  // Public site may offer the full seminar catalogue; accept any titles (max 3).
 
   return {
     ok: true,

@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 
-import { loadEmailTemplate } from "@/lib/email";
 import {
   PARTNER_WELCOME_EMAIL_SUBJECT,
   buildPartnerWelcomeHtmlFromTemplate,
   buildPartnerWelcomePlainText,
   type PartnerWelcomeEmailInput,
 } from "@/lib/partner-welcome-email-content";
+import { PARTNER_WELCOME_HTML_TEMPLATE } from "@/lib/partner-welcome-email-template";
 
 export const dynamic = "force-dynamic";
 
@@ -29,11 +29,12 @@ export async function POST(request: Request) {
     temporaryPassword,
   };
 
-  const template = await loadEmailTemplate("emails/partner-welcome.html");
-
   return NextResponse.json({
     subject: PARTNER_WELCOME_EMAIL_SUBJECT,
-    html: buildPartnerWelcomeHtmlFromTemplate(template, input),
+    html: buildPartnerWelcomeHtmlFromTemplate(
+      PARTNER_WELCOME_HTML_TEMPLATE,
+      input
+    ),
     plainText: buildPartnerWelcomePlainText(input),
   });
 }

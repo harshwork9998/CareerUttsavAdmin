@@ -264,6 +264,7 @@ export interface PartnerContact {
 export interface Spoc {
   id: string;
   name: string;
+  organization: string;
   phone: string;
   email: string;
   createdAt: string;
@@ -380,10 +381,12 @@ export interface Partner {
   portalSmsContent?: string;
   /** Panelist / speaker details per allotted seminar */
   portalSeminarSpeakers?: PartnerSeminarSpeakerSubmission[];
-  /** On-ground representatives attending Career Uttsav */
-  portalRepresentatives?: PartnerRepresentativesSubmission;
+  /** On-ground representatives attending Career Uttsav (per event/city) */
+  portalRepresentatives?: PartnerRepresentativesSubmission[];
   /** Set after partner changes temp password */
   portalPasswordChangedAt?: string;
+  /** Bumped when portal auth credentials change */
+  portalAuthVersion?: number;
   /** First outreach */
   contactedAt?: string;
   contactedNotes?: string;
@@ -491,6 +494,8 @@ export interface PartnerRepresentative {
 }
 
 export interface PartnerRepresentativesSubmission {
+  /** Event (city edition) these on-ground reps are attending. */
+  eventId: string;
   count: number;
   representatives: PartnerRepresentative[];
   updatedAt: string;

@@ -1,6 +1,12 @@
 import type { Partner } from "@/types";
 
-import type { PartnerWelcomeEmailInput } from "@/lib/partner-welcome-email-content";
+import {
+  PARTNER_WELCOME_EMAIL_SUBJECT,
+  buildPartnerWelcomeHtmlFromTemplate,
+  buildPartnerWelcomePlainText,
+  type PartnerWelcomeEmailInput,
+} from "@/lib/partner-welcome-email-content";
+import { PARTNER_WELCOME_HTML_TEMPLATE } from "@/lib/partner-welcome-email-template";
 
 export function isPartnerPortalEmail(value: string | undefined): boolean {
   if (!value?.trim()) return false;
@@ -49,24 +55,16 @@ export function generateTempPassword(length = 10) {
   return out;
 }
 
-export async function buildPartnerWelcomeEmail(input: PartnerWelcomeEmailInput) {
-  const res = await fetch("/api/partners/welcome-email", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-    cache: "no-store",
-  });
-
-  if (!res.ok) {
-    const err = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(err.error ?? "Could not build welcome email");
-  }
-
-  return res.json() as Promise<{
-    subject: string;
-    html: string;
-    plainText: string;
-  }>;
+/** Build welcome email locally (no network) so finish stays snappy. */
+export function buildPartnerWelcomeEmail(input: PartnerWelcomeEmailInput) {
+  return {
+    subject: PARTNER_WELCOME_EMAIL_SUBJECT,
+    html: buildPartnerWelcomeHtmlFromTemplate(
+      PARTNER_WELCOME_HTML_TEMPLATE,
+      input
+    ),
+    plainText: buildPartnerWelcomePlainText(input),
+  };
 }
 
 async function copyRichEmailToClipboard(html: string, plainText: string) {
@@ -75,42 +73,56 @@ async function copyRichEmailToClipboard(html: string, plainText: string) {
     navigator.clipboard?.write &&
     typeof Blob !== "undefined"
   ) {
-    await navigator.clipboard.write([
-      new ClipboardItem({
-        "text/html": new Blob([html], { type: "text/html" }),
-        "text/plain": new Blob([plainText], { type: "text/plain" }),
-      }),
-    ]);
-    return "html";
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          "text/html": new Blob([html], { type: "text/html" }),
+          "text/plain": new Blob([plainText], { type: "text/plain" }),
+        }),
+      ]);
+      return "html" as const;
+    } catch {
+      // Fall through to plain text if rich clipboard is blocked.
+    }
   }
 
   await navigator.clipboard.writeText(plainText);
-  return "plain";
+  return "plain" as const;
 }
 
-/** Opens Gmail compose and copies formatted HTML to the clipboard for paste. */
-export async function openPartnerWelcomeGmailCompose(input: {
-  to: string;
-  subject: string;
-  html: string;
-  plainText: string;
-}): Promise<"html" | "plain"> {
-  const mode = await copyRichEmailToClipboard(input.html, input.plainText);
-
+function openGmailComposeWindow(to: string, subject: string) {
   const params = new URLSearchParams({
     view: "cm",
     fs: "1",
-    to: input.to.trim(),
-    su: input.subject,
+    to: to.trim(),
+    su: subject,
   });
   window.open(
     `https://mail.google.com/mail/?${params.toString()}`,
     "_blank",
     "noopener,noreferrer"
   );
-
-  return mode;
 }
+
+/**
+ * Opens Gmail compose (call synchronously from a click handler when possible)
+ * and copies formatted HTML to the clipboard for paste.
+ */
+export async function openPartnerWelcomeGmailCompose(input: {
+  to: string;
+  subject: string;
+  html: string;
+  plainText: string;
+  /** When true, skip window.open — caller already opened Gmail under the user gesture. */
+  skipOpen?: boolean;
+}): Promise<"html" | "plain"> {
+  if (!input.skipOpen) {
+    openGmailComposeWindow(input.to, input.subject);
+  }
+  return copyRichEmailToClipboard(input.html, input.plainText);
+}
+
+export { openGmailComposeWindow, PARTNER_WELCOME_EMAIL_SUBJECT };
 
 /** @deprecated Use openPartnerWelcomeGmailCompose for HTML partner emails. */
 export function openGmailCompose(input: {

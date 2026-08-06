@@ -20,6 +20,7 @@ function seedFromPartners(): Spoc[] {
   for (const partner of partners) {
     const owner = partner.relationshipOwner;
     const name = owner?.managerName?.trim() ?? "";
+    const organization = owner?.organization?.trim() ?? "";
     const phone = owner?.managerPhone?.trim() ?? "";
     const email = owner?.managerEmail?.trim() ?? "";
     if (!name || !phone || !email) continue;
@@ -30,6 +31,7 @@ function seedFromPartners(): Spoc[] {
     byEmail.set(key, {
       id: generateId(),
       name,
+      organization: organization || "—",
       phone,
       email,
       createdAt: now,
@@ -59,9 +61,15 @@ export function loadSpocs(): Spoc[] {
     if (!Array.isArray(parsed)) {
       return seedStore();
     }
-    return (parsed as Spoc[]).slice().sort((a, b) =>
-      a.name.localeCompare(b.name)
-    );
+    return (parsed as Spoc[])
+      .map((spoc) => ({
+        ...spoc,
+        organization:
+          typeof spoc.organization === "string" && spoc.organization.trim()
+            ? spoc.organization.trim()
+            : "—",
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
   } catch {
     return seedStore();
   }

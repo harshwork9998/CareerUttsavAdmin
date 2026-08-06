@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { motion } from "framer-motion";
 import {
@@ -19,6 +19,12 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
+import {
+  buildStudentRegistrationAnalytics,
+  formatWeekLabel,
+  getScopedStudentRegistrationDates,
+  weekStartMonday,
+} from "@/lib/build-dashboard-student-analytics";
 import { cn, formatNumber } from "@/lib/utils";
 import type {
   Event,
@@ -36,67 +42,35 @@ import {
 
 type TimelineMode = "weekly" | "monthly" | "custom";
 
-const MONTH_ORDER = ["Aug", "Sep", "Oct", "Nov", "Dec"] as const;
-const MONTH_FULL: Record<(typeof MONTH_ORDER)[number], string> = {
+const MONTH_ABBR = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+] as const;
+
+const MONTH_FULL: Record<(typeof MONTH_ABBR)[number], string> = {
+  Jan: "January",
+  Feb: "February",
+  Mar: "March",
+  Apr: "April",
+  May: "May",
+  Jun: "June",
+  Jul: "July",
   Aug: "August",
   Sep: "September",
   Oct: "October",
   Nov: "November",
   Dec: "December",
 };
-
-const SEASON_FROM = "2026-08-03";
-const SEASON_TO = "2026-12-28";
-
-/** Fallback series if slice data is missing — Aug → Dec 2026. */
-const DUMMY_WEEKLY_TREND: Array<{ name: string; value: number }> = [
-  { name: "3 Aug", value: 620 },
-  { name: "10 Aug", value: 740 },
-  { name: "17 Aug", value: 860 },
-  { name: "24 Aug", value: 980 },
-  { name: "31 Aug", value: 1120 },
-  { name: "7 Sep", value: 1280 },
-  { name: "14 Sep", value: 1410 },
-  { name: "21 Sep", value: 1580 },
-  { name: "28 Sep", value: 1720 },
-  { name: "5 Oct", value: 1890 },
-  { name: "12 Oct", value: 2100 },
-  { name: "19 Oct", value: 2280 },
-  { name: "26 Oct", value: 2410 },
-  { name: "2 Nov", value: 2360 },
-  { name: "9 Nov", value: 2180 },
-  { name: "16 Nov", value: 1950 },
-  { name: "23 Nov", value: 1720 },
-  { name: "30 Nov", value: 1480 },
-  { name: "7 Dec", value: 1260 },
-  { name: "14 Dec", value: 1080 },
-  { name: "21 Dec", value: 920 },
-  { name: "28 Dec", value: 780 },
-];
-
-const MONTH_INDEX: Record<string, number> = {
-  Jan: 0,
-  Feb: 1,
-  Mar: 2,
-  Apr: 3,
-  May: 4,
-  Jun: 5,
-  Jul: 6,
-  Aug: 7,
-  Sep: 8,
-  Oct: 9,
-  Nov: 10,
-  Dec: 11,
-};
-
-function parseWeekLabel(label: string): Date | null {
-  const parts = label.trim().split(/\s+/);
-  if (parts.length < 2) return null;
-  const day = Number(parts[0]);
-  const month = MONTH_INDEX[parts[1]];
-  if (!Number.isFinite(day) || month == null) return null;
-  return new Date(2026, month, day);
-}
 
 function parseDateInput(value: string): Date | null {
   if (!value) return null;
@@ -105,11 +79,72 @@ function parseDateInput(value: string): Date | null {
   return new Date(y, m - 1, d);
 }
 
+function startOfDay(date: Date): Date {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  return next;
+}
+
+function endOfDay(date: Date): Date {
+  const next = new Date(date);
+  next.setHours(23, 59, 59, 999);
+  return next;
+}
+
+function toInputDate(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 function formatShortDate(date: Date): string {
   return date.toLocaleDateString("en-GB", {
     day: "numeric",
     month: "short",
   });
+}
+
+function parseRegistrationDates(timestamps: string[]): Date[] {
+  return timestamps
+    .map((raw) => new Date(raw))
+    .filter((date) => !Number.isNaN(date.getTime()));
+}
+
+/** Count registrations per week (week starts Monday). */
+function buildWeeklySeries(dates: Date[]): Array<{ name: string; value: number }> {
+  const map = new Map<string, { value: number; sortKey: number }>();
+  for (const date of dates) {
+    const weekStart = weekStartMonday(date);
+    const label = formatWeekLabel(weekStart);
+    const prev = map.get(label);
+    map.set(label, {
+      value: (prev?.value ?? 0) + 1,
+      sortKey: weekStart.getTime(),
+    });
+  }
+  return Array.from(map.entries())
+    .sort((a, b) => a[1].sortKey - b[1].sortKey)
+    .map(([name, row]) => ({ name, value: row.value }));
+}
+
+/** Count registrations per calendar month. */
+function buildMonthlySeries(dates: Date[]): Array<{ name: string; value: number }> {
+  const map = new Map<string, { label: string; value: number; order: number }>();
+  for (const date of dates) {
+    const abbr = MONTH_ABBR[date.getMonth()];
+    const year = date.getFullYear();
+    const key = `${year}-${abbr}`;
+    const prev = map.get(key);
+    map.set(key, {
+      label: `${MONTH_FULL[abbr]} ${year}`,
+      value: (prev?.value ?? 0) + 1,
+      order: year * 12 + date.getMonth(),
+    });
+  }
+  return Array.from(map.values())
+    .sort((a, b) => a.order - b.order)
+    .map((row) => ({ name: row.label, value: row.value }));
 }
 
 function TrendTooltip({
@@ -154,7 +189,7 @@ function TimelineControls({
   onRangeChange: (from: string, to: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const rangeLabel = `${formatShortDate(parseDateInput(customFrom) ?? new Date(2026, 7, 3))} – ${formatShortDate(parseDateInput(customTo) ?? new Date(2026, 11, 28))}`;
+  const rangeLabel = `${formatShortDate(parseDateInput(customFrom) ?? new Date())} – ${formatShortDate(parseDateInput(customTo) ?? new Date())}`;
 
   const modes: Array<{ id: TimelineMode; label: string }> = [
     { id: "weekly", label: "Weekly" },
@@ -219,13 +254,12 @@ function TimelineControls({
                 type="date"
                 aria-label="From date"
                 value={customFrom}
-                min={SEASON_FROM}
-                max={customTo || SEASON_TO}
+                max={customTo || undefined}
                 onChange={(e) => {
-                  const next = e.target.value || SEASON_FROM;
+                  const next = e.target.value || customFrom;
                   onRangeChange(
                     next,
-                    customTo < next ? next : customTo || SEASON_TO
+                    customTo && customTo < next ? next : customTo || next
                   );
                 }}
                 className="h-8 flex-1 border-brand-900/12 bg-white px-2 text-[12px] shadow-none"
@@ -237,12 +271,11 @@ function TimelineControls({
                 type="date"
                 aria-label="To date"
                 value={customTo}
-                min={customFrom || SEASON_FROM}
-                max={SEASON_TO}
+                min={customFrom || undefined}
                 onChange={(e) => {
-                  const next = e.target.value || SEASON_TO;
+                  const next = e.target.value || customTo;
                   onRangeChange(
-                    customFrom > next ? next : customFrom || SEASON_FROM,
+                    customFrom && customFrom > next ? next : customFrom || next,
                     next
                   );
                 }}
@@ -429,82 +462,74 @@ function CareerInterestPanel({ rows }: { rows: CareerInterestRow[] }) {
 
 function CareerInterestAndTrend({
   careerInterests,
-  weeklyTrend,
+  registrationDates,
   liveFeed,
 }: {
   careerInterests: CareerInterestRow[];
-  weeklyTrend: Array<{ name: string; value: number }>;
+  /** ISO timestamps of scoped student registrations */
+  registrationDates: string[];
   liveFeed: LiveRegistrationItem[];
 }) {
   const [mode, setMode] = useState<TimelineMode>("weekly");
-  const [customFrom, setCustomFrom] = useState<string>(SEASON_FROM);
-  const [customTo, setCustomTo] = useState<string>(SEASON_TO);
+  const dates = useMemo(
+    () => parseRegistrationDates(registrationDates),
+    [registrationDates]
+  );
 
-  const weeklyPoints = useMemo(() => {
-    const source =
-      weeklyTrend.length > 0 ? weeklyTrend : DUMMY_WEEKLY_TREND;
-    return source.map((row) => {
-      const date = parseWeekLabel(String(row.name));
-      return {
-        name: String(row.name),
-        value: Number(row.value),
-        date,
-      };
-    });
-  }, [weeklyTrend]);
+  const dataRange = useMemo(() => {
+    if (dates.length === 0) {
+      const now = new Date();
+      const from = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+      return { from: toInputDate(from), to: toInputDate(now) };
+    }
+    const min = new Date(Math.min(...dates.map((d) => d.getTime())));
+    const max = new Date(Math.max(...dates.map((d) => d.getTime())));
+    return { from: toInputDate(startOfDay(min)), to: toInputDate(startOfDay(max)) };
+  }, [dates]);
+
+  const [customFrom, setCustomFrom] = useState<string>("");
+  const [customTo, setCustomTo] = useState<string>("");
+  const customTouchedRef = useRef(false);
+
+  useEffect(() => {
+    // Keep default range aligned with data until the user picks custom dates.
+    if (customTouchedRef.current) return;
+    setCustomFrom(dataRange.from);
+    setCustomTo(dataRange.to);
+  }, [dataRange.from, dataRange.to]);
+
+  const resolvedFrom = customFrom || dataRange.from;
+  const resolvedTo = customTo || dataRange.to;
 
   const chartData = useMemo(() => {
     if (mode === "monthly") {
-      const buckets = new Map<(typeof MONTH_ORDER)[number], number>();
-      for (const point of weeklyPoints) {
-        if (!point.date) continue;
-        const abbr = (
-          [
-            "Jan",
-            "Feb",
-            "Mar",
-            "Apr",
-            "May",
-            "Jun",
-            "Jul",
-            "Aug",
-            "Sep",
-            "Oct",
-            "Nov",
-            "Dec",
-          ] as const
-        )[point.date.getMonth()];
-        if (!abbr || !(MONTH_ORDER as readonly string[]).includes(abbr))
-          continue;
-        const key = abbr as (typeof MONTH_ORDER)[number];
-        buckets.set(key, (buckets.get(key) ?? 0) + point.value);
-      }
-      return MONTH_ORDER.filter((m) => buckets.has(m)).map((m) => ({
-        name: MONTH_FULL[m],
-        value: buckets.get(m) ?? 0,
-      }));
+      return buildMonthlySeries(dates);
     }
 
     if (mode === "custom") {
-      const from = parseDateInput(customFrom) ?? parseDateInput(SEASON_FROM)!;
-      const to = parseDateInput(customTo) ?? parseDateInput(SEASON_TO)!;
-      const start = from <= to ? from : to;
-      const end = from <= to ? to : from;
-      return weeklyPoints
-        .filter((p) => p.date && p.date >= start && p.date <= end)
-        .map((p) => ({ name: p.name, value: p.value }));
+      const from = parseDateInput(resolvedFrom);
+      const to = parseDateInput(resolvedTo);
+      if (!from || !to) return [];
+      const start = startOfDay(from <= to ? from : to);
+      const end = endOfDay(from <= to ? to : from);
+      const inRange = dates.filter((date) => date >= start && date <= end);
+      // Show weekly buckets for registrations that fall inside the chosen dates.
+      return buildWeeklySeries(inRange);
     }
 
-    return weeklyPoints.map((p) => ({ name: p.name, value: p.value }));
-  }, [mode, weeklyPoints, customFrom, customTo]);
+    // Weekly: count of registrations in each week
+    return buildWeeklySeries(dates);
+  }, [mode, dates, resolvedFrom, resolvedTo]);
 
   const chartTotal = chartData.reduce((s, r) => s + r.value, 0);
-  const showDots = mode === "monthly" || chartData.length <= 8;
+  const showDots = mode === "monthly" || chartData.length <= 12;
 
   const subtitle =
-    mode === "custom"
-      ? `${formatShortDate(parseDateInput(customFrom) ?? new Date(2026, 7, 3))} – ${formatShortDate(parseDateInput(customTo) ?? new Date(2026, 11, 28))}`
-      : "August – December 2026";
+    mode === "weekly"
+      ? "Registrations counted by week"
+      : mode === "monthly"
+        ? "Registrations counted by month"
+        : `${formatShortDate(parseDateInput(resolvedFrom) ?? new Date())} – ${formatShortDate(parseDateInput(resolvedTo) ?? new Date())}`;
 
   return (
     <motion.div
@@ -538,9 +563,10 @@ function CareerInterestAndTrend({
             <TimelineControls
               mode={mode}
               onModeChange={setMode}
-              customFrom={customFrom}
-              customTo={customTo}
+              customFrom={resolvedFrom}
+              customTo={resolvedTo}
               onRangeChange={(from, to) => {
+                customTouchedRef.current = true;
                 setCustomFrom(from);
                 setCustomTo(to);
               }}
@@ -682,25 +708,31 @@ export function StudentRegistrationSection({
     [data.bySeminar]
   );
 
-  const weeklyTrend = useMemo(() => {
-    if (data.weeklyTrend?.length) {
-      return data.weeklyTrend.map((item) => ({
-        name: String(item.name),
-        value: Number(item.value),
-      }));
-    }
-    if (isAllCities) {
-      return DUMMY_WEEKLY_TREND.map((item) => ({
-        name: String(item.name),
-        value: Number(item.value),
-      }));
-    }
-    return [];
-  }, [data.weeklyTrend, isAllCities]);
+  // Build trend/feed from live registrations so new entries show immediately
+  // (dashboard analytics alone can lag or fall back to mock series).
+  const liveStudentAnalytics = useMemo(
+    () =>
+      buildStudentRegistrationAnalytics(
+        registrations,
+        events,
+        isAllCities ? "all" : (cityLabel ?? "all")
+      ),
+    [registrations, events, isAllCities, cityLabel]
+  );
+
+  const registrationDates = useMemo(
+    () =>
+      getScopedStudentRegistrationDates(
+        registrations,
+        events,
+        isAllCities ? "all" : (cityLabel ?? "all")
+      ),
+    [registrations, events, isAllCities, cityLabel]
+  );
 
   const liveFeed = useMemo(
-    () => data.liveFeed ?? [],
-    [data.liveFeed]
+    () => liveStudentAnalytics.liveFeed ?? data.liveFeed ?? [],
+    [liveStudentAnalytics.liveFeed, data.liveFeed]
   );
 
   const seminarData = useMemo(
@@ -737,7 +769,7 @@ export function StudentRegistrationSection({
 
       <CareerInterestAndTrend
         careerInterests={careerInterests}
-        weeklyTrend={weeklyTrend}
+        registrationDates={registrationDates}
         liveFeed={liveFeed}
       />
 

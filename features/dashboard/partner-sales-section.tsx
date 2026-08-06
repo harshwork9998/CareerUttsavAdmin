@@ -49,28 +49,19 @@ function tierRank(tier: string): number {
   return index === -1 ? TIER_ORDER.length : index;
 }
 
-const PIPELINE_STAGE_ORDER: PartnerLifecycleStage[] = [
-  "New",
-  "Contacted",
-  "Meeting Scheduled",
+const PIPELINE_STAGE_ORDER = [
   "Negotiation",
   "Confirmed",
   "Not Proceeding",
-];
+] as const satisfies readonly PartnerLifecycleStage[];
 
-const STAGE_SHORT_LABEL: Record<PartnerLifecycleStage, string> = {
-  New: "New",
-  Contacted: "Contacted",
-  "Meeting Scheduled": "Meeting",
+const STAGE_SHORT_LABEL: Record<(typeof PIPELINE_STAGE_ORDER)[number], string> = {
   Negotiation: "Negotiation",
   Confirmed: "Confirmed",
   "Not Proceeding": "Not proceeding",
 };
 
-const STAGE_ACCENT: Record<PartnerLifecycleStage, string> = {
-  New: BRAND[700],
-  Contacted: "#0B5F5E",
-  "Meeting Scheduled": "#5C6B8A",
+const STAGE_ACCENT: Record<(typeof PIPELINE_STAGE_ORDER)[number], string> = {
   Negotiation: "#8A6A2F",
   Confirmed: "#2F6B4F",
   "Not Proceeding": "#9A4A4A",
@@ -180,6 +171,7 @@ function PartnerStageBoard({
   isAllCities?: boolean;
 }) {
   const columns = useMemo(() => {
+    const visibleStages = new Set<PartnerLifecycleStage>(PIPELINE_STAGE_ORDER);
     const byStage = new Map<PartnerLifecycleStage, PartnerSalesDeal[]>();
     for (const stage of PIPELINE_STAGE_ORDER) {
       byStage.set(stage, []);
@@ -187,6 +179,7 @@ function PartnerStageBoard({
 
     for (const deal of deals) {
       const stage = normalizeStage(deal.stage);
+      if (!visibleStages.has(stage)) continue;
       const bucket = byStage.get(stage) ?? [];
       bucket.push(deal);
       byStage.set(stage, bucket);
@@ -200,7 +193,7 @@ function PartnerStageBoard({
     }));
   }, [deals]);
 
-  const total = deals.length;
+  const total = columns.reduce((sum, column) => sum + column.deals.length, 0);
 
   return (
     <div className={cn(surface.mint, "p-3.5 sm:p-4")}>
@@ -221,12 +214,9 @@ function PartnerStageBoard({
         </p>
       </div>
 
-      <div className="flex gap-3 overflow-x-auto pb-1">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {columns.map((column) => (
-          <div
-            key={column.stage}
-            className="flex w-[min(100%,240px)] shrink-0 flex-col sm:w-[220px]"
-          >
+          <div key={column.stage} className="flex min-w-0 flex-col">
             <div
               className="mb-2 flex items-center gap-2 rounded-lg px-2.5 py-2"
               style={{ background: PAPER.muted, border: `1px solid ${LINE.subtle}` }}

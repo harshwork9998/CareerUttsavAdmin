@@ -16,7 +16,6 @@ import {
 import { toast } from "sonner";
 
 import {
-  RELATIONSHIP_OWNER_ORGS,
   SPONSORSHIP_TIERS,
   PARTNER_DELIVERABLE_DEFINITIONS,
   applyTierDefaultsPreservingCustom,
@@ -64,6 +63,7 @@ import {
   allEventsHaveTier,
   assignedSlotsForEvent,
   buildEventPackageSummaries,
+  clampSeminarSlotAssignmentsToBudget,
   enrichSeminarSlotAssignments,
   hasPartnershipTier,
   partnerHasEventPackages,
@@ -71,6 +71,7 @@ import {
   prunePartnerEventLinks,
   removeEventPartnership,
   resolveEventPartnerships,
+  seminarSlotAssignmentsMatchBudget,
   seminarSlotBudgetByEvent,
   syncLegacyPartnerFields,
   upsertEventPartnership,
@@ -79,7 +80,9 @@ import {
   generateTempPassword,
   buildPartnerWelcomeEmail,
   isPartnerPortalEmail,
+  openGmailComposeWindow,
   openPartnerWelcomeGmailCompose,
+  PARTNER_WELCOME_EMAIL_SUBJECT,
   resolvePortalLogin,
 } from "@/lib/partner-invite";
 import {
@@ -116,7 +119,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-const CUSTOM_ORG = "__custom__";
 const NEW_SPOC = "__new__";
 const AUTO_SAVE_DELAY_MS = 1500;
 
@@ -165,7 +167,7 @@ function resolveSpocChoice(
     const match = spocs.find((s) => s.email.trim().toLowerCase() === email);
     if (match) return match.id;
   }
-  return NEW_SPOC;
+  return "";
 }
 
 function canPersistNewPartner(name: string, city: string, state: string) {
@@ -342,10 +344,9 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
   // Chapter 3 — meetings managed via ChapterMeetings component
 
   // Chapter 4
-  const [orgChoice, setOrgChoice] = useState<string>("K2");
-  const [customOrg, setCustomOrg] = useState("");
-  const [spocChoice, setSpocChoice] = useState<string>(NEW_SPOC);
+  const [spocChoice, setSpocChoice] = useState<string>("");
   const [managerName, setManagerName] = useState("");
+  const [spocOrganization, setSpocOrganization] = useState("");
   const [managerPhone, setManagerPhone] = useState("");
   const [managerEmail, setManagerEmail] = useState("");
   const [eventIds, setEventIds] = useState<string[]>([]);
@@ -386,27 +387,25 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     setSecondary({ ...partner.secondaryContact });
     setContactedAt(partner.contactedAt ?? "");
     setContactedNotes(partner.contactedNotes ?? "");
-    const org = partner.relationshipOwner?.organization ?? "";
-    if (
-      RELATIONSHIP_OWNER_ORGS.includes(
-        org as (typeof RELATIONSHIP_OWNER_ORGS)[number]
-      )
-    ) {
-      setOrgChoice(org);
-      setCustomOrg("");
-    } else if (org) {
-      setOrgChoice(CUSTOM_ORG);
-      setCustomOrg(org);
-    } else {
-      setOrgChoice("K2");
-      setCustomOrg("");
-    }
     setManagerName(partner.relationshipOwner?.managerName ?? "");
     setManagerPhone(partner.relationshipOwner?.managerPhone ?? "");
     setManagerEmail(partner.relationshipOwner?.managerEmail ?? "");
-    setSpocChoice(
-      resolveSpocChoice(partner.relationshipOwner, spocsQuery.data ?? [])
-    );
+    {
+      const choice = resolveSpocChoice(
+        partner.relationshipOwner,
+        spocsQuery.data ?? []
+      );
+      setSpocChoice(choice);
+      const matched =
+        choice !== NEW_SPOC
+          ? (spocsQuery.data ?? []).find((s) => s.id === choice)
+          : undefined;
+      setSpocOrganization(
+        matched?.organization ??
+          partner.relationshipOwner?.organization ??
+          ""
+      );
+    }
     setEventIds([...partner.eventIds]);
     setEventPartnerships(resolveEventPartnerships(partner, generateId));
     setSponsorshipNotes(partner.sponsorshipNotes ?? "");
@@ -435,12 +434,38 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     if (!partner || !spocsQuery.isSuccess) return;
     if (formHydratedForRef.current !== partner.id) return;
     setSpocChoice((current) => {
-      if (current !== NEW_SPOC && spocs.some((s) => s.id === current)) {
-        return current;
-      }
+      if (current === NEW_SPOC) return current;
+      if (current && spocs.some((s) => s.id === current)) return current;
       return resolveSpocChoice(partner.relationshipOwner, spocs);
     });
   }, [partner, spocs, spocsQuery.isSuccess]);
+
+  // Keep seminar seat picks aligned with deliverables budgets when allotting seats.
+  useEffect(() => {
+    if (chapter !== 6) return;
+    const activePartnerships = eventPartnerships.filter((ep) =>
+      eventIds.includes(ep.eventId)
+    );
+    const budgets = seminarSlotBudgetByEvent(activePartnerships);
+    setSlotAssignments((prev) => {
+      const next = clampSeminarSlotAssignmentsToBudget(
+        prev.filter((a) => eventIds.includes(a.eventId)),
+        budgets
+      );
+      if (
+        next.length === prev.length &&
+        next.every(
+          (row, index) =>
+            row.eventId === prev[index]?.eventId &&
+            row.seminarId === prev[index]?.seminarId &&
+            row.slots === prev[index]?.slots
+        )
+      ) {
+        return prev;
+      }
+      return next;
+    });
+  }, [chapter, eventIds, eventPartnerships]);
 
   const persistCache = (saved: Partner) => {
     queryClient.setQueryData(["partners", saved.id], saved);
@@ -529,7 +554,6 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       }
       persistCache(saved);
       void queryClient.invalidateQueries({ queryKey: ["partners"] });
-      void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       if (vars.markNotProceeding) {
         toast.success("Marked as not proceeding");
         router.push("/partners");
@@ -540,10 +564,12 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
         return;
       }
       if (vars.isFinal) {
-        toast.success("Welcome email sent with partner login");
+        // Skip dashboard rebuild here — it is heavy and blocks a snappy finish.
+        toast.success("Welcome email prepared with partner login");
         router.push("/partners");
         return;
       }
+      void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       if (vars.advance && chapter < 8) {
         setChapter((Math.min(8, chapter + 1) as ChapterId));
       }
@@ -560,6 +586,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     setSpocChoice(value);
     if (value === NEW_SPOC) {
       setManagerName("");
+      setSpocOrganization("");
       setManagerPhone("");
       setManagerEmail("");
       return;
@@ -567,37 +594,73 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     const selected = spocs.find((s) => s.id === value);
     if (!selected) return;
     setManagerName(selected.name);
+    setSpocOrganization(selected.organization ?? "");
     setManagerPhone(selected.phone);
     setManagerEmail(selected.email);
   };
 
   const ensureSpocLinked = async (options?: {
     requireComplete?: boolean;
-  }): Promise<{ ok: true; spocId?: string } | { ok: false; error: string }> => {
+  }): Promise<
+    | {
+        ok: true;
+        spocId?: string;
+        organization: string;
+        managerName: string;
+        managerPhone: string;
+        managerEmail: string;
+      }
+    | { ok: false; error: string }
+  > => {
     const name = managerName.trim();
+    const organization = spocOrganization.trim();
     const phone = managerPhone.trim();
     const email = managerEmail.trim();
     const requireComplete = options?.requireComplete ?? false;
-    const complete = Boolean(name && phone && email);
 
+    // Existing directory SPOC — link only; do not rewrite details from hidden fields.
+    if (spocChoice !== NEW_SPOC && spocs.some((s) => s.id === spocChoice)) {
+      const selected = spocs.find((s) => s.id === spocChoice)!;
+      setManagerName(selected.name);
+      setSpocOrganization(selected.organization ?? "");
+      setManagerPhone(selected.phone);
+      setManagerEmail(selected.email);
+      return {
+        ok: true,
+        spocId: selected.id,
+        organization: selected.organization ?? "",
+        managerName: selected.name,
+        managerPhone: selected.phone,
+        managerEmail: selected.email,
+      };
+    }
+
+    const complete = Boolean(name && organization && phone && email);
     if (!complete) {
       if (requireComplete) {
-        return { ok: false, error: "SPOC name, phone, and email are required" };
+        return {
+          ok: false,
+          error: "SPOC name, organization, phone, and email are required",
+        };
       }
       return {
         ok: true,
-        spocId: spocChoice !== NEW_SPOC ? spocChoice : undefined,
+        spocId: undefined,
+        organization,
+        managerName: name,
+        managerPhone: phone,
+        managerEmail: email,
       };
     }
 
     try {
-      let saved: Spoc;
-      if (spocChoice !== NEW_SPOC && spocs.some((s) => s.id === spocChoice)) {
-        saved = await spocsService.update(spocChoice, { name, phone, email });
-      } else {
-        saved = await spocsService.create({ name, phone, email });
-        setSpocChoice(saved.id);
-      }
+      const saved = await spocsService.create({
+        name,
+        organization,
+        phone,
+        email,
+      });
+      setSpocChoice(saved.id);
       queryClient.setQueryData<Spoc[]>(["spocs"], (old) => {
         const list = old ?? [];
         const exists = list.some((s) => s.id === saved.id);
@@ -607,7 +670,14 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
         return next.sort((a, b) => a.name.localeCompare(b.name));
       });
       void queryClient.invalidateQueries({ queryKey: ["spocs"] });
-      return { ok: true, spocId: saved.id };
+      return {
+        ok: true,
+        spocId: saved.id,
+        organization: saved.organization,
+        managerName: saved.name,
+        managerPhone: saved.phone,
+        managerEmail: saved.email,
+      };
     } catch (error) {
       return {
         ok: false,
@@ -679,8 +749,12 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       };
     }
     if (chapter === 4) {
+      const selectedSpoc =
+        spocChoice !== NEW_SPOC
+          ? spocs.find((s) => s.id === spocChoice)
+          : undefined;
       const organization =
-        orgChoice === CUSTOM_ORG ? customOrg.trim() : orgChoice;
+        selectedSpoc?.organization?.trim() || spocOrganization.trim();
       const activePartnerships = eventPartnerships.filter((ep) =>
         eventIds.includes(ep.eventId)
       );
@@ -691,10 +765,10 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
         eventPartnerships: activePartnerships,
         relationshipOwner: {
           organization,
-          spocId: spocChoice !== NEW_SPOC ? spocChoice : undefined,
-          managerName: managerName.trim(),
-          managerPhone: managerPhone.trim(),
-          managerEmail: managerEmail.trim(),
+          spocId: selectedSpoc?.id,
+          managerName: (selectedSpoc?.name ?? managerName).trim(),
+          managerPhone: (selectedSpoc?.phone ?? managerPhone).trim(),
+          managerEmail: (selectedSpoc?.email ?? managerEmail).trim(),
         },
         sponsorshipNotes: sponsorshipNotes.trim(),
       };
@@ -811,7 +885,11 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
           ...data,
           relationshipOwner: {
             ...data.relationshipOwner!,
+            organization: linked.organization,
             spocId: linked.spocId,
+            managerName: linked.managerName,
+            managerPhone: linked.managerPhone,
+            managerEmail: linked.managerEmail,
           },
         };
       }
@@ -852,10 +930,9 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
         secondary,
         contactedAt,
         contactedNotes,
-        orgChoice,
-        customOrg,
         spocChoice,
         managerName,
+        spocOrganization,
         managerPhone,
         managerEmail,
         eventIds,
@@ -877,10 +954,9 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       secondary,
       contactedAt,
       contactedNotes,
-      orgChoice,
-      customOrg,
       spocChoice,
       managerName,
+      spocOrganization,
       managerPhone,
       managerEmail,
       eventIds,
@@ -1193,13 +1269,17 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
 
   const submitChapter4 = async () => {
     if (!partner) return;
-    const organization =
-      orgChoice === CUSTOM_ORG ? customOrg.trim() : orgChoice;
     const next: Record<string, string> = {};
-    if (!organization) next.org = "Required";
-    if (!managerName.trim()) next.mName = "Required";
-    if (!managerPhone.trim()) next.mPhone = "Required";
-    if (!managerEmail.trim()) next.mEmail = "Required";
+    if (!spocChoice) {
+      next.spoc = "Select a SPOC";
+    } else if (spocChoice === NEW_SPOC) {
+      if (!managerName.trim()) next.mName = "Required";
+      if (!spocOrganization.trim()) next.mOrg = "Required";
+      if (!managerPhone.trim()) next.mPhone = "Required";
+      if (!managerEmail.trim()) next.mEmail = "Required";
+    } else if (!spocs.some((s) => s.id === spocChoice)) {
+      next.spoc = "Select a SPOC";
+    }
     if (eventIds.length === 0) next.events = "Select at least one event";
     if (!allEventsHaveTier(eventPartnerships, eventIds)) {
       next.tier = "Select a tier for each selected event";
@@ -1222,6 +1302,10 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       eventIds.includes(ep.eventId)
     );
     const legacy = syncLegacyPartnerFields(activePartnerships);
+    const nextAssignments = slotAssignments.filter((a) =>
+      eventIds.includes(a.eventId)
+    );
+    setSlotAssignments(nextAssignments);
 
     saveMutation.mutate({
       create: false,
@@ -1230,15 +1314,13 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
         ...partner,
         ...legacy,
         eventPartnerships: activePartnerships,
-        seminarSlotAssignments: (partner.seminarSlotAssignments ?? []).filter(
-          (a) => eventIds.includes(a.eventId)
-        ),
+        seminarSlotAssignments: nextAssignments,
         relationshipOwner: {
-          organization,
+          organization: linked.organization,
           spocId: linked.spocId,
-          managerName: managerName.trim(),
-          managerPhone: managerPhone.trim(),
-          managerEmail: managerEmail.trim(),
+          managerName: linked.managerName,
+          managerPhone: linked.managerPhone,
+          managerEmail: linked.managerEmail,
         },
         sponsorshipNotes: sponsorshipNotes.trim(),
         stage: "Negotiation",
@@ -1320,6 +1402,16 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     });
 
     const legacy = syncLegacyPartnerFields(activePartnerships);
+    const budgets = seminarSlotBudgetByEvent(activePartnerships);
+    const clampedAssignments = clampSeminarSlotAssignmentsToBudget(
+      slotAssignments.filter((a) => eventIds.includes(a.eventId)),
+      budgets
+    );
+    setSlotAssignments(clampedAssignments);
+    const slotsStillMatchBudget = seminarSlotAssignmentsMatchBudget(
+      clampedAssignments,
+      activePartnerships
+    );
 
     saveMutation.mutate({
       create: false,
@@ -1328,6 +1420,14 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
         ...partner,
         ...legacy,
         eventPartnerships: activePartnerships,
+        seminarSlotAssignments: enrichSeminarSlotAssignments(
+          clampedAssignments,
+          eventsQuery.data ?? []
+        ),
+        // Re-confirm seminars when budget no longer matches seat picks.
+        seminarSlotsConfirmedAt: slotsStillMatchBudget
+          ? partner.seminarSlotsConfirmedAt
+          : undefined,
         deliverablesConfirmedAt: new Date().toISOString(),
       },
     });
@@ -1339,12 +1439,21 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     const activePartnerships = eventPartnerships.filter((ep) =>
       eventIds.includes(ep.eventId)
     );
+    const budgets = seminarSlotBudgetByEvent(activePartnerships);
+    const clampedAssignments = clampSeminarSlotAssignmentsToBudget(
+      slotAssignments.filter((a) => eventIds.includes(a.eventId)),
+      budgets
+    );
+    setSlotAssignments(clampedAssignments);
 
     for (const ep of activePartnerships) {
-      const assigned = assignedSlotsForEvent(slotAssignments, ep.eventId);
-      if (assigned > ep.seminarSlotCount) {
+      const budget = ep.seminarSlotCount ?? 0;
+      const assigned = assignedSlotsForEvent(clampedAssignments, ep.eventId);
+      if (assigned !== budget) {
         next[`event-${ep.eventId}`] =
-          `Pick at most ${ep.seminarSlotCount} seminar seat${ep.seminarSlotCount === 1 ? "" : "s"}`;
+          budget === 0
+            ? "No seminar seats were set in deliverables — remove any picks for this event"
+            : `Pick exactly ${budget} seminar seat${budget === 1 ? "" : "s"} (currently ${assigned})`;
       }
     }
 
@@ -1356,7 +1465,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       data: {
         ...partner,
         seminarSlotAssignments: enrichSeminarSlotAssignments(
-          slotAssignments,
+          clampedAssignments,
           eventsQuery.data ?? []
         ),
         seminarSlotsConfirmedAt: new Date().toISOString(),
@@ -1402,54 +1511,56 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     if (!tempPassword.trim()) next.password = "Password required";
     if (applyFormErrors(setErrors, next)) return;
 
-    void (async () => {
-      try {
-        const welcomeEmail = await buildPartnerWelcomeEmail({
-          partnerName: partner.name,
-          login,
-          temporaryPassword: tempPassword,
-        });
+    // Open Gmail immediately under the user gesture (before any await).
+    openGmailComposeWindow(email, PARTNER_WELCOME_EMAIL_SUBJECT);
 
-        const pasteMode = await openPartnerWelcomeGmailCompose({
-          to: email,
-          subject: welcomeEmail.subject,
-          html: welcomeEmail.html,
-          plainText: welcomeEmail.plainText,
-        });
+    const welcomeEmail = buildPartnerWelcomeEmail({
+      partnerName: partner.name,
+      login,
+      temporaryPassword: tempPassword,
+    });
 
+    // Save and clipboard copy in parallel — don't block finish on either alone.
+    void openPartnerWelcomeGmailCompose({
+      to: email,
+      subject: welcomeEmail.subject,
+      html: welcomeEmail.html,
+      plainText: welcomeEmail.plainText,
+      skipOpen: true,
+    })
+      .then((pasteMode) => {
         toast.success(
           pasteMode === "html"
             ? "Gmail opened — press Ctrl+V in the message body to paste the formatted email"
             : "Gmail opened — formatted email copied as plain text; paste into the message body"
         );
-      } catch (error) {
+      })
+      .catch((error) => {
         toast.error(
           error instanceof Error
             ? error.message
-            : "Could not prepare the welcome email"
+            : "Could not copy the welcome email — paste details manually in Gmail"
         );
-        return;
-      }
-
-      saveMutation.mutate({
-        create: false,
-        advance: false,
-        isFinal: true,
-        data: {
-          ...partner,
-          portalLogin: login,
-          portalTempPassword: tempPassword,
-          portalInviteEmail: email,
-          portalInviteSentAt: new Date().toISOString(),
-          stage: partner.stage === "Not Proceeding" ? partner.stage : "Confirmed",
-          stageRemarks: pushRemark(
-            partner.stage,
-            partner.stage === "Not Proceeding" ? "Not Proceeding" : "Confirmed",
-            `Partner access email prepared for ${email}`
-          ),
-        },
       });
-    })();
+
+    saveMutation.mutate({
+      create: false,
+      advance: false,
+      isFinal: true,
+      data: {
+        ...partner,
+        portalLogin: login,
+        portalTempPassword: tempPassword,
+        portalInviteEmail: email,
+        portalInviteSentAt: new Date().toISOString(),
+        stage: partner.stage === "Not Proceeding" ? partner.stage : "Confirmed",
+        stageRemarks: pushRemark(
+          partner.stage,
+          partner.stage === "Not Proceeding" ? "Not Proceeding" : "Confirmed",
+          `Partner access email prepared for ${email}`
+        ),
+      },
+    });
   };
 
   const confirmNotProceeding = () => {
@@ -1491,25 +1602,20 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     } else if (chapter === 3) {
       // Meetings reset handled in ChapterMeetings composer
     } else if (chapter === 4) {
-      const org = partner.relationshipOwner?.organization ?? "";
-      if (
-        RELATIONSHIP_OWNER_ORGS.includes(
-          org as (typeof RELATIONSHIP_OWNER_ORGS)[number]
-        )
-      ) {
-        setOrgChoice(org);
-        setCustomOrg("");
-      } else if (org) {
-        setOrgChoice(CUSTOM_ORG);
-        setCustomOrg(org);
-      } else {
-        setOrgChoice("K2");
-        setCustomOrg("");
-      }
       setManagerName(partner.relationshipOwner?.managerName ?? "");
       setManagerPhone(partner.relationshipOwner?.managerPhone ?? "");
       setManagerEmail(partner.relationshipOwner?.managerEmail ?? "");
-      setSpocChoice(resolveSpocChoice(partner.relationshipOwner, spocs));
+      {
+        const choice = resolveSpocChoice(partner.relationshipOwner, spocs);
+        setSpocChoice(choice);
+        const matched =
+          choice !== NEW_SPOC ? spocs.find((s) => s.id === choice) : undefined;
+        setSpocOrganization(
+          matched?.organization ??
+            partner.relationshipOwner?.organization ??
+            ""
+        );
+      }
       setEventIds([...partner.eventIds]);
       setEventPartnerships(resolveEventPartnerships(partner, generateId));
       setSponsorshipNotes(partner.sponsorshipNotes ?? "");
@@ -1788,15 +1894,13 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
 
                 {chapter === 4 && (
                   <ChapterPartnership
-                    orgChoice={orgChoice}
-                    setOrgChoice={setOrgChoice}
-                    customOrg={customOrg}
-                    setCustomOrg={setCustomOrg}
                     spocChoice={spocChoice}
                     spocs={spocs}
                     onSpocChoiceChange={selectSpoc}
                     managerName={managerName}
                     setManagerName={setManagerName}
+                    spocOrganization={spocOrganization}
+                    setSpocOrganization={setSpocOrganization}
                     managerPhone={managerPhone}
                     setManagerPhone={setManagerPhone}
                     managerEmail={managerEmail}
@@ -2217,15 +2321,13 @@ function ChapterContacted(props: {
 }
 
 function ChapterPartnership(props: {
-  orgChoice: string;
-  setOrgChoice: (v: string) => void;
-  customOrg: string;
-  setCustomOrg: (v: string) => void;
   spocChoice: string;
   spocs: Spoc[];
   onSpocChoiceChange: (v: string) => void;
   managerName: string;
   setManagerName: (v: string) => void;
+  spocOrganization: string;
+  setSpocOrganization: (v: string) => void;
   managerPhone: string;
   setManagerPhone: (v: string) => void;
   managerEmail: string;
@@ -2243,6 +2345,7 @@ function ChapterPartnership(props: {
   setSponsorshipNotes: (v: string) => void;
   errors: Record<string, string>;
 }) {
+  const creatingSpoc = props.spocChoice === NEW_SPOC;
   const partnershipForEvent = (eventId: string) =>
     props.eventPartnerships.find((ep) => ep.eventId === eventId);
 
@@ -2329,86 +2432,91 @@ function ChapterPartnership(props: {
           Relationship owner
         </h3>
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5 sm:col-span-2" data-field-error={props.errors.org ? "true" : undefined}>
-            <Label>Closing organization</Label>
-            <Select value={props.orgChoice} onValueChange={props.setOrgChoice}>
-              <SelectTrigger className={fieldErrorClass(props.errors.org)}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {RELATIONSHIP_OWNER_ORGS.map((org) => (
-                  <SelectItem key={org} value={org}>
-                    {org}
-                  </SelectItem>
-                ))}
-                <SelectItem value={CUSTOM_ORG}>Create / enter company…</SelectItem>
-              </SelectContent>
-            </Select>
-            <FieldError message={props.errors.org} />
-          </div>
-          {props.orgChoice === CUSTOM_ORG && (
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label>Company name</Label>
-              <Input
-                value={props.customOrg}
-                onChange={(e) => props.setCustomOrg(e.target.value)}
-              />
-            </div>
-          )}
-          <div className="space-y-1.5 sm:col-span-2">
+          <div
+            className="space-y-1.5 sm:col-span-2"
+            data-field-error={props.errors.spoc ? "true" : undefined}
+          >
             <Label>SPOC</Label>
             <Select
-              value={props.spocChoice}
+              value={props.spocChoice || undefined}
               onValueChange={props.onSpocChoiceChange}
             >
-              <SelectTrigger>
-                <SelectValue placeholder="Select or create a SPOC" />
+              <SelectTrigger className={fieldErrorClass(props.errors.spoc)}>
+                <SelectValue placeholder="Select a SPOC" />
               </SelectTrigger>
               <SelectContent>
                 {props.spocs.map((spoc) => (
                   <SelectItem key={spoc.id} value={spoc.id}>
-                    {spoc.name}
-                    {spoc.email ? ` · ${spoc.email}` : ""}
+                    {spoc.organization?.trim() && spoc.organization !== "—"
+                      ? `${spoc.name} - ${spoc.organization}`
+                      : spoc.name}
                   </SelectItem>
                 ))}
-                <SelectItem value={NEW_SPOC}>Create new SPOC…</SelectItem>
+                <SelectItem value={NEW_SPOC}>Create new SPOC</SelectItem>
               </SelectContent>
             </Select>
+            <FieldError message={props.errors.spoc} />
             <p className="text-xs text-muted-foreground">
-              Pick a saved SPOC for this partner, or create one to reuse later.
+              Select a saved SPOC, or create a new one to reuse across partners.
             </p>
           </div>
-          <div className="space-y-1.5" data-field-error={props.errors.mName ? "true" : undefined}>
-            <Label>SPOC name</Label>
-            <Input
-              className={fieldErrorClass(props.errors.mName)}
-              aria-invalid={Boolean(props.errors.mName)}
-              value={props.managerName}
-              onChange={(e) => props.setManagerName(e.target.value)}
-            />
-            <FieldError message={props.errors.mName} />
-          </div>
-          <div className="space-y-1.5" data-field-error={props.errors.mPhone ? "true" : undefined}>
-            <Label>Contact number</Label>
-            <Input
-              className={fieldErrorClass(props.errors.mPhone)}
-              aria-invalid={Boolean(props.errors.mPhone)}
-              value={props.managerPhone}
-              onChange={(e) => props.setManagerPhone(e.target.value)}
-            />
-            <FieldError message={props.errors.mPhone} />
-          </div>
-          <div className="space-y-1.5 sm:col-span-2" data-field-error={props.errors.mEmail ? "true" : undefined}>
-            <Label>Official email</Label>
-            <Input
-              type="email"
-              className={fieldErrorClass(props.errors.mEmail)}
-              aria-invalid={Boolean(props.errors.mEmail)}
-              value={props.managerEmail}
-              onChange={(e) => props.setManagerEmail(e.target.value)}
-            />
-            <FieldError message={props.errors.mEmail} />
-          </div>
+          {creatingSpoc ? (
+            <>
+              <div
+                className="space-y-1.5"
+                data-field-error={props.errors.mName ? "true" : undefined}
+              >
+                <Label>Name</Label>
+                <Input
+                  className={fieldErrorClass(props.errors.mName)}
+                  aria-invalid={Boolean(props.errors.mName)}
+                  value={props.managerName}
+                  onChange={(e) => props.setManagerName(e.target.value)}
+                />
+                <FieldError message={props.errors.mName} />
+              </div>
+              <div
+                className="space-y-1.5"
+                data-field-error={props.errors.mOrg ? "true" : undefined}
+              >
+                <Label>Organization name</Label>
+                <Input
+                  className={fieldErrorClass(props.errors.mOrg)}
+                  aria-invalid={Boolean(props.errors.mOrg)}
+                  value={props.spocOrganization}
+                  onChange={(e) => props.setSpocOrganization(e.target.value)}
+                />
+                <FieldError message={props.errors.mOrg} />
+              </div>
+              <div
+                className="space-y-1.5"
+                data-field-error={props.errors.mPhone ? "true" : undefined}
+              >
+                <Label>Contact number</Label>
+                <Input
+                  className={fieldErrorClass(props.errors.mPhone)}
+                  aria-invalid={Boolean(props.errors.mPhone)}
+                  value={props.managerPhone}
+                  onChange={(e) => props.setManagerPhone(e.target.value)}
+                />
+                <FieldError message={props.errors.mPhone} />
+              </div>
+              <div
+                className="space-y-1.5"
+                data-field-error={props.errors.mEmail ? "true" : undefined}
+              >
+                <Label>Email</Label>
+                <Input
+                  type="email"
+                  className={fieldErrorClass(props.errors.mEmail)}
+                  aria-invalid={Boolean(props.errors.mEmail)}
+                  value={props.managerEmail}
+                  onChange={(e) => props.setManagerEmail(e.target.value)}
+                />
+                <FieldError message={props.errors.mEmail} />
+              </div>
+            </>
+          ) : null}
         </div>
       </section>
 

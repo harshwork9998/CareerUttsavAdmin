@@ -665,8 +665,8 @@ export function ChapterEventDeliverables({
                     </p>
                     <p className="mt-0.5 text-xs" style={{ color: INK.muted }}>
                       {isCustomPartnership(ep)
-                        ? "Include panel seats in this custom package if applicable — pick seminars in the next step."
-                        : "Total seats for this event — you'll pick which seminars in the next step."}
+                        ? "Include panel seats in this custom package if applicable — the next step must fill this exact count."
+                        : "Total seats for this event — the next step must fill this exact count."}
                     </p>
                   </div>
                 </div>

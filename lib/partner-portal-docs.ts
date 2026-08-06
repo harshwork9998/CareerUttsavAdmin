@@ -1,8 +1,87 @@
 import type {
   Partner,
   PartnerPortalDocument,
+  PartnerRepresentativesSubmission,
   PartnerSeminarSlotAssignment,
 } from "@/types";
+
+function isValidRepPhone(phone: string): boolean {
+  return /^[6-9]\d{9}$/.test(phone.replace(/\D/g, "").slice(-10));
+}
+
+function isRepresentativesRowComplete(
+  row: PartnerRepresentativesSubmission
+): boolean {
+  return (
+    row.count >= 1 &&
+    row.representatives.length === row.count &&
+    row.representatives.every(
+      (r) => r.name.trim().length > 0 && isValidRepPhone(r.phone)
+    )
+  );
+}
+
+/**
+ * Normalize portal reps from Partner Portal (per-event array) or legacy
+ * single-object shape still present on older Admin records.
+ */
+export function normalizePortalRepresentatives(
+  raw: Partner["portalRepresentatives"] | PartnerRepresentativesSubmission | unknown,
+  eventIds: string[] = []
+): PartnerRepresentativesSubmission[] {
+  if (raw == null) return [];
+
+  if (Array.isArray(raw)) {
+    return raw
+      .map((item) => {
+        const row = item as Partial<PartnerRepresentativesSubmission>;
+        const eventId = typeof row.eventId === "string" ? row.eventId : "";
+        if (!eventId) return null;
+        return {
+          eventId,
+          count: Math.max(0, Math.floor(Number(row.count) || 0)),
+          representatives: Array.isArray(row.representatives)
+            ? row.representatives.map((r) => ({
+                name: typeof r?.name === "string" ? r.name : "",
+                phone: typeof r?.phone === "string" ? r.phone : "",
+              }))
+            : [],
+          updatedAt:
+            typeof row.updatedAt === "string"
+              ? row.updatedAt
+              : new Date().toISOString(),
+        } satisfies PartnerRepresentativesSubmission;
+      })
+      .filter((r): r is PartnerRepresentativesSubmission => r !== null);
+  }
+
+  if (typeof raw === "object") {
+    const legacy = raw as Partial<PartnerRepresentativesSubmission>;
+    const eventId =
+      typeof legacy.eventId === "string" && legacy.eventId
+        ? legacy.eventId
+        : eventIds[0] ?? "";
+    if (!eventId) return [];
+    return [
+      {
+        eventId,
+        count: Math.max(0, Math.floor(Number(legacy.count) || 0)),
+        representatives: Array.isArray(legacy.representatives)
+          ? legacy.representatives.map((r) => ({
+              name: typeof r?.name === "string" ? r.name : "",
+              phone: typeof r?.phone === "string" ? r.phone : "",
+            }))
+          : [],
+        updatedAt:
+          typeof legacy.updatedAt === "string"
+            ? legacy.updatedAt
+            : new Date().toISOString(),
+      },
+    ];
+  }
+
+  return [];
+}
 
 /** Seven items partners must complete — logo lives in dashboard hero, not this list */
 export const PORTAL_SUBMISSION_ITEMS = [
@@ -111,6 +190,7 @@ export function getPartnerPortalUploadStatus(
     | "portalSeminarSpeakers"
     | "portalRepresentatives"
     | "seminarSlotAssignments"
+    | "eventIds"
   >
 ): PartnerPortalUploadStatus {
   const docs = partner.portalDocuments ?? [];
@@ -130,16 +210,27 @@ export function getPartnerPortalUploadStatus(
       )
     );
 
-  const reps = partner.portalRepresentatives;
-  const representativesComplete = Boolean(
-    reps &&
-      reps.count >= 1 &&
-      reps.representatives.length === reps.count &&
-      reps.representatives.every(
-        (r) =>
-          r.name.trim().length > 0 && /^[6-9]\d{9}$/.test(r.phone.replace(/\D/g, "").slice(-10))
-      )
+  const eventIds =
+    partner.eventIds?.length > 0
+      ? partner.eventIds
+      : [
+          ...new Set(
+            (partner.seminarSlotAssignments ?? []).map((a) => a.eventId)
+          ),
+        ];
+  const repRows = normalizePortalRepresentatives(
+    partner.portalRepresentatives,
+    eventIds
   );
+  const requiredEventIds =
+    eventIds.length > 0 ? eventIds : repRows.map((r) => r.eventId);
+  const representativesComplete =
+    requiredEventIds.length > 0
+      ? requiredEventIds.every((eventId) => {
+          const row = repRows.find((r) => r.eventId === eventId);
+          return row ? isRepresentativesRowComplete(row) : false;
+        })
+      : repRows.some(isRepresentativesRowComplete);
 
   const checklist: PortalSubmissionChecklistItem[] = [
     {
@@ -211,7 +302,9 @@ export function getPartnerPortalUploadStatus(
   for (const row of partner.portalSeminarSpeakers ?? []) {
     if (row.updatedAt) timestamps.push(row.updatedAt);
   }
-  if (reps?.updatedAt) timestamps.push(reps.updatedAt);
+  for (const row of repRows) {
+    if (row.updatedAt) timestamps.push(row.updatedAt);
+  }
 
   let lastUpdatedAt: string | null = null;
   for (const iso of timestamps) {
