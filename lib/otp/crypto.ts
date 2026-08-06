@@ -1,29 +1,36 @@
-import { createHash, randomInt, randomBytes } from "crypto";
+import { createHash, randomBytes, timingSafeEqual } from "crypto";
 
-function hashPepper(): string {
-  return process.env.OTP_HASH_SECRET ?? "career-uttsav-otp-dev-secret";
+/**
+ * Secret used only to hash opaque phone verification tokens
+ * (issued after successful OTP verify). Does not hash MSG91 OTPs.
+ *
+ * Prefer PHONE_VERIFICATION_TOKEN_SECRET; OTP_HASH_SECRET is accepted
+ * temporarily for local/env migration.
+ */
+function tokenSecret(): string {
+  return (
+    process.env.PHONE_VERIFICATION_TOKEN_SECRET ??
+    process.env.OTP_HASH_SECRET ??
+    "career-uttsav-phone-verification-dev-secret"
+  );
 }
 
-/** Hash a value with the server pepper. Used for OTP codes and verification tokens. */
-export function hashOtpValue(value: string): string {
+/** Hash a verification token with the server pepper. Never store plaintext tokens. */
+export function hashVerificationToken(value: string): string {
   return createHash("sha256")
-    .update(`${hashPepper()}:${value.trim()}`)
+    .update(`${tokenSecret()}:${value.trim()}`)
     .digest("hex");
 }
 
 export function timingSafeEqualHex(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let mismatch = 0;
-  for (let i = 0; i < a.length; i += 1) {
-    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  try {
+    const bufA = Buffer.from(a, "hex");
+    const bufB = Buffer.from(b, "hex");
+    if (bufA.length === 0 || bufA.length !== bufB.length) return false;
+    return timingSafeEqual(bufA, bufB);
+  } catch {
+    return false;
   }
-  return mismatch === 0;
-}
-
-/** Cryptographically strong 6-digit OTP (000000–999999, zero-padded). */
-export function generateOtpCode(length = 6): string {
-  const max = 10 ** length;
-  return String(randomInt(0, max)).padStart(length, "0");
 }
 
 /** Opaque verification token returned to the client after successful verify. */

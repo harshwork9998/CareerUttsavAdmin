@@ -1,18 +1,24 @@
-import { normalizeRegistrationPhone } from "@/lib/registration-duplicates";
 import { generateId } from "@/lib/utils";
 import {
-  generateOtpCode,
   generateVerificationToken,
-  hashOtpValue,
+  hashVerificationToken,
   timingSafeEqualHex,
 } from "@/lib/otp/crypto";
+import {
+  msg91RetryOtp,
+  msg91SendOtp,
+  msg91VerifyOtp,
+  type Msg91ApiResult,
+} from "@/lib/otp/msg91";
+import { normalizeOtpPhone } from "@/lib/otp/phone";
 import {
   loadOtpChallenges,
   pruneOtpChallenges,
   saveOtpChallenges,
 } from "@/lib/otp/persistence";
-import { buildOtpSmsMessage, sendSms } from "@/lib/otp/sms";
+import { resolveOtpProvider } from "@/lib/otp/provider";
 import {
+  MOCK_OTP_CODE,
   OTP_CONFIG,
   OTP_PURPOSES,
   type OtpChallenge,
@@ -31,7 +37,7 @@ export type SendOtpSuccess = {
   message: string;
   expiresInSeconds: number;
   resendAfterSeconds: number;
-  /** Dev-only: never returned when SMS_PROVIDER is a real provider. */
+  /** Present only for OTP_PROVIDER=mock (never in production). */
   debugCode?: string;
 };
 
@@ -55,12 +61,7 @@ export function parseOtpPurpose(value: unknown): OtpPurpose | null {
   return value;
 }
 
-export function normalizeOtpPhone(phone: unknown): string | null {
-  if (typeof phone !== "string") return null;
-  const normalized = normalizeRegistrationPhone(phone);
-  if (!/^[6-9]\d{9}$/.test(normalized)) return null;
-  return normalized;
-}
+export { normalizeOtpPhone };
 
 function findActiveChallenge(
   challenges: OtpChallenge[],
@@ -75,9 +76,40 @@ function findActiveChallenge(
     )[0];
 }
 
+async function mockSend(): Promise<Msg91ApiResult> {
+  return { ok: true, type: "success", message: "mock_otp_sent", raw: { type: "success" } };
+}
+
+async function mockRetry(): Promise<Msg91ApiResult> {
+  return {
+    ok: true,
+    type: "success",
+    message: "mock_otp_resent",
+    raw: { type: "success" },
+  };
+}
+
+async function mockVerify(otp: string): Promise<Msg91ApiResult> {
+  if (otp === MOCK_OTP_CODE) {
+    return {
+      ok: true,
+      type: "success",
+      message: "mock_otp_verified",
+      raw: { type: "success" },
+    };
+  }
+  return {
+    ok: false,
+    kind: "provider",
+    type: "error",
+    message: "invalid_otp",
+    error: "Incorrect OTP. Please try again.",
+  };
+}
+
 /**
- * Send (or resend) an OTP for a phone + purpose.
- * Always generates a new code and invalidates any previous unverified code.
+ * Send a new OTP, or resend the same active OTP via MSG91 retry when a
+ * non-expired challenge already exists.
  */
 export async function sendOtp(input: {
   phone: string;
@@ -92,12 +124,26 @@ export async function sendOtp(input: {
     };
   }
 
+  const providerResult = resolveOtpProvider();
+  if (!providerResult.ok) {
+    return {
+      ok: false,
+      status: providerResult.status,
+      error: providerResult.error,
+    };
+  }
+
   const now = Date.now();
   const nowIso = new Date(now).toISOString();
   let challenges = pruneOtpChallenges(loadOtpChallenges());
 
   const existing = findActiveChallenge(challenges, phone, input.purpose);
-  const requestTimestamps = (existing?.requestTimestamps ?? []).filter(
+  const existingValid =
+    existing && new Date(existing.expiresAt).getTime() > now
+      ? existing
+      : undefined;
+
+  const requestTimestamps = (existingValid?.requestTimestamps ?? []).filter(
     (ts) => new Date(ts).getTime() >= now - OTP_CONFIG.requestWindowMs
   );
 
@@ -117,8 +163,8 @@ export async function sendOtp(input: {
     };
   }
 
-  if (existing?.lastSentAt) {
-    const elapsed = now - new Date(existing.lastSentAt).getTime();
+  if (existingValid?.lastSentAt) {
+    const elapsed = now - new Date(existingValid.lastSentAt).getTime();
     if (elapsed < OTP_CONFIG.resendCooldownMs) {
       const retryAfterSeconds = Math.ceil(
         (OTP_CONFIG.resendCooldownMs - elapsed) / 1000
@@ -132,75 +178,102 @@ export async function sendOtp(input: {
     }
   }
 
-  const code = generateOtpCode(OTP_CONFIG.codeLength);
-  const codeHash = hashOtpValue(code);
-  const expiresAt = new Date(now + OTP_CONFIG.ttlMs).toISOString();
-  const nextTimestamps = [...requestTimestamps, nowIso];
+  const isResend = Boolean(existingValid);
+  let providerResponse: Msg91ApiResult;
 
-  // Invalidate previous unverified challenges for this phone+purpose
-  challenges = challenges.filter(
-    (c) => !(c.phone === phone && c.purpose === input.purpose && !c.verifiedAt)
-  );
+  if (providerResult.provider === "mock") {
+    providerResponse = isResend ? await mockRetry() : await mockSend();
+  } else if (isResend) {
+    providerResponse = await msg91RetryOtp({ phone10: phone, retrytype: "text" });
+  } else {
+    providerResponse = await msg91SendOtp({ phone10: phone });
+  }
 
-  const challenge: OtpChallenge = {
-    id: `otp-${generateId()}`,
-    phone,
-    purpose: input.purpose,
-    codeHash,
-    expiresAt,
-    attempts: 0,
-    requestTimestamps: nextTimestamps,
-    lastSentAt: nowIso,
-    createdAt: existing?.createdAt ?? nowIso,
-    updatedAt: nowIso,
-  };
-
-  challenges.unshift(challenge);
-  saveOtpChallenges(challenges);
-
-  const sms = await sendSms({
-    to: phone,
-    message: buildOtpSmsMessage(code, input.purpose),
-  });
-
-  if (!sms.ok) {
+  if (!providerResponse.ok) {
+    const status =
+      providerResponse.kind === "config"
+        ? 503
+        : providerResponse.kind === "timeout" ||
+            providerResponse.kind === "network"
+          ? 504
+          : 502;
     return {
       ok: false,
-      status: 502,
-      error: sms.error || "Could not send OTP. Please try again.",
+      status,
+      error: providerResponse.error,
     };
   }
 
+  const expiresAt = new Date(now + OTP_CONFIG.ttlMs).toISOString();
+  const nextTimestamps = [...requestTimestamps, nowIso];
+
+  if (existingValid) {
+    existingValid.requestTimestamps = nextTimestamps;
+    existingValid.lastSentAt = nowIso;
+    existingValid.updatedAt = nowIso;
+    // Keep original expiresAt so retry continues the same OTP window
+    challenges = challenges.map((c) =>
+      c.id === existingValid.id ? existingValid : c
+    );
+  } else {
+    challenges = challenges.filter(
+      (c) =>
+        !(c.phone === phone && c.purpose === input.purpose && !c.verifiedAt)
+    );
+    const challenge: OtpChallenge = {
+      id: `otp-${generateId()}`,
+      phone,
+      purpose: input.purpose,
+      expiresAt,
+      attempts: 0,
+      requestTimestamps: nextTimestamps,
+      lastSentAt: nowIso,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+    challenges.unshift(challenge);
+  }
+
+  saveOtpChallenges(challenges);
+
   const result: SendOtpSuccess = {
     ok: true,
-    message: "OTP sent successfully",
+    message: isResend ? "OTP resent successfully" : "OTP sent successfully",
     expiresInSeconds: Math.floor(OTP_CONFIG.ttlMs / 1000),
     resendAfterSeconds: Math.floor(OTP_CONFIG.resendCooldownMs / 1000),
   };
 
-  // Surface code only when using the console provider (local/dev).
-  if ((process.env.SMS_PROVIDER ?? "console").toLowerCase() === "console") {
-    result.debugCode = code;
+  if (providerResult.provider === "mock") {
+    result.debugCode = MOCK_OTP_CODE;
   }
 
   return result;
 }
 
 /**
- * Verify an OTP. On success, issues a verification token for gated actions
- * (e.g. student registration submit).
+ * Verify an OTP via MSG91 (or mock). On success, issues a verification token
+ * for gated actions (e.g. student registration submit).
  */
-export function verifyOtp(input: {
+export async function verifyOtp(input: {
   phone: string;
   purpose: OtpPurpose;
   code: string;
-}): VerifyOtpSuccess | OtpServiceError {
+}): Promise<VerifyOtpSuccess | OtpServiceError> {
   const phone = normalizeOtpPhone(input.phone);
   if (!phone) {
     return {
       ok: false,
       status: 400,
       error: "Enter a valid 10-digit mobile number starting 6–9",
+    };
+  }
+
+  const providerResult = resolveOtpProvider();
+  if (!providerResult.ok) {
+    return {
+      ok: false,
+      status: providerResult.status,
+      error: providerResult.error,
     };
   }
 
@@ -242,11 +315,22 @@ export function verifyOtp(input: {
     };
   }
 
-  const expected = challenge.codeHash;
-  const actual = hashOtpValue(code);
-  const matches = timingSafeEqualHex(expected, actual);
+  const providerResponse =
+    providerResult.provider === "mock"
+      ? await mockVerify(code)
+      : await msg91VerifyOtp({ phone10: phone, otp: code });
 
-  if (!matches) {
+  if (!providerResponse.ok) {
+    if (providerResponse.kind === "config") {
+      return { ok: false, status: 503, error: providerResponse.error };
+    }
+    if (
+      providerResponse.kind === "timeout" ||
+      providerResponse.kind === "network"
+    ) {
+      return { ok: false, status: 504, error: providerResponse.error };
+    }
+
     challenge.attempts += 1;
     challenge.updatedAt = nowIso;
     challenges = challenges.map((c) =>
@@ -255,6 +339,18 @@ export function verifyOtp(input: {
     saveOtpChallenges(challenges);
 
     const remaining = OTP_CONFIG.maxVerifyAttempts - challenge.attempts;
+    const expired =
+      providerResponse.error.toLowerCase().includes("expired") ||
+      (providerResponse.message ?? "").toLowerCase().includes("expir");
+
+    if (expired) {
+      return {
+        ok: false,
+        status: 400,
+        error: "OTP has expired. Please request a new code.",
+      };
+    }
+
     return {
       ok: false,
       status: 400,
@@ -267,13 +363,11 @@ export function verifyOtp(input: {
 
   const verificationToken = generateVerificationToken();
   challenge.verifiedAt = nowIso;
-  challenge.verificationTokenHash = hashOtpValue(verificationToken);
+  challenge.verificationTokenHash = hashVerificationToken(verificationToken);
   challenge.verificationTokenExpiresAt = new Date(
     now + OTP_CONFIG.verificationTokenTtlMs
   ).toISOString();
   challenge.updatedAt = nowIso;
-  // Invalidate the OTP code hash so it cannot be reused
-  challenge.codeHash = hashOtpValue(`used:${challenge.id}:${nowIso}`);
 
   challenges = challenges.map((c) => (c.id === challenge.id ? challenge : c));
   saveOtpChallenges(challenges);
@@ -325,7 +419,10 @@ export function consumePhoneVerification(input: {
       c.verificationTokenHash
   );
 
-  if (!challenge?.verificationTokenHash || !challenge.verificationTokenExpiresAt) {
+  if (
+    !challenge?.verificationTokenHash ||
+    !challenge.verificationTokenExpiresAt
+  ) {
     return {
       ok: false,
       status: 400,
@@ -343,7 +440,7 @@ export function consumePhoneVerification(input: {
 
   const matches = timingSafeEqualHex(
     challenge.verificationTokenHash,
-    hashOtpValue(token)
+    hashVerificationToken(token)
   );
   if (!matches) {
     return {

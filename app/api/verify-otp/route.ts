@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const result = verifyOtp({
+  const result = await verifyOtp({
     phone: body.phone ?? "",
     purpose,
     code: body.code ?? "",

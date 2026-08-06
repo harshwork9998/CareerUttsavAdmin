@@ -6,7 +6,22 @@ import type { OtpChallenge } from "@/lib/otp/types";
 const DATA_DIR = path.join(process.cwd(), "data");
 const STORE_PATH = path.join(DATA_DIR, "otp-store.json");
 
+/** In-memory override for Vitest (null = use filesystem). */
+let testStore: OtpChallenge[] | null = null;
+
+export function __setOtpStoreForTests(challenges: OtpChallenge[] | null): void {
+  testStore = challenges === null ? null : challenges.map((c) => ({ ...c }));
+}
+
+export function __resetOtpStoreForTests(): void {
+  testStore = null;
+}
+
 function ensureStore(): OtpChallenge[] {
+  if (testStore) {
+    return testStore.map((c) => ({ ...c }));
+  }
+
   fs.mkdirSync(DATA_DIR, { recursive: true });
   if (!fs.existsSync(STORE_PATH)) {
     fs.writeFileSync(STORE_PATH, "[]", "utf-8");
@@ -26,6 +41,10 @@ export function loadOtpChallenges(): OtpChallenge[] {
 }
 
 export function saveOtpChallenges(challenges: OtpChallenge[]): void {
+  if (testStore !== null) {
+    testStore = challenges.map((c) => ({ ...c }));
+    return;
+  }
   fs.mkdirSync(DATA_DIR, { recursive: true });
   fs.writeFileSync(STORE_PATH, JSON.stringify(challenges, null, 2), "utf-8");
 }
