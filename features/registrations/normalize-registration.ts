@@ -1,3 +1,4 @@
+import { canonicalizeClassLabel } from "@/lib/registration-validation";
 import type { StudentRegistration } from "@/types";
 
 const FEMALE_FIRST_NAMES = new Set([
@@ -41,18 +42,19 @@ function inferStream(course?: string): string {
 }
 
 const SCHOOL_CLASSES = [
-  "Grade 9",
-  "Grade 10",
-  "Grade 11 (I PUC)",
-  "Grade 12 (II PUC)",
+  "Class 9",
+  "Class 10",
+  "Class 11 (I PUC)",
+  "Class 12 (II PUC)",
   "Others",
 ] as const;
 
 function inferClass(r: StudentRegistration): string {
-  if (SCHOOL_CLASSES.includes(r.classLabel as (typeof SCHOOL_CLASSES)[number])) {
-    return r.classLabel as (typeof SCHOOL_CLASSES)[number];
+  const label = canonicalizeClassLabel(r.classLabel);
+  if (SCHOOL_CLASSES.includes(label as (typeof SCHOOL_CLASSES)[number])) {
+    return label;
   }
-  // School fair — grades 4–12 only (no university years)
+  // School fair — classes 4–12 only (no university years)
   return SCHOOL_CLASSES[(r.college?.length || 0) % SCHOOL_CLASSES.length];
 }
 

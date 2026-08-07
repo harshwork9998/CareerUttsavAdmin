@@ -1,3 +1,4 @@
+import { canonicalizeSeminarTitle } from "@/features/dashboard/seminars";
 import { nextRegistrationNumber } from "@/lib/registration-number";
 import type {
   Event,
@@ -12,12 +13,19 @@ import type {
 export const MAX_SEMINAR_INTERESTS = 3;
 
 export const REGISTRATION_CLASS_OPTIONS = [
-  "Grade 9",
-  "Grade 10",
-  "Grade 11 (I PUC)",
-  "Grade 12 (II PUC)",
+  "Class 9",
+  "Class 10",
+  "Class 11 (I PUC)",
+  "Class 12 (II PUC)",
   "Others",
 ] as const;
+
+/** Map legacy "Grade …" labels onto "Class …" so counts never split. */
+export function canonicalizeClassLabel(value: string | undefined): string {
+  const trimmed = value?.trim() ?? "";
+  if (!trimmed) return trimmed;
+  return trimmed.replace(/^Grade\b/i, "Class");
+}
 
 export const REGISTRATION_STREAM_OPTIONS = [
   "Science",
@@ -107,7 +115,7 @@ export function normalizeSeminarInterests(
 ): string[] {
   const unique: string[] = [];
   for (const title of interests ?? []) {
-    const trimmed = title.trim();
+    const trimmed = canonicalizeSeminarTitle(title);
     if (!trimmed || unique.includes(trimmed)) continue;
     unique.push(trimmed);
   }
@@ -161,7 +169,7 @@ function validateStudentCreate(
     return { ok: false, error: "School/college is required" };
   }
 
-  const classLabel = body.classLabel?.trim() ?? "";
+  const classLabel = canonicalizeClassLabel(body.classLabel);
   if (
     !REGISTRATION_CLASS_OPTIONS.includes(
       classLabel as (typeof REGISTRATION_CLASS_OPTIONS)[number]
@@ -338,7 +346,7 @@ function validateAmbassadorCreate(
     return { ok: false, error: "Name is required" };
   }
 
-  const ambassadorClass = body.ambassadorClass?.trim() ?? "";
+  const ambassadorClass = canonicalizeClassLabel(body.ambassadorClass);
   if (
     !REGISTRATION_CLASS_OPTIONS.includes(
       ambassadorClass as (typeof REGISTRATION_CLASS_OPTIONS)[number]

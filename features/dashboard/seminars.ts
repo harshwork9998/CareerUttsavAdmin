@@ -153,13 +153,55 @@ export type CareerInterestRow = {
   seminars: Array<{ name: string; value: number }>;
 };
 
+/**
+ * Loose key so website/admin title variants match the same seminar
+ * (quotes, dashes vs colons, Art/Arts, extra words like "or"/"the").
+ */
+export function seminarMatchKey(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[''`´"]/g, "")
+    .replace(/[–—−‑-]/g, " ")
+    .replace(/[:;,./!?()]/g, " ")
+    .replace(/\barts\b/g, "art")
+    .replace(/\b(a|an|the|of|in|or|and|to|for|with|my)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Map a stored/website title onto the closest catalogue title when possible. */
+export function canonicalizeSeminarTitle(
+  title: string,
+  catalog: readonly string[] = CAREER_UTTSAV_SEMINARS
+): string {
+  const trimmed = title.trim();
+  if (!trimmed) return trimmed;
+
+  const exact = catalog.find((entry) => entry === trimmed);
+  if (exact) return exact;
+
+  const key = seminarMatchKey(trimmed);
+  if (!key) return trimmed;
+
+  const hit = catalog.find((entry) => seminarMatchKey(entry) === key);
+  return hit ?? trimmed;
+}
+
+export function seminarTitlesMatch(a: string, b: string): boolean {
+  const left = seminarMatchKey(a);
+  const right = seminarMatchKey(b);
+  return Boolean(left) && left === right;
+}
+
 /** Sum seminar interest counts into the four career tracks. */
 export function aggregateByCareerInterest(
   bySeminar: Array<{ name: string; value: number }>
 ): CareerInterestRow[] {
-  const seminarMap = new Map(
-    bySeminar.map((row) => [String(row.name), Number(row.value)])
-  );
+  const seminarMap = new Map<string, number>();
+  for (const row of bySeminar) {
+    const name = canonicalizeSeminarTitle(String(row.name));
+    seminarMap.set(name, (seminarMap.get(name) ?? 0) + Number(row.value));
+  }
 
   return CAREER_INTEREST_CATEGORIES.map((category) => {
     const seminars = category.seminars.map((name) => ({

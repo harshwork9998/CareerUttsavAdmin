@@ -1,4 +1,6 @@
+import { canonicalizeSeminarTitle } from "@/features/dashboard/seminars";
 import { isStudentRegistration } from "@/lib/registration-kinds";
+import { canonicalizeClassLabel } from "@/lib/registration-validation";
 import { resolveEventCity } from "@/lib/resolve-event-city";
 import { citiesMatch, getEventCities } from "@/lib/event-cities";
 import type {
@@ -27,18 +29,18 @@ function countBy(
 }
 
 function classSegment(classLabel: string): "lower" | "core" | undefined {
-  const match = classLabel.match(/(?:Class|Grade)\s*(\d+)/i);
+  const match = classLabel.match(/Class\s*(\d+)/i);
   if (!match) return undefined;
-  const grade = Number(match[1]);
-  if (grade <= 8) return "lower";
-  if (grade >= 9) return "core";
+  const classNumber = Number(match[1]);
+  if (classNumber <= 8) return "lower";
+  if (classNumber >= 9) return "core";
   return undefined;
 }
 
 function buildByClass(registrations: StudentRegistration[]): ChartDataPoint[] {
   const map = new Map<string, { value: number; segment?: "lower" | "core" }>();
   for (const registration of registrations) {
-    const name = registration.classLabel?.trim();
+    const name = canonicalizeClassLabel(registration.classLabel);
     if (!name) continue;
     const prev = map.get(name);
     map.set(name, {
@@ -53,9 +55,9 @@ function buildByClass(registrations: StudentRegistration[]): ChartDataPoint[] {
       ...(row.segment ? { segment: row.segment } : {}),
     }))
     .sort((a, b) => {
-      const grade = (label: string) =>
+      const classNumber = (label: string) =>
         Number(label.match(/Class (\d+)/)?.[1] ?? 0);
-      return grade(String(a.name)) - grade(String(b.name));
+      return classNumber(String(a.name)) - classNumber(String(b.name));
     });
 }
 
@@ -63,7 +65,7 @@ function buildBySeminar(registrations: StudentRegistration[]): ChartDataPoint[] 
   const map = new Map<string, number>();
   for (const registration of registrations) {
     for (const seminar of registration.seminarInterests ?? []) {
-      const title = seminar.trim();
+      const title = canonicalizeSeminarTitle(seminar);
       if (!title) continue;
       map.set(title, (map.get(title) ?? 0) + 1);
     }
@@ -148,7 +150,7 @@ function buildLiveFeed(registrations: StudentRegistration[]): LiveRegistrationIt
     .map((registration) => ({
       id: registration.id,
       studentName: registration.studentName,
-      classLabel: registration.classLabel ?? "Class 10",
+      classLabel: canonicalizeClassLabel(registration.classLabel) || "Class 10",
       stream: registration.interestedStream,
       board: registration.board,
       school: registration.college,

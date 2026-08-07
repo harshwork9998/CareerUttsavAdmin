@@ -1,5 +1,7 @@
+import { seminarTitlesMatch } from "@/features/dashboard/seminars";
 import { citiesMatch, getEventCities } from "@/lib/event-cities";
 import { isStudentRegistration } from "@/lib/registration-kinds";
+import { canonicalizeClassLabel } from "@/lib/registration-validation";
 import { resolveEventCity } from "@/lib/resolve-event-city";
 import type { ChartDataPoint, Event, Registration, StudentRegistration } from "@/types";
 
@@ -43,16 +45,16 @@ function countBy(
 function buildByClass(registrations: StudentRegistration[]): ChartDataPoint[] {
   const map = new Map<string, number>();
   for (const registration of registrations) {
-    const name = registration.classLabel?.trim();
+    const name = canonicalizeClassLabel(registration.classLabel);
     if (!name) continue;
     map.set(name, (map.get(name) ?? 0) + 1);
   }
   return Array.from(map.entries())
     .map(([name, value]) => ({ name, value }))
     .sort((a, b) => {
-      const grade = (label: string) =>
+      const classNumber = (label: string) =>
         Number(label.match(/Class (\d+)/)?.[1] ?? 0);
-      return grade(a.name) - grade(b.name);
+      return classNumber(a.name) - classNumber(b.name);
     });
 }
 
@@ -60,9 +62,8 @@ function registrationHasSeminar(
   registration: StudentRegistration,
   seminarName: string
 ): boolean {
-  const target = seminarName.trim().toLowerCase();
-  return (registration.seminarInterests ?? []).some(
-    (seminar: string) => seminar.trim().toLowerCase() === target
+  return (registration.seminarInterests ?? []).some((seminar) =>
+    seminarTitlesMatch(seminar, seminarName)
   );
 }
 

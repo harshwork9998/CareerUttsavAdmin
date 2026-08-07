@@ -1,4 +1,5 @@
 import { REGISTRATION_STATUSES } from "@/constants";
+import { canonicalizeClassLabel } from "@/lib/registration-validation";
 import type {
   PartnerRegistrationEntry,
   Registration,
@@ -84,10 +85,19 @@ export function migrateLegacyRegistration(
     raw.kind === "partner_registration" ||
     raw.kind === "student_ambassador"
   ) {
-    return {
+    const registration = {
       ...(raw as unknown as Registration),
       status: normalizeRegistrationStatus(raw.status),
     };
+    if (registration.kind === "student") {
+      registration.classLabel = canonicalizeClassLabel(registration.classLabel);
+    }
+    if (registration.kind === "student_ambassador") {
+      registration.ambassadorClass = canonicalizeClassLabel(
+        registration.ambassadorClass
+      );
+    }
+    return registration;
   }
 
   return {
@@ -111,7 +121,9 @@ export function migrateLegacyRegistration(
       typeof raw.parentPhone === "string" ? raw.parentPhone : undefined,
     college: String(raw.college ?? ""),
     classLabel:
-      typeof raw.classLabel === "string" ? raw.classLabel : undefined,
+      typeof raw.classLabel === "string"
+        ? canonicalizeClassLabel(raw.classLabel)
+        : undefined,
     interestedStream:
       typeof raw.interestedStream === "string"
         ? raw.interestedStream

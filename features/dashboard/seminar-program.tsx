@@ -21,7 +21,10 @@ import {
   DASH_COLORS,
   surface,
 } from "@/features/dashboard/dashboard-ui";
-import { CAREER_UTTSAV_SEMINARS } from "@/features/dashboard/seminars";
+import {
+  CAREER_UTTSAV_SEMINARS,
+  canonicalizeSeminarTitle,
+} from "@/features/dashboard/seminars";
 import { SeminarBroadcastDialog } from "@/features/messaging/seminar-broadcast-dialog";
 import { citiesMatch } from "@/lib/event-cities";
 import {
@@ -565,10 +568,11 @@ export function SeminarProgram({
   const byName = useMemo(() => {
     const map = new Map<string, number>();
     for (const item of items) {
-      map.set(item.name, Number(item.value));
+      const name = canonicalizeSeminarTitle(item.name, catalog);
+      map.set(name, (map.get(name) ?? 0) + Number(item.value));
     }
     return map;
-  }, [items]);
+  }, [items, catalog]);
 
   const seminars = useMemo(() => {
     return catalog.map((name) => ({

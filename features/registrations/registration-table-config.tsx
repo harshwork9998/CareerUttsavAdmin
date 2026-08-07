@@ -8,6 +8,7 @@ import {
   isStudentAmbassadorRegistration,
   isStudentRegistration,
 } from "@/lib/registration-kinds";
+import { canonicalizeClassLabel } from "@/lib/registration-validation";
 import { formatDateTime } from "@/lib/utils";
 import type { ColumnDef } from "@/components/shared";
 import type { Registration, RegistrationKind } from "@/types";
@@ -101,7 +102,7 @@ export function buildRegistrationColumns(
         cell: ({ row }) => (
           <span className="whitespace-nowrap text-sm">
             {isStudentRegistration(row.original)
-              ? (row.original.classLabel ?? "—")
+              ? (canonicalizeClassLabel(row.original.classLabel) || "—")
               : "—"}
           </span>
         ),
@@ -323,7 +324,7 @@ export function buildRegistrationColumns(
       cell: ({ row }) => (
         <span className="whitespace-nowrap text-sm">
           {isStudentAmbassadorRegistration(row.original)
-            ? row.original.ambassadorClass
+            ? canonicalizeClassLabel(row.original.ambassadorClass) || "—"
             : "—"}
         </span>
       ),
@@ -456,7 +457,7 @@ export function exportRowForKind(
       registration.studentName,
       registration.college,
       eventTitle,
-      registration.classLabel ?? "",
+      canonicalizeClassLabel(registration.classLabel),
       registration.interestedStream ?? "",
       registration.board ?? "",
       formatSeminarInterests(registration),
@@ -498,7 +499,7 @@ export function exportRowForKind(
       registeredAt,
       passId,
       registration.ambassadorName,
-      registration.ambassadorClass,
+      canonicalizeClassLabel(registration.ambassadorClass),
       registration.ambassadorSchoolCollege,
       eventTitle,
       String(registration.ambassadorAge),
@@ -530,7 +531,7 @@ export function registrationMatchesSearch(
       registration.phone,
       registration.parentPhone ?? "",
       registration.college,
-      registration.classLabel ?? "",
+      canonicalizeClassLabel(registration.classLabel),
       registration.interestedStream ?? "",
       registration.board ?? "",
       formatSeminarInterests(registration),
@@ -555,7 +556,7 @@ export function registrationMatchesSearch(
     );
   } else if (isStudentAmbassadorRegistration(registration)) {
     haystack.push(
-      registration.ambassadorClass,
+      canonicalizeClassLabel(registration.ambassadorClass),
       registration.ambassadorSchoolCollege,
       String(registration.ambassadorAge),
       registration.ambassadorPhone,

@@ -24,6 +24,10 @@ import {
   registrationMatchesAllSeminars,
   slugifySeminarFilters,
 } from "@/lib/registration-seminar-filters";
+import {
+  canonicalizeClassLabel,
+  REGISTRATION_CLASS_OPTIONS,
+} from "@/lib/registration-validation";
 import { cn, formatNumber } from "@/lib/utils";
 import type { Registration, RegistrationKind } from "@/types";
 import type { FilterConfig } from "@/components/shared";
@@ -226,19 +230,14 @@ export function RegistrationsList() {
   );
 
   const classOptions = useMemo(() => {
-    const order = [
-      "Grade 9",
-      "Grade 10",
-      "Grade 11 (I PUC)",
-      "Grade 12 (II PUC)",
-      "Others",
-    ];
     const present = new Set(
-      studentRegistrations.map((r) => r.classLabel).filter(Boolean)
+      studentRegistrations
+        .map((r) => canonicalizeClassLabel(r.classLabel))
+        .filter(Boolean)
     );
-    return order
-      .filter((value) => present.has(value))
-      .map((value) => ({ label: value, value }));
+    return REGISTRATION_CLASS_OPTIONS.filter((value) => present.has(value)).map(
+      (value) => ({ label: value, value })
+    );
   }, [studentRegistrations]);
 
   const streamOptions = useMemo(
@@ -296,7 +295,11 @@ export function RegistrationsList() {
       if (!registrationMatchesEventFilter(r, eventFilter)) return false;
 
       if (isStudentRegistration(r)) {
-        if (classFilter !== "all" && r.classLabel !== classFilter) return false;
+        if (
+          classFilter !== "all" &&
+          canonicalizeClassLabel(r.classLabel) !== classFilter
+        )
+          return false;
         if (streamFilter !== "all" && r.interestedStream !== streamFilter)
           return false;
         if (boardFilter !== "all" && r.board !== boardFilter) return false;

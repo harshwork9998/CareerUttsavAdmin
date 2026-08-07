@@ -1,10 +1,7 @@
+import { seminarMatchKey } from "@/features/dashboard/seminars";
 import { isStudentRegistration } from "@/lib/registration-kinds";
 import { getPrimarySeminar } from "@/lib/enrich-registration";
 import type { Registration } from "@/types";
-
-function normalizeSeminarTitle(title: string): string {
-  return title.trim().toLowerCase();
-}
 
 /** Seminar titles stored on a registration (explicit picks or inferred primary). */
 export function getRegistrationSeminarInterests(
@@ -28,11 +25,11 @@ export function registrationMatchesAllSeminars(
   if (requiredSeminars.length === 0) return true;
 
   const interests = new Set(
-    getRegistrationSeminarInterests(registration).map(normalizeSeminarTitle)
+    getRegistrationSeminarInterests(registration).map(seminarMatchKey)
   );
 
   return requiredSeminars.every((seminar) =>
-    interests.has(normalizeSeminarTitle(seminar))
+    interests.has(seminarMatchKey(seminar))
   );
 }
 
