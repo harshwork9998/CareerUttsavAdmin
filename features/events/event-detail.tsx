@@ -20,11 +20,17 @@ import { toast } from "sonner";
 import {
   eventsService,
   partnersService,
+  registrationsService,
 } from "@/services/api";
+import { getPartnerTierForEvent } from "@/lib/partner-event-config";
+import { isStudentRegistration } from "@/lib/registration-kinds";
 import { cn, formatDate, formatDateTime, formatNumber } from "@/lib/utils";
 import { CreateEventDialog } from "@/features/events/create-event-dialog";
 import { SeminarProgram } from "@/features/dashboard/seminar-program";
-import { buildEventSeminarRegistrationItems } from "@/features/dashboard/seminars";
+import {
+  canonicalizeSeminarTitle,
+  seminarTitlesMatch,
+} from "@/features/dashboard/seminars";
 import {
   BRAND,
   INK,
@@ -43,7 +49,42 @@ import {
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { Event, EventSeminar, OperatingCity } from "@/types";
+import type { Event, EventSeminar, OperatingCity, Registration } from "@/types";
+
+function isCheckedIn(registration: Registration): boolean {
+  return (
+    registration.status === "Checked In" || Boolean(registration.checkInTime)
+  );
+}
+
+function buildLiveSeminarInterestItems(
+  registrations: Registration[],
+  seminarTitles: readonly string[]
+): Array<{ name: string; value: number }> {
+  if (seminarTitles.length === 0) return [];
+
+  const map = new Map<string, number>();
+  for (const title of seminarTitles) {
+    map.set(title, 0);
+  }
+
+  for (const registration of registrations) {
+    if (!isStudentRegistration(registration)) continue;
+    for (const interest of registration.seminarInterests ?? []) {
+      const canonical = canonicalizeSeminarTitle(interest, seminarTitles);
+      const matched =
+        seminarTitles.find((title) => seminarTitlesMatch(title, canonical)) ??
+        null;
+      if (!matched) continue;
+      map.set(matched, (map.get(matched) ?? 0) + 1);
+    }
+  }
+
+  return seminarTitles.map((name) => ({
+    name,
+    value: map.get(name) ?? 0,
+  }));
+}
 
 function formatSeminarTime(time: string): string {
   if (!time) return "—";
@@ -124,11 +165,20 @@ export function EventDetail({ eventId }: EventDetailProps) {
   const partnersQuery = useQuery({
     queryKey: ["partners", "event", eventId],
     queryFn: () => partnersService.getByEvent(eventId),
-    enabled: activeTab === "partners" || activeTab === "overview",
+  });
+
+  const registrationsQuery = useQuery({
+    queryKey: ["registrations", "event", eventId],
+    queryFn: () => registrationsService.getByEvent(eventId),
   });
 
   const event = eventQuery.data;
   const partners = partnersQuery.data ?? [];
+  const registrations = registrationsQuery.data ?? [];
+
+  const liveRegistrationCount = registrations.length;
+  const liveCheckInCount = registrations.filter(isCheckedIn).length;
+  const livePartnerCount = partners.length;
 
   const seminarDays = useMemo(() => {
     if (!event) return [];
@@ -154,13 +204,10 @@ export function EventDetail({ eventId }: EventDetailProps) {
     [event?.seminars]
   );
 
-  const seminarRegistrationItems = useMemo(() => {
-    if (!event) return [];
-    return buildEventSeminarRegistrationItems(
-      eventSeminarTitles,
-      event.registrationCount
-    );
-  }, [event, eventSeminarTitles]);
+  const seminarRegistrationItems = useMemo(
+    () => buildLiveSeminarInterestItems(registrations, eventSeminarTitles),
+    [registrations, eventSeminarTitles]
+  );
 
   if (eventQuery.isLoading) {
     return (
@@ -287,9 +334,9 @@ export function EventDetail({ eventId }: EventDetailProps) {
             </div>
           </div>
 
-          <div className="grid shrink-0 grid-cols-2 gap-3">
+          <div className="grid shrink-0 grid-cols-3 gap-3">
             <div
-              className="flex min-w-[8.5rem] flex-col items-center justify-center rounded-2xl px-6 py-5 text-center sm:min-w-[10rem]"
+              className="flex min-w-[7.5rem] flex-col items-center justify-center rounded-2xl px-4 py-5 text-center sm:min-w-[9rem] sm:px-6"
               style={{
                 background: PAPER.muted,
                 border: `1px solid ${LINE.subtle}`,
@@ -302,14 +349,16 @@ export function EventDetail({ eventId }: EventDetailProps) {
                 )}
                 style={{ color: INK.primary }}
               >
-                {formatNumber(event.registrationCount)}
+                {registrationsQuery.isLoading
+                  ? "—"
+                  : formatNumber(liveRegistrationCount)}
               </p>
               <p className="mt-2 text-sm leading-none" style={{ color: INK.muted }}>
                 Registrations
               </p>
             </div>
             <div
-              className="flex min-w-[8.5rem] flex-col items-center justify-center rounded-2xl px-6 py-5 text-center sm:min-w-[10rem]"
+              className="flex min-w-[7.5rem] flex-col items-center justify-center rounded-2xl px-4 py-5 text-center sm:min-w-[9rem] sm:px-6"
               style={{
                 background: PAPER.muted,
                 border: `1px solid ${LINE.subtle}`,
@@ -322,10 +371,32 @@ export function EventDetail({ eventId }: EventDetailProps) {
                 )}
                 style={{ color: INK.primary }}
               >
-                {formatNumber(event.checkInCount)}
+                {registrationsQuery.isLoading
+                  ? "—"
+                  : formatNumber(liveCheckInCount)}
               </p>
               <p className="mt-2 text-sm leading-none" style={{ color: INK.muted }}>
                 Check-ins
+              </p>
+            </div>
+            <div
+              className="flex min-w-[7.5rem] flex-col items-center justify-center rounded-2xl px-4 py-5 text-center sm:min-w-[9rem] sm:px-6"
+              style={{
+                background: PAPER.muted,
+                border: `1px solid ${LINE.subtle}`,
+              }}
+            >
+              <p
+                className={cn(
+                  displayClass,
+                  "text-3xl font-semibold leading-none tabular-nums sm:text-4xl"
+                )}
+                style={{ color: INK.primary }}
+              >
+                {partnersQuery.isLoading ? "—" : formatNumber(livePartnerCount)}
+              </p>
+              <p className="mt-2 text-sm leading-none" style={{ color: INK.muted }}>
+                Partners
               </p>
             </div>
           </div>
@@ -539,12 +610,15 @@ export function EventDetail({ eventId }: EventDetailProps) {
               items={seminarRegistrationItems}
               isAllCities={false}
               cityLabel={eventOperatingCity(event.city)}
+              eventCities={[eventOperatingCity(event.city)]}
+              registrations={registrations}
+              events={[event]}
               seminarTitles={eventSeminarTitles}
               uniformCards
               eventId={event.id}
               eventTitle={event.title}
               eventSeminars={event.seminars ?? []}
-              subtitle={`${eventSeminarTitles.length} scheduled seminar${eventSeminarTitles.length === 1 ? "" : "s"} · tap for breakdown`}
+              subtitle={`${eventSeminarTitles.length} scheduled seminar${eventSeminarTitles.length === 1 ? "" : "s"} · live interest from registrations`}
             />
           )}
         </TabsContent>
@@ -582,7 +656,9 @@ export function EventDetail({ eventId }: EventDetailProps) {
               />
             ) : (
               <div className="grid gap-3 sm:grid-cols-2">
-                {partners.map((partner) => (
+                {partners.map((partner) => {
+                  const eventTier = getPartnerTierForEvent(partner, event.id);
+                  return (
                   <div
                     key={partner.id}
                     className="rounded-xl border px-4 py-3.5"
@@ -599,9 +675,7 @@ export function EventDetail({ eventId }: EventDetailProps) {
                     </p>
                     <p className="mt-1 text-xs" style={{ color: INK.muted }}>
                       {partner.stage}
-                      {partner.sponsorshipTier
-                        ? ` · ${partner.sponsorshipTier}`
-                        : ""}
+                      {eventTier ? ` · ${eventTier}` : ""}
                     </p>
                     <div
                       className="mt-3 space-y-1 text-xs"
@@ -623,7 +697,8 @@ export function EventDetail({ eventId }: EventDetailProps) {
                       </p>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

@@ -365,8 +365,15 @@ export interface Partner {
   commercialsConfirmedAt?: string;
   /** Partner portal login (usually primary contact email) */
   portalLogin?: string;
-  /** Temporary password issued for first partner-portal login */
+  /**
+   * Write-only: plaintext password from Admin/Partner UI.
+   * Never persisted — converted to portalPasswordHash on save.
+   */
   portalTempPassword?: string;
+  /** Salted scrypt hash of the partner portal password */
+  portalPasswordHash?: string;
+  /** Present on API responses when a password hash exists (never includes the secret) */
+  hasPortalPassword?: boolean;
   /** Email address the invite was sent to */
   portalInviteEmail?: string;
   /** When the welcome email with credentials was sent */

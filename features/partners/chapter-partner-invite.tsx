@@ -26,6 +26,7 @@ export function ChapterPartnerInvite(props: {
   login: string;
   setLogin: (v: string) => void;
   temporaryPassword: string;
+  passwordAlreadySet?: boolean;
   onRegeneratePassword: () => void;
   errors: Record<string, string>;
 }) {
@@ -114,7 +115,10 @@ export function ChapterPartnerInvite(props: {
                 <Label>Temporary password</Label>
                 <div className="flex gap-2">
                   <Input
-                    value={props.temporaryPassword}
+                    value={
+                      props.temporaryPassword ||
+                      (props.passwordAlreadySet ? "••••••••••••" : "")
+                    }
                     readOnly
                     className="bg-white font-mono"
                   />
@@ -125,6 +129,7 @@ export function ChapterPartnerInvite(props: {
                     onClick={() =>
                       copyText("Temporary password", props.temporaryPassword)
                     }
+                    disabled={!props.temporaryPassword}
                     aria-label="Copy password"
                   >
                     <Copy className="h-4 w-4" />
@@ -139,6 +144,17 @@ export function ChapterPartnerInvite(props: {
                     <RefreshCw className="h-4 w-4" />
                   </Button>
                 </div>
+                {props.passwordAlreadySet && !props.temporaryPassword ? (
+                  <p className="text-xs" style={{ color: INK.muted }}>
+                    A password is already saved securely. Regenerate to create a
+                    new one for the invite email.
+                  </p>
+                ) : (
+                  <p className="text-xs" style={{ color: INK.muted }}>
+                    Shown once here for the invite — only a secure hash is stored.
+                  </p>
+                )}
+                <FieldError message={props.errors.password} />
               </div>
             </div>
           </div>

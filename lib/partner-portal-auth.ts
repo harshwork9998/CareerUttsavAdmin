@@ -1,3 +1,7 @@
+import {
+  partnerHasPortalPassword,
+  verifyStoredPartnerPassword,
+} from "@/lib/partner-credentials";
 import { loadPartners } from "@/lib/server/partners-persistence";
 import type { Partner } from "@/types";
 
@@ -34,7 +38,7 @@ export type PartnerPortalAuthResult =
 
 /**
  * Authenticate a partner portal login against the Admin partners store.
- * Credentials are plaintext on the Partner record (issued in Chapter 8).
+ * Passwords are verified against a salted hash (never stored as plaintext).
  */
 export function authenticatePartnerPortalLogin(input: {
   login: string;
@@ -62,8 +66,7 @@ export function authenticatePartnerPortalLogin(input: {
     };
   }
 
-  const expected = partner.portalTempPassword ?? "";
-  if (!expected) {
+  if (!partnerHasPortalPassword(partner)) {
     return {
       ok: false,
       status: 401,
@@ -76,7 +79,7 @@ export function authenticatePartnerPortalLogin(input: {
   // so draft-saved Chapter 8 credentials still work before "Send email & finish".
   const activated =
     Boolean(partner.portalInviteSentAt) ||
-    Boolean(partner.portalLogin && partner.portalTempPassword);
+    Boolean(partner.portalLogin && partnerHasPortalPassword(partner));
   if (!activated) {
     return {
       ok: false,
@@ -86,7 +89,7 @@ export function authenticatePartnerPortalLogin(input: {
     };
   }
 
-  if (expected !== password) {
+  if (!verifyStoredPartnerPassword(partner, password)) {
     return {
       ok: false,
       status: 401,

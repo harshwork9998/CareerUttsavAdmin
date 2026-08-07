@@ -182,6 +182,20 @@ export function getPartnerDisplayTier(partner: Partner): string | undefined {
   return `${unique[0]} +${unique.length - 1}`;
 }
 
+/** Tier for one event — prefers that event's package over the legacy overall tier. */
+export function getPartnerTierForEvent(
+  partner: Partner,
+  eventId: string
+): string | undefined {
+  const ep = resolveEventPartnerships(partner).find(
+    (row) => row.eventId === eventId
+  );
+  if (ep && hasPartnershipTier(ep)) {
+    return getPartnershipTierLabel(ep);
+  }
+  return partner.sponsorshipTier;
+}
+
 export function partnerMatchesTierFilter(
   partner: Partner,
   tier: string

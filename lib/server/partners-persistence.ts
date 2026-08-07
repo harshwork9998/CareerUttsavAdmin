@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 
+import { migratePartnerCredentials } from "@/lib/partner-credentials";
 import { enrichPartnersWithEventCatalog } from "@/lib/partner-event-config";
 import { mockPartners } from "@/lib/mock-data/partners";
 import { getEventCatalog } from "@/lib/server/events-catalog";
@@ -10,7 +11,19 @@ const DATA_DIR = path.join(process.cwd(), "data");
 const STORE_PATH = path.join(DATA_DIR, "partners-store.json");
 
 function enrichStoredPartners(partners: Partner[]): Partner[] {
-  return enrichPartnersWithEventCatalog(partners, getEventCatalog());
+  return enrichPartnersWithEventCatalog(partners, getEventCatalog()).map(
+    migratePartnerCredentials
+  );
+}
+
+function credentialsDigest(partners: Partner[]): string {
+  return JSON.stringify(
+    partners.map((p) => ({
+      id: p.id,
+      hash: p.portalPasswordHash ?? null,
+      temp: p.portalTempPassword ?? null,
+    }))
+  );
 }
 
 function seminarAssignmentsDigest(partners: Partner[]): string {
@@ -36,7 +49,11 @@ export function loadPartners(): Partner[] {
       return seedStore();
     }
     const enriched = enrichStoredPartners(parsed);
-    if (seminarAssignmentsDigest(parsed) !== seminarAssignmentsDigest(enriched)) {
+    const assignmentsChanged =
+      seminarAssignmentsDigest(parsed) !== seminarAssignmentsDigest(enriched);
+    const credentialsChanged =
+      credentialsDigest(parsed) !== credentialsDigest(enriched);
+    if (assignmentsChanged || credentialsChanged) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
       fs.writeFileSync(STORE_PATH, JSON.stringify(enriched, null, 2), "utf-8");
     }

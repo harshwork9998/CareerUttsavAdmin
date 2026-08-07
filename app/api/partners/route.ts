@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 
+import {
+  applyPartnerCredentialFields,
+  toPublicPartner,
+} from "@/lib/partner-credentials";
 import { loadPartners, savePartners } from "@/lib/server/partners-persistence";
 import { validatePartnerCreate } from "@/lib/partner-validation";
 import { generateId } from "@/lib/utils";
@@ -9,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   const partners = loadPartners();
-  return NextResponse.json(partners);
+  return NextResponse.json(partners.map(toPublicPartner));
 }
 
 export async function POST(request: Request) {
@@ -23,13 +27,16 @@ export async function POST(request: Request) {
   }
 
   const now = new Date().toISOString();
-  const created: Partner = {
-    ...validated.data,
-    id: generateId(),
-    createdAt: now,
-    updatedAt: now,
-  };
+  const created = applyPartnerCredentialFields(
+    {
+      ...validated.data,
+      id: generateId(),
+      createdAt: now,
+      updatedAt: now,
+    } as Partner,
+    validated.data
+  );
   const partners = loadPartners();
   savePartners([created, ...partners]);
-  return NextResponse.json(created);
+  return NextResponse.json(toPublicPartner(created));
 }

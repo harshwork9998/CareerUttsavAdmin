@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 
+import {
+  applyPartnerCredentialFields,
+  toPublicPartner,
+} from "@/lib/partner-credentials";
 import { loadPartners, savePartners } from "@/lib/server/partners-persistence";
 import type { Partner } from "@/types";
 
@@ -13,7 +17,7 @@ export async function GET(_request: Request, context: RouteContext) {
   if (!partner) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  return NextResponse.json(partner);
+  return NextResponse.json(toPublicPartner(partner));
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
@@ -24,16 +28,14 @@ export async function PATCH(request: Request, context: RouteContext) {
   if (idx === -1) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  const updated: Partner = {
-    ...partners[idx],
+  const updated = applyPartnerCredentialFields(partners[idx], {
     ...patch,
-    id: partners[idx].id,
     updatedAt: new Date().toISOString(),
-  };
+  });
   const next = [...partners];
   next[idx] = updated;
   savePartners(next);
-  return NextResponse.json(updated);
+  return NextResponse.json(toPublicPartner(updated));
 }
 
 export async function DELETE(_request: Request, context: RouteContext) {
@@ -44,5 +46,5 @@ export async function DELETE(_request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
   savePartners(next);
-  return NextResponse.json(next);
+  return NextResponse.json(next.map(toPublicPartner));
 }

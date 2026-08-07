@@ -426,7 +426,13 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       partner.portalInviteEmail || partner.primaryContact.email || ""
     );
     setPortalLogin(resolvePortalLogin(partner));
-    setTempPassword((prev) => partner.portalTempPassword || prev || generateTempPassword());
+    setTempPassword((prev) => {
+      if (prev) return prev;
+      // Password is never returned from the API (hash only). Existing partners
+      // must regenerate to set/send a new one; new partners get a fresh temp.
+      if (partner.hasPortalPassword) return "";
+      return generateTempPassword();
+    });
   }, [partner?.id, partnerQuery.isSuccess, spocsQuery.isSuccess, spocsQuery.data]);
 
   // Once SPOCs load, resolve dropdown for an already-hydrated partner.
@@ -734,7 +740,6 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
         netAmount: partner?.netAmount,
         commercialsConfirmedAt: partner?.commercialsConfirmedAt,
         portalLogin: partner?.portalLogin,
-        portalTempPassword: partner?.portalTempPassword,
         portalInviteEmail: partner?.portalInviteEmail,
         portalInviteSentAt: partner?.portalInviteSentAt,
       };
@@ -808,11 +813,15 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     }
     if (chapter === 8) {
       const login = portalLogin.trim().toLowerCase();
-      const hasCredentials = Boolean(login && tempPassword.trim());
+      const password = tempPassword.trim();
+      const hasCredentials = Boolean(
+        login && (password || partner.hasPortalPassword)
+      );
       return {
         ...partner,
         portalLogin: login || partner.portalLogin,
-        portalTempPassword: tempPassword || partner.portalTempPassword,
+        // Write-only plaintext — API hashes and discards it.
+        ...(password ? { portalTempPassword: password } : {}),
         portalInviteEmail: inviteEmail.trim() || partner.portalInviteEmail,
         // Activate portal access as soon as credentials exist (email send is separate).
         portalInviteSentAt:
@@ -1147,7 +1156,6 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       netAmount: partner?.netAmount,
       commercialsConfirmedAt: partner?.commercialsConfirmedAt,
       portalLogin: partner?.portalLogin,
-      portalTempPassword: partner?.portalTempPassword,
       portalInviteEmail: partner?.portalInviteEmail,
       portalInviteSentAt: partner?.portalInviteSentAt,
     };
@@ -1508,7 +1516,11 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     if (!login || !isPartnerPortalEmail(login)) {
       next.login = "Login must be a valid email";
     }
-    if (!tempPassword.trim()) next.password = "Password required";
+    if (!tempPassword.trim()) {
+      next.password = partner.hasPortalPassword
+        ? "Regenerate a password to include it in the invite email"
+        : "Password required";
+    }
     if (applyFormErrors(setErrors, next)) return;
 
     // Open Gmail immediately under the user gesture (before any await).
@@ -1968,6 +1980,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
                     login={portalLogin}
                     setLogin={setPortalLogin}
                     temporaryPassword={tempPassword}
+                    passwordAlreadySet={Boolean(partner.hasPortalPassword)}
                     onRegeneratePassword={() =>
                       setTempPassword(generateTempPassword())
                     }
