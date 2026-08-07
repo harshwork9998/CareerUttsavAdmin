@@ -8,6 +8,7 @@ import {
   isStudentAmbassadorRegistration,
   isStudentRegistration,
 } from "@/lib/registration-kinds";
+import { formatDateTime } from "@/lib/utils";
 import type { ColumnDef } from "@/components/shared";
 import type { Registration, RegistrationKind } from "@/types";
 
@@ -22,6 +23,18 @@ export function getRegistrationDisplayName(registration: Registration): string {
   }
   return "—";
 }
+
+const registeredAtColumn: ColumnDef<Registration, unknown> = {
+  accessorKey: "registeredAt",
+  header: "Registration Date",
+  cell: ({ row }) => (
+    <span className="whitespace-nowrap text-sm">
+      {row.original.registeredAt
+        ? formatDateTime(row.original.registeredAt)
+        : "—"}
+    </span>
+  ),
+};
 
 export function buildRegistrationColumns(
   kind: RegistrationKind,
@@ -39,6 +52,7 @@ export function buildRegistrationColumns(
 
   if (kind === "student") {
     return [
+      registeredAtColumn,
       {
         accessorKey: "studentName",
         header: "Student Name",
@@ -145,6 +159,7 @@ export function buildRegistrationColumns(
 
   if (kind === "school") {
     return [
+      registeredAtColumn,
       {
         id: "schoolContactName",
         header: "Name",
@@ -202,6 +217,7 @@ export function buildRegistrationColumns(
 
   if (kind === "partner_registration") {
     return [
+      registeredAtColumn,
       {
         id: "partnerRegContactName",
         header: "Name",
@@ -262,6 +278,7 @@ export function buildRegistrationColumns(
   }
 
   return [
+    registeredAtColumn,
     {
       id: "ambassadorName",
       header: "Name",
@@ -336,6 +353,7 @@ export function exportHeadersForKind(kind: RegistrationKind): string[] {
   switch (kind) {
     case "student":
       return [
+        "Registration Date",
         "Student Name",
         "School/College",
         "Event",
@@ -350,6 +368,7 @@ export function exportHeadersForKind(kind: RegistrationKind): string[] {
       ];
     case "school":
       return [
+        "Registration Date",
         "Name",
         "School Name",
         "Event",
@@ -359,6 +378,7 @@ export function exportHeadersForKind(kind: RegistrationKind): string[] {
       ];
     case "partner_registration":
       return [
+        "Registration Date",
         "Name",
         "Institution Name",
         "Event",
@@ -368,6 +388,7 @@ export function exportHeadersForKind(kind: RegistrationKind): string[] {
       ];
     case "student_ambassador":
       return [
+        "Registration Date",
         "Name",
         "Class",
         "School/College Name",
@@ -385,9 +406,13 @@ export function exportRowForKind(
 ): string[] {
   const eventTitle =
     eventTitleById.get(registration.eventId) ?? registration.eventTitle;
+  const registeredAt = registration.registeredAt
+    ? formatDateTime(registration.registeredAt)
+    : "";
 
   if (isStudentRegistration(registration)) {
     return [
+      registeredAt,
       registration.studentName,
       registration.college,
       eventTitle,
@@ -403,6 +428,7 @@ export function exportRowForKind(
   }
   if (isSchoolRegistration(registration)) {
     return [
+      registeredAt,
       registration.schoolContactName,
       registration.schoolName,
       eventTitle,
@@ -413,6 +439,7 @@ export function exportRowForKind(
   }
   if (isPartnerRegistrationEntry(registration)) {
     return [
+      registeredAt,
       registration.partnerRegContactName,
       registration.partnerRegInstitutionName,
       eventTitle,
@@ -423,6 +450,7 @@ export function exportRowForKind(
   }
   if (isStudentAmbassadorRegistration(registration)) {
     return [
+      registeredAt,
       registration.ambassadorName,
       registration.ambassadorClass,
       registration.ambassadorSchoolCollege,
