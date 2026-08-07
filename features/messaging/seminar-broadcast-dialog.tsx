@@ -122,11 +122,13 @@ export function SeminarBroadcastDialog({
       }),
     onSuccess: (result) => {
       toast.success(
-        `${result.channel === "email" ? "Email" : "WhatsApp"} sent to ${formatNumber(result.sent)} registrants`
+        `Demo only — prepared ${formatNumber(result.sent)} ${
+          result.channel === "email" ? "email" : "WhatsApp"
+        } message${result.sent === 1 ? "" : "s"} (not delivered yet)`
       );
       onOpenChange(false);
     },
-    onError: () => toast.error("Could not send messages. Try again."),
+    onError: () => toast.error("Could not prepare messages. Try again."),
   });
 
   const switchChannel = (next: BroadcastChannel) => {
@@ -162,6 +164,13 @@ export function SeminarBroadcastDialog({
         </DialogHeader>
 
         <div className="min-h-0 flex-1 space-y-4 overflow-auto p-4">
+          <p className="rounded-lg border border-amber-500/25 bg-amber-50 px-3 py-2 text-[12px] leading-snug text-amber-950/90">
+            <span className="font-semibold">Demo mode</span>
+            {" — "}
+            messages are prepared against the recipient list but not delivered
+            by email or WhatsApp yet.
+          </p>
+
           <p className="rounded-lg border border-brand-900/10 bg-brand-50/60 px-3 py-2 text-[12px] leading-snug text-brand-900/80">
             <span className="font-semibold text-brand-950">{seminarTitle}</span>
             {" · "}
@@ -261,7 +270,7 @@ export function SeminarBroadcastDialog({
           ) : null}
 
           <p className="text-[11px] leading-snug text-muted-foreground">
-            Will send to{" "}
+            Would reach{" "}
             <span className="font-semibold tabular-nums text-foreground">
               {formatNumber(reachable)}
             </span>{" "}
@@ -297,8 +306,8 @@ export function SeminarBroadcastDialog({
           >
             <Send className="size-3.5" />
             {sendMutation.isPending
-              ? "Sending…"
-              : `Send ${channel === "email" ? "email" : "WhatsApp"}`}
+              ? "Preparing…"
+              : `Preview send (demo)`}
           </Button>
         </DialogFooter>
       </DialogContent>

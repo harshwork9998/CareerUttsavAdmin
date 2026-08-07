@@ -24,6 +24,7 @@ import {
 import {
   CAREER_UTTSAV_SEMINARS,
   canonicalizeSeminarTitle,
+  seminarTitlesMatch,
 } from "@/features/dashboard/seminars";
 import { SeminarBroadcastDialog } from "@/features/messaging/seminar-broadcast-dialog";
 import { citiesMatch } from "@/lib/event-cities";
@@ -362,8 +363,25 @@ function SeminarDetailDialog({
   const [broadcastOpen, setBroadcastOpen] = useState(false);
 
   const canMessage = Boolean(eventId && eventTitle && eventSeminarTitles?.length);
-  const seminarSlot = eventSeminars?.find((s) => s.title === name);
+  const matchingSlots = useMemo(
+    () =>
+      (eventSeminars ?? []).filter((seminar) =>
+        seminarTitlesMatch(seminar.title, name)
+      ),
+    [eventSeminars, name]
+  );
+  const seminarSlot = matchingSlots[0];
   const cityOrder = eventCities.length > 0 ? eventCities : [fixedCity];
+
+  function formatSlotTime(time: string): string {
+    const [h, m] = time.split(":").map(Number);
+    if (!Number.isFinite(h)) return time;
+    return new Date(2000, 0, 1, h, m || 0).toLocaleTimeString("en-IN", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+  }
 
   useEffect(() => {
     setCity(fixedCity);
@@ -404,10 +422,30 @@ function SeminarDetailDialog({
               : `${formatNumber(total)} students in ${city}`}
             {" · "}
             gender, board, stream, and class
+            {matchingSlots.length > 1
+              ? ` · ${matchingSlots.length} time slots on stage`
+              : null}
           </DialogDescription>
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-auto p-4">
+          {matchingSlots.length > 1 ? (
+            <p className="mb-3 rounded-lg border border-brand-900/10 bg-brand-50/60 px-3 py-2 text-[12px] leading-snug text-brand-900/85">
+              <span className="font-semibold text-brand-950">
+                {matchingSlots.length} stage slots
+              </span>
+              {" — "}
+              student interest is counted once for this title. Slots:{" "}
+              {matchingSlots
+                .map(
+                  (slot) =>
+                    `${formatSlotTime(slot.startTime)}${
+                      slot.hall ? ` · Audi ${slot.hall}` : ""
+                    }`
+                )
+                .join(" · ")}
+            </p>
+          ) : null}
           {showCityToggle ? (
             <div
               role="tablist"
@@ -640,6 +678,9 @@ export function SeminarProgram({
               const featured = !uniformCards && index === 0;
               const elevated = !uniformCards && index > 0 && index <= 2;
               const isPressed = pressed === seminar.name;
+              const stageSlotCount = (eventSeminars ?? []).filter((slot) =>
+                seminarTitlesMatch(slot.title, seminar.name)
+              ).length;
 
               return (
                 <motion.button
@@ -726,6 +767,16 @@ export function SeminarProgram({
                     >
                       {formatNumber(seminar.value)}
                     </motion.p>
+                    {stageSlotCount > 1 ? (
+                      <p
+                        className={cn(
+                          "mt-1.5 text-[11px] font-medium",
+                          featured ? "text-white/75" : "text-muted-foreground"
+                        )}
+                      >
+                        {stageSlotCount} time slots on stage
+                      </p>
+                    ) : null}
                     <p
                       className={cn(
                         "mt-2 text-[12px] font-medium tracking-tight opacity-0 transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100",

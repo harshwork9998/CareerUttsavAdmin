@@ -1,45 +1,27 @@
+import { seminarTitlesMatch } from "@/features/dashboard/seminars";
 import { isStudentRegistration } from "@/lib/registration-kinds";
 import type { Registration, StudentRegistration } from "@/types";
 
-function hash01(input: string): number {
-  let h = 0;
-  for (let i = 0; i < input.length; i++) {
-    h = (h * 31 + input.charCodeAt(i)) >>> 0;
-  }
-  return (h % 1000) / 1000;
-}
-
-/** Deterministic seminar picks when explicit interests are not stored yet. */
+/** Explicit seminar picks only — never invent interests. */
 export function resolveSeminarInterests(
   registration: StudentRegistration,
-  eventSeminarTitles: readonly string[]
+  _eventSeminarTitles?: readonly string[]
 ): string[] {
-  if (registration.seminarInterests?.length) {
-    return registration.seminarInterests;
-  }
-
-  const titles = [...new Set(eventSeminarTitles.filter(Boolean))];
-  if (titles.length === 0) return [];
-
-  const pickCount = Math.min(titles.length, hash01(registration.id) > 0.65 ? 2 : 1);
-  const ordered = [...titles].sort(
-    (a, b) =>
-      hash01(`${registration.id}:${b}`) - hash01(`${registration.id}:${a}`)
-  );
-
-  return ordered.slice(0, pickCount);
+  return (registration.seminarInterests ?? [])
+    .map((title) => title.trim())
+    .filter(Boolean);
 }
 
 export function filterRegistrantsForSeminar(
   registrations: Registration[],
   seminarTitle: string,
-  eventSeminarTitles: readonly string[]
+  _eventSeminarTitles?: readonly string[]
 ): StudentRegistration[] {
   return registrations.filter(
     (registration): registration is StudentRegistration => {
       if (!isStudentRegistration(registration)) return false;
-      return resolveSeminarInterests(registration, eventSeminarTitles).includes(
-        seminarTitle
+      return resolveSeminarInterests(registration).some((interest) =>
+        seminarTitlesMatch(interest, seminarTitle)
       );
     }
   );

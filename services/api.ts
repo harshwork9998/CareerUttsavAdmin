@@ -206,14 +206,14 @@ export const dashboardService = {
 };
 
 export const messagingService = {
+  /** Demo only — counts recipients; does not deliver email/WhatsApp. */
   sendSeminarBroadcast: (payload: SeminarBroadcastRequest) => {
     const sent = payload.recipientIds.length;
-    const failed = payload.channel === "whatsapp" ? Math.min(1, sent > 0 ? 0 : 0) : 0;
     const result: SeminarBroadcastResult = {
       channel: payload.channel,
-      sent: Math.max(0, sent - failed),
-      failed,
-      batchId: `batch-${generateId()}`,
+      sent,
+      failed: 0,
+      batchId: `demo-${generateId()}`,
     };
     return simulate(result);
   },

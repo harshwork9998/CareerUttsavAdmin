@@ -1,20 +1,15 @@
 import { seminarMatchKey } from "@/features/dashboard/seminars";
 import { isStudentRegistration } from "@/lib/registration-kinds";
-import { getPrimarySeminar } from "@/lib/enrich-registration";
 import type { Registration } from "@/types";
 
-/** Seminar titles stored on a registration (explicit picks or inferred primary). */
+/** Explicit seminar titles stored on a registration (never invented). */
 export function getRegistrationSeminarInterests(
   registration: Registration
 ): string[] {
   if (!isStudentRegistration(registration)) return [];
-  const fromInterests = (registration.seminarInterests ?? [])
+  return (registration.seminarInterests ?? [])
     .map((title) => title.trim())
     .filter(Boolean);
-  if (fromInterests.length > 0) return fromInterests;
-
-  const primary = getPrimarySeminar(registration);
-  return primary !== "—" ? [primary] : [];
 }
 
 /** True when the student is registered for every seminar in `requiredSeminars`. */
