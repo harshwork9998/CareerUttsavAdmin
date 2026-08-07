@@ -29,10 +29,8 @@ export const ROLE_LABELS: Record<(typeof ROLES)[number], string> = {
 };
 
 export const REGISTRATION_STATUSES = [
-  "Pending",
   "Confirmed",
   "Checked In",
-  "Cancelled",
 ] as const;
 
 export const UNIVERSITY_STATUSES = [

@@ -1,11 +1,23 @@
+import { REGISTRATION_STATUSES } from "@/constants";
 import type {
   PartnerRegistrationEntry,
   Registration,
   RegistrationKind,
+  RegistrationStatus,
   SchoolRegistration,
   StudentAmbassadorRegistration,
   StudentRegistration,
 } from "@/types";
+
+function normalizeRegistrationStatus(value: unknown): RegistrationStatus {
+  if (
+    typeof value === "string" &&
+    (REGISTRATION_STATUSES as readonly string[]).includes(value)
+  ) {
+    return value as RegistrationStatus;
+  }
+  return "Confirmed";
+}
 
 export const REGISTRATION_KINDS = [
   "student",
@@ -72,7 +84,10 @@ export function migrateLegacyRegistration(
     raw.kind === "partner_registration" ||
     raw.kind === "student_ambassador"
   ) {
-    return raw as unknown as Registration;
+    return {
+      ...(raw as unknown as Registration),
+      status: normalizeRegistrationStatus(raw.status),
+    };
   }
 
   return {
@@ -81,7 +96,7 @@ export function migrateLegacyRegistration(
     kind: "student",
     eventId: String(raw.eventId ?? ""),
     eventTitle: String(raw.eventTitle ?? ""),
-    status: (raw.status as StudentRegistration["status"]) ?? "Confirmed",
+    status: normalizeRegistrationStatus(raw.status),
     paymentStatus:
       (raw.paymentStatus as StudentRegistration["paymentStatus"]) ?? "Waived",
     registeredAt: String(raw.registeredAt ?? new Date().toISOString()),

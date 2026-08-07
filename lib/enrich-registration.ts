@@ -87,5 +87,5 @@ export function formatSeminarInterests(registration: Registration): string {
   if (!isStudentRegistration(registration)) return "—";
   const items = (registration.seminarInterests ?? []).filter(Boolean);
   if (items.length === 0) return "—";
-  return items.join(" · ");
+  return items.join(" - ");
 }

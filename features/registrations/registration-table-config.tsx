@@ -36,6 +36,26 @@ const registeredAtColumn: ColumnDef<Registration, unknown> = {
   ),
 };
 
+const passIdColumn: ColumnDef<Registration, unknown> = {
+  accessorKey: "registrationNumber",
+  header: "Pass ID",
+  cell: ({ row }) => (
+    <span className="whitespace-nowrap font-mono text-sm font-medium">
+      {row.original.registrationNumber || "—"}
+    </span>
+  ),
+};
+
+const statusColumn: ColumnDef<Registration, unknown> = {
+  accessorKey: "status",
+  header: "Status",
+  cell: ({ row }) => (
+    <span className="whitespace-nowrap text-sm">
+      {row.original.status || "—"}
+    </span>
+  ),
+};
+
 export function buildRegistrationColumns(
   kind: RegistrationKind,
   eventTitleById: Map<string, string>
@@ -53,6 +73,7 @@ export function buildRegistrationColumns(
   if (kind === "student") {
     return [
       registeredAtColumn,
+      passIdColumn,
       {
         accessorKey: "studentName",
         header: "Student Name",
@@ -154,12 +175,14 @@ export function buildRegistrationColumns(
           </span>
         ),
       },
+      statusColumn,
     ];
   }
 
   if (kind === "school") {
     return [
       registeredAtColumn,
+      passIdColumn,
       {
         id: "schoolContactName",
         header: "Name",
@@ -212,12 +235,14 @@ export function buildRegistrationColumns(
           </span>
         ),
       },
+      statusColumn,
     ];
   }
 
   if (kind === "partner_registration") {
     return [
       registeredAtColumn,
+      passIdColumn,
       {
         id: "partnerRegContactName",
         header: "Name",
@@ -274,11 +299,13 @@ export function buildRegistrationColumns(
           </span>
         ),
       },
+      statusColumn,
     ];
   }
 
   return [
     registeredAtColumn,
+    passIdColumn,
     {
       id: "ambassadorName",
       header: "Name",
@@ -346,6 +373,7 @@ export function buildRegistrationColumns(
         </span>
       ),
     },
+    statusColumn,
   ];
 }
 
@@ -354,6 +382,7 @@ export function exportHeadersForKind(kind: RegistrationKind): string[] {
     case "student":
       return [
         "Registration Date",
+        "Pass ID",
         "Student Name",
         "School/College",
         "Event",
@@ -365,30 +394,36 @@ export function exportHeadersForKind(kind: RegistrationKind): string[] {
         "Gender",
         "Student Mobile Number",
         "Email Address",
+        "Status",
       ];
     case "school":
       return [
         "Registration Date",
+        "Pass ID",
         "Name",
         "School Name",
         "Event",
         "City",
         "Contact Number",
         "Email",
+        "Status",
       ];
     case "partner_registration":
       return [
         "Registration Date",
+        "Pass ID",
         "Name",
         "Institution Name",
         "Event",
         "City",
         "Contact Number",
         "Email",
+        "Status",
       ];
     case "student_ambassador":
       return [
         "Registration Date",
+        "Pass ID",
         "Name",
         "Class",
         "School/College Name",
@@ -396,6 +431,7 @@ export function exportHeadersForKind(kind: RegistrationKind): string[] {
         "Age",
         "Number",
         "Email",
+        "Status",
       ];
   }
 }
@@ -410,9 +446,13 @@ export function exportRowForKind(
     ? formatDateTime(registration.registeredAt)
     : "";
 
+  const passId = registration.registrationNumber ?? "";
+  const status = registration.status ?? "";
+
   if (isStudentRegistration(registration)) {
     return [
       registeredAt,
+      passId,
       registration.studentName,
       registration.college,
       eventTitle,
@@ -424,33 +464,39 @@ export function exportRowForKind(
       registration.gender ?? "",
       registration.phone,
       registration.email,
+      status,
     ];
   }
   if (isSchoolRegistration(registration)) {
     return [
       registeredAt,
+      passId,
       registration.schoolContactName,
       registration.schoolName,
       eventTitle,
       registration.schoolCity,
       registration.schoolContactNumber,
       registration.schoolContactEmail,
+      status,
     ];
   }
   if (isPartnerRegistrationEntry(registration)) {
     return [
       registeredAt,
+      passId,
       registration.partnerRegContactName,
       registration.partnerRegInstitutionName,
       eventTitle,
       registration.partnerRegCity,
       registration.partnerRegContactNumber,
       registration.partnerRegContactEmail,
+      status,
     ];
   }
   if (isStudentAmbassadorRegistration(registration)) {
     return [
       registeredAt,
+      passId,
       registration.ambassadorName,
       registration.ambassadorClass,
       registration.ambassadorSchoolCollege,
@@ -458,6 +504,7 @@ export function exportRowForKind(
       String(registration.ambassadorAge),
       registration.ambassadorPhone,
       registration.ambassadorEmail,
+      status,
     ];
   }
   return [];
@@ -465,21 +512,32 @@ export function exportRowForKind(
 
 export function registrationMatchesSearch(
   registration: Registration,
-  query: string
+  query: string,
+  eventTitleById?: Map<string, string>
 ): boolean {
-  const haystack: string[] = [getRegistrationDisplayName(registration)];
+  const eventTitle =
+    eventTitleById?.get(registration.eventId) ?? registration.eventTitle ?? "";
+  const haystack: string[] = [
+    getRegistrationDisplayName(registration),
+    registration.registrationNumber ?? "",
+    registration.status ?? "",
+    eventTitle,
+  ];
 
   if (isStudentRegistration(registration)) {
     haystack.push(
       registration.email,
       registration.phone,
+      registration.parentPhone ?? "",
       registration.college,
       registration.classLabel ?? "",
       registration.interestedStream ?? "",
       registration.board ?? "",
       formatSeminarInterests(registration),
       getPrimarySeminar(registration),
-      registration.city
+      registration.city,
+      registration.state ?? "",
+      registration.gender ?? ""
     );
   } else if (isSchoolRegistration(registration)) {
     haystack.push(

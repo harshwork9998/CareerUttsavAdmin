@@ -236,10 +236,8 @@ export const mockDashboardData: DashboardData = {
     { name: "Others", value: 3200 },
   ],
   registrationsByStatus: [
-    { name: "Confirmed", value: 18500 },
+    { name: "Confirmed", value: 21380 },
     { name: "Checked In", value: 22240 },
-    { name: "Pending", value: 890 },
-    { name: "Cancelled", value: 1990 },
   ],
   recentActivities: [
     {

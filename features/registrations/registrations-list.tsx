@@ -102,13 +102,13 @@ function registrationCity(registration: Registration): string | undefined {
 function searchPlaceholderForKind(kind: RegistrationKind): string {
   switch (kind) {
     case "student":
-      return "Search by name, school, email, or mobile…";
+      return "Search by pass ID, name, school, email, mobile, or seminar…";
     case "school":
-      return "Search by contact name, school, city, or email…";
+      return "Search by pass ID, contact name, school, city, or email…";
     case "partner_registration":
-      return "Search by name, institution, city, or email…";
+      return "Search by pass ID, name, institution, city, or email…";
     case "student_ambassador":
-      return "Search by name, school/college, class, or email…";
+      return "Search by pass ID, name, school/college, class, or email…";
   }
 }
 
@@ -309,7 +309,7 @@ export function RegistrationsList() {
       }
 
       if (!query) return true;
-      return registrationMatchesSearch(r, query);
+      return registrationMatchesSearch(r, query, eventTitleById);
     });
   }, [
     kindRegistrations,
@@ -321,6 +321,7 @@ export function RegistrationsList() {
     seminarFilter,
     cityFilter,
     genderFilter,
+    eventTitleById,
   ]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));

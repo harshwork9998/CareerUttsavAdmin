@@ -680,10 +680,8 @@ const bangaloreSlice: CityDashboardSlice = {
     },
   ],
   registrationsByStatus: [
-    { name: "Confirmed", value: 9680 },
+    { name: "Confirmed", value: 11180 },
     { name: "Checked In", value: 11620 },
-    { name: "Pending", value: 460 },
-    { name: "Cancelled", value: 1040 },
   ],
   recentActivities: [
     {
@@ -1280,10 +1278,8 @@ const mysoreSlice: CityDashboardSlice = {
     },
   ],
   registrationsByStatus: [
-    { name: "Confirmed", value: 5100 },
+    { name: "Confirmed", value: 5880 },
     { name: "Checked In", value: 6120 },
-    { name: "Pending", value: 245 },
-    { name: "Cancelled", value: 535 },
   ],
   recentActivities: [
     {
@@ -1872,10 +1868,8 @@ const hubliSlice: CityDashboardSlice = {
     },
   ],
   registrationsByStatus: [
-    { name: "Confirmed", value: 3720 },
+    { name: "Confirmed", value: 4320 },
     { name: "Checked In", value: 4500 },
-    { name: "Pending", value: 185 },
-    { name: "Cancelled", value: 415 },
   ],
   recentActivities: [
     {
