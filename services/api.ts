@@ -37,6 +37,7 @@ import {
   updateUserApi,
 } from "@/lib/users-api-client";
 import type { CreateRegistrationInput } from "@/lib/registration-validation";
+import type { RegistrationTrendSeries } from "@/lib/registration-time-series";
 import {
   fetchAllSeminarRosters,
   upsertSeminarRosterApi,
@@ -177,6 +178,30 @@ export const dashboardService = {
         partners
       )
     );
+  },
+  getRegistrationTrend: async (input: {
+    from: string;
+    to: string;
+    city?: string | "all";
+  }) => {
+    const params = new URLSearchParams({
+      from: input.from,
+      to: input.to,
+      city: input.city ?? "all",
+    });
+    const res = await fetch(
+      `/api/dashboard/registration-trend?${params.toString()}`,
+      { cache: "no-store" }
+    );
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(
+        typeof err.error === "string"
+          ? err.error
+          : `Could not load registration trend (${res.status})`
+      );
+    }
+    return res.json() as Promise<RegistrationTrendSeries>;
   },
 };
 

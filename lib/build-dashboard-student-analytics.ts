@@ -82,24 +82,27 @@ export function weekStartMonday(date: Date): Date {
   return day;
 }
 
-const MONTH_ABBR = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-] as const;
+/**
+ * ISO week number for a date (weeks start Monday; week 1 contains the year's first Thursday).
+ */
+export function getIsoWeekParts(date: Date): { week: number; year: number } {
+  const monday = weekStartMonday(date);
+  // Thursday of this week decides the ISO week-year.
+  const thursday = new Date(monday);
+  thursday.setDate(monday.getDate() + 3);
+  const year = thursday.getFullYear();
+  const jan4 = new Date(year, 0, 4);
+  const week1Monday = weekStartMonday(jan4);
+  const week =
+    Math.round((monday.getTime() - week1Monday.getTime()) / (7 * 86_400_000)) +
+    1;
+  return { week, year };
+}
 
-/** Locale-stable week label (avoids en-IN narrow-space / ordering quirks). */
+/** Locale-stable week label using the ISO week number. */
 export function formatWeekLabel(date: Date): string {
-  return `${date.getDate()} ${MONTH_ABBR[date.getMonth()]} ${date.getFullYear()}`;
+  const { week, year } = getIsoWeekParts(date);
+  return `Week ${week}, ${year}`;
 }
 
 function buildWeeklyTrend(registrations: StudentRegistration[]): ChartDataPoint[] {

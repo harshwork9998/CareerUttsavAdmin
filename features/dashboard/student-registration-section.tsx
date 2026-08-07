@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
   CartesianGrid,
@@ -14,17 +14,15 @@ import {
 } from "recharts";
 
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Input } from "@/components/ui/input";
-import {
   buildStudentRegistrationAnalytics,
-  formatWeekLabel,
   getScopedStudentRegistrationDates,
-  weekStartMonday,
 } from "@/lib/build-dashboard-student-analytics";
+import {
+  groupingLabel,
+  parseInputDate,
+  toInputDate,
+  type RegistrationTrendGrouping,
+} from "@/lib/registration-time-series";
 import { cn, formatNumber } from "@/lib/utils";
 import type {
   Event,
@@ -32,70 +30,20 @@ import type {
   Registration,
   StudentRegistrationAnalytics,
 } from "@/types";
-import { BRAND, surface } from "@/features/dashboard/dashboard-ui";
+import { BRAND, INK, LINE, PAPER, surface } from "@/features/dashboard/dashboard-ui";
 import { SeminarProgram } from "@/features/dashboard/seminar-program";
 import { ShareDonutCard } from "@/features/dashboard/share-donut-card";
 import {
   aggregateByCareerInterest,
   type CareerInterestRow,
 } from "@/features/dashboard/seminars";
-
-type TimelineMode = "weekly" | "monthly" | "custom";
-
-const MONTH_ABBR = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-] as const;
-
-const MONTH_FULL: Record<(typeof MONTH_ABBR)[number], string> = {
-  Jan: "January",
-  Feb: "February",
-  Mar: "March",
-  Apr: "April",
-  May: "May",
-  Jun: "June",
-  Jul: "July",
-  Aug: "August",
-  Sep: "September",
-  Oct: "October",
-  Nov: "November",
-  Dec: "December",
-};
-
-function parseDateInput(value: string): Date | null {
-  if (!value) return null;
-  const [y, m, d] = value.split("-").map(Number);
-  if (!y || !m || !d) return null;
-  return new Date(y, m - 1, d);
-}
+import { DateField } from "@/features/events/event-datetime-fields";
+import { dashboardService } from "@/services/api";
 
 function startOfDay(date: Date): Date {
   const next = new Date(date);
   next.setHours(0, 0, 0, 0);
   return next;
-}
-
-function endOfDay(date: Date): Date {
-  const next = new Date(date);
-  next.setHours(23, 59, 59, 999);
-  return next;
-}
-
-function toInputDate(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
 }
 
 function formatShortDate(date: Date): string {
@@ -111,59 +59,25 @@ function parseRegistrationDates(timestamps: string[]): Date[] {
     .filter((date) => !Number.isNaN(date.getTime()));
 }
 
-/** Count registrations per week (week starts Monday). */
-function buildWeeklySeries(dates: Date[]): Array<{ name: string; value: number }> {
-  const map = new Map<string, { value: number; sortKey: number }>();
-  for (const date of dates) {
-    const weekStart = weekStartMonday(date);
-    const label = formatWeekLabel(weekStart);
-    const prev = map.get(label);
-    map.set(label, {
-      value: (prev?.value ?? 0) + 1,
-      sortKey: weekStart.getTime(),
-    });
-  }
-  return Array.from(map.entries())
-    .sort((a, b) => a[1].sortKey - b[1].sortKey)
-    .map(([name, row]) => ({ name, value: row.value }));
-}
-
-/** Count registrations per calendar month. */
-function buildMonthlySeries(dates: Date[]): Array<{ name: string; value: number }> {
-  const map = new Map<string, { label: string; value: number; order: number }>();
-  for (const date of dates) {
-    const abbr = MONTH_ABBR[date.getMonth()];
-    const year = date.getFullYear();
-    const key = `${year}-${abbr}`;
-    const prev = map.get(key);
-    map.set(key, {
-      label: `${MONTH_FULL[abbr]} ${year}`,
-      value: (prev?.value ?? 0) + 1,
-      order: year * 12 + date.getMonth(),
-    });
-  }
-  return Array.from(map.values())
-    .sort((a, b) => a.order - b.order)
-    .map((row) => ({ name: row.label, value: row.value }));
-}
-
 function TrendTooltip({
   active,
   payload,
   label,
-  mode,
+  grouping,
 }: {
   active?: boolean;
   payload?: Array<{ value: number }>;
   label?: string;
-  mode: TimelineMode;
+  grouping: RegistrationTrendGrouping;
 }) {
   if (!active || !payload?.[0]) return null;
-  const periodLabel = mode === "monthly" ? label : `Week of ${label}`;
   return (
     <div className="rounded-xl border border-brand-900/12 bg-white px-3 py-2 shadow-[0_8px_24px_rgba(18,35,63,0.12)]">
       <p className="text-[12px] font-medium text-muted-foreground">
-        {periodLabel}
+        {label}
+      </p>
+      <p className="mt-0.5 text-[11px] text-brand-900/45">
+        {groupingLabel(grouping)}
       </p>
       <p className="mt-0.5 text-[14px] font-semibold tabular-nums text-brand-950">
         {formatNumber(Number(payload[0].value))}{" "}
@@ -175,116 +89,73 @@ function TrendTooltip({
   );
 }
 
-function TimelineControls({
-  mode,
-  onModeChange,
+function TimelineRangeControls({
   customFrom,
   customTo,
   onRangeChange,
 }: {
-  mode: TimelineMode;
-  onModeChange: (mode: TimelineMode) => void;
   customFrom: string;
   customTo: string;
   onRangeChange: (from: string, to: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const rangeLabel = `${formatShortDate(parseDateInput(customFrom) ?? new Date())} – ${formatShortDate(parseDateInput(customTo) ?? new Date())}`;
-
-  const modes: Array<{ id: TimelineMode; label: string }> = [
-    { id: "weekly", label: "Weekly" },
-    { id: "monthly", label: "Monthly" },
-    { id: "custom", label: "Custom" },
-  ];
-
   return (
-    <div className="inline-flex flex-wrap items-center gap-2">
-      <div
-        role="tablist"
-        aria-label="Registration timeline"
-        className="inline-flex rounded-lg border border-brand-900/12 bg-brand-50/70 p-0.5"
-      >
-        {modes.map((opt) => {
-          const active = mode === opt.id;
-          return (
-            <button
-              key={opt.id}
-              type="button"
-              role="tab"
-              aria-selected={active}
-              onClick={() => {
-                onModeChange(opt.id);
-                if (opt.id === "custom") setOpen(true);
-                else setOpen(false);
-              }}
-              className={cn(
-                "rounded-md px-2.5 py-1 text-[12px] font-semibold transition-colors",
-                active
-                  ? "bg-white text-brand-950 shadow-sm"
-                  : "text-brand-900/55 hover:text-brand-900"
-              )}
-            >
-              {opt.label}
-            </button>
-          );
-        })}
+    <div
+      className="inline-flex h-9 max-w-full items-stretch overflow-hidden rounded-lg border bg-white"
+      style={{ borderColor: LINE.subtle }}
+    >
+      <div className="flex min-w-0 flex-1 items-center gap-1.5 px-2 sm:px-2.5">
+        <span
+          className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.06em]"
+          style={{ color: INK.muted }}
+        >
+          From
+        </span>
+        <DateField
+          id="registration-trend-from"
+          value={customFrom}
+          max={customTo || undefined}
+          onChange={(next) => {
+            const value = next || customFrom;
+            onRangeChange(
+              value,
+              customTo && customTo < value ? value : customTo || value
+            );
+          }}
+          className="h-7 min-w-0 flex-1 border-0 bg-transparent px-1.5 text-[12px] font-medium shadow-none hover:bg-brand-50/60 focus-visible:ring-0"
+        />
       </div>
-
-      {mode === "custom" ? (
-        <Popover open={open} onOpenChange={setOpen}>
-          <PopoverTrigger asChild>
-            <button
-              type="button"
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-brand-900/12 bg-white px-2.5 text-[12px] font-semibold text-brand-950 shadow-sm transition-colors hover:border-brand-700/30 hover:bg-brand-50/60"
-            >
-              <span className="tabular-nums">{rangeLabel}</span>
-              <ChevronDown className="size-3.5 text-brand-900/45" />
-            </button>
-          </PopoverTrigger>
-          <PopoverContent
-            align="end"
-            className="w-[280px] border-brand-900/10 p-3 shadow-[0_12px_40px_rgba(18,35,63,0.14)]"
-            onOpenAutoFocus={(e) => e.preventDefault()}
-          >
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-brand-900/45">
-              Your dates
-            </p>
-            <div className="flex items-center gap-2">
-              <Input
-                type="date"
-                aria-label="From date"
-                value={customFrom}
-                max={customTo || undefined}
-                onChange={(e) => {
-                  const next = e.target.value || customFrom;
-                  onRangeChange(
-                    next,
-                    customTo && customTo < next ? next : customTo || next
-                  );
-                }}
-                className="h-8 flex-1 border-brand-900/12 bg-white px-2 text-[12px] shadow-none"
-              />
-              <span className="shrink-0 text-[11px] text-muted-foreground">
-                to
-              </span>
-              <Input
-                type="date"
-                aria-label="To date"
-                value={customTo}
-                min={customFrom || undefined}
-                onChange={(e) => {
-                  const next = e.target.value || customTo;
-                  onRangeChange(
-                    customFrom && customFrom > next ? next : customFrom || next,
-                    next
-                  );
-                }}
-                className="h-8 flex-1 border-brand-900/12 bg-white px-2 text-[12px] shadow-none"
-              />
-            </div>
-          </PopoverContent>
-        </Popover>
-      ) : null}
+      <div
+        className="flex w-9 shrink-0 items-center justify-center border-x text-[11px] font-medium leading-none"
+        style={{
+          borderColor: LINE.subtle,
+          color: INK.muted,
+          background: PAPER.muted,
+        }}
+        aria-hidden
+      >
+        to
+      </div>
+      <div className="flex min-w-0 flex-1 items-center gap-1.5 px-2 sm:px-2.5">
+        <span
+          className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.06em]"
+          style={{ color: INK.muted }}
+        >
+          To
+        </span>
+        <DateField
+          id="registration-trend-to"
+          value={customTo}
+          min={customFrom || undefined}
+          onChange={(next) => {
+            const value = next || customTo;
+            onRangeChange(
+              customFrom && customFrom > value ? value : customFrom || value,
+              value
+            );
+          }}
+          className="h-7 min-w-0 flex-1 border-0 bg-transparent px-1.5 text-[12px] font-medium shadow-none hover:bg-brand-50/60 focus-visible:ring-0"
+        />
+      </div>
     </div>
   );
 }
@@ -464,13 +335,14 @@ function CareerInterestAndTrend({
   careerInterests,
   registrationDates,
   liveFeed,
+  city,
 }: {
   careerInterests: CareerInterestRow[];
-  /** ISO timestamps of scoped student registrations */
+  /** ISO timestamps used only to seed the default date range */
   registrationDates: string[];
   liveFeed: LiveRegistrationItem[];
+  city: string | "all";
 }) {
-  const [mode, setMode] = useState<TimelineMode>("weekly");
   const dates = useMemo(
     () => parseRegistrationDates(registrationDates),
     [registrationDates]
@@ -484,7 +356,10 @@ function CareerInterestAndTrend({
     }
     const min = new Date(Math.min(...dates.map((d) => d.getTime())));
     const max = new Date(Math.max(...dates.map((d) => d.getTime())));
-    return { from: toInputDate(startOfDay(min)), to: toInputDate(startOfDay(max)) };
+    return {
+      from: toInputDate(startOfDay(min)),
+      to: toInputDate(startOfDay(max)),
+    };
   }, [dates]);
 
   const [customFrom, setCustomFrom] = useState<string>("");
@@ -492,7 +367,7 @@ function CareerInterestAndTrend({
   const customTouchedRef = useRef(false);
 
   useEffect(() => {
-    // Keep default range aligned with data until the user picks custom dates.
+    // Keep default range aligned with data until the user picks dates.
     if (customTouchedRef.current) return;
     setCustomFrom(dataRange.from);
     setCustomTo(dataRange.to);
@@ -500,36 +375,34 @@ function CareerInterestAndTrend({
 
   const resolvedFrom = customFrom || dataRange.from;
   const resolvedTo = customTo || dataRange.to;
+  const rangeValid = Boolean(
+    parseInputDate(resolvedFrom) && parseInputDate(resolvedTo)
+  );
 
-  const chartData = useMemo(() => {
-    if (mode === "monthly") {
-      return buildMonthlySeries(dates);
-    }
+  const trendQuery = useQuery({
+    queryKey: [
+      "dashboard-registration-trend",
+      resolvedFrom,
+      resolvedTo,
+      city,
+      registrationDates.length,
+    ],
+    queryFn: () =>
+      dashboardService.getRegistrationTrend({
+        from: resolvedFrom,
+        to: resolvedTo,
+        city,
+      }),
+    enabled: rangeValid,
+    placeholderData: (previous) => previous,
+  });
 
-    if (mode === "custom") {
-      const from = parseDateInput(resolvedFrom);
-      const to = parseDateInput(resolvedTo);
-      if (!from || !to) return [];
-      const start = startOfDay(from <= to ? from : to);
-      const end = endOfDay(from <= to ? to : from);
-      const inRange = dates.filter((date) => date >= start && date <= end);
-      // Show weekly buckets for registrations that fall inside the chosen dates.
-      return buildWeeklySeries(inRange);
-    }
+  const chartData = trendQuery.data?.points ?? [];
+  const grouping = trendQuery.data?.grouping ?? "day";
+  const chartTotal = trendQuery.data?.total ?? 0;
+  const showDots = chartData.length <= 16;
 
-    // Weekly: count of registrations in each week
-    return buildWeeklySeries(dates);
-  }, [mode, dates, resolvedFrom, resolvedTo]);
-
-  const chartTotal = chartData.reduce((s, r) => s + r.value, 0);
-  const showDots = mode === "monthly" || chartData.length <= 12;
-
-  const subtitle =
-    mode === "weekly"
-      ? "Registrations counted by week"
-      : mode === "monthly"
-        ? "Registrations counted by month"
-        : `${formatShortDate(parseDateInput(resolvedFrom) ?? new Date())} – ${formatShortDate(parseDateInput(resolvedTo) ?? new Date())}`;
+  const subtitle = `${formatShortDate(parseInputDate(resolvedFrom) ?? new Date())} – ${formatShortDate(parseInputDate(resolvedTo) ?? new Date())} · ${groupingLabel(grouping)}`;
 
   return (
     <motion.div
@@ -560,9 +433,7 @@ function CareerInterestAndTrend({
                 in view
               </p>
             </div>
-            <TimelineControls
-              mode={mode}
-              onModeChange={setMode}
+            <TimelineRangeControls
               customFrom={resolvedFrom}
               customTo={resolvedTo}
               onRangeChange={(from, to) => {
@@ -574,9 +445,17 @@ function CareerInterestAndTrend({
           </div>
 
           <div className="min-h-[280px] flex-1 sm:min-h-[320px]">
-            {chartData.length === 0 ? (
+            {trendQuery.isError ? (
               <div className="flex h-full min-h-[280px] items-center justify-center rounded-xl border border-dashed border-brand-900/15 bg-brand-50/30 text-[13px] text-muted-foreground">
-                No registrations in this range
+                Could not load registrations for this range
+              </div>
+            ) : chartData.length === 0 && trendQuery.isLoading ? (
+              <div className="flex h-full min-h-[280px] items-center justify-center rounded-xl border border-dashed border-brand-900/15 bg-brand-50/30 text-[13px] text-muted-foreground">
+                Loading trend…
+              </div>
+            ) : chartData.length === 0 ? (
+              <div className="flex h-full min-h-[280px] items-center justify-center rounded-xl border border-dashed border-brand-900/15 bg-brand-50/30 text-[13px] text-muted-foreground">
+                Select a valid date range
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
@@ -594,23 +473,25 @@ function CareerInterestAndTrend({
                     tick={{ fontSize: 10, fill: "#64748B" }}
                     tickLine={false}
                     axisLine={{ stroke: "rgba(18, 35, 63, 0.12)" }}
-                    interval={mode === "monthly" ? 0 : "preserveStartEnd"}
-                    minTickGap={mode === "monthly" ? 4 : 36}
+                    interval="preserveStartEnd"
+                    minTickGap={grouping === "day" ? 28 : 36}
                   />
                   <YAxis
                     tick={{ fontSize: 10, fill: "#64748B" }}
                     tickLine={false}
                     axisLine={false}
                     width={36}
+                    allowDecimals={false}
                     tickFormatter={(v) => formatNumber(Number(v))}
                   />
-                  <Tooltip content={<TrendTooltip mode={mode} />} />
+                  <Tooltip content={<TrendTooltip grouping={grouping} />} />
                   <Line
                     type="monotone"
                     dataKey="value"
                     name="Registrations"
                     stroke={BRAND[700]}
                     strokeWidth={2.5}
+                    connectNulls
                     dot={
                       showDots
                         ? {
@@ -771,6 +652,7 @@ export function StudentRegistrationSection({
         careerInterests={careerInterests}
         registrationDates={registrationDates}
         liveFeed={liveFeed}
+        city={isAllCities ? "all" : (cityLabel ?? "all")}
       />
 
       <SeminarProgram
