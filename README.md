@@ -69,7 +69,7 @@ MSG91 generates and verifies the SMS OTP. This app does **not** store OTP codes.
 ### Example: send OTP
 
 ```bash
-curl -X POST http://localhost:3000/api/send-otp \
+curl -X POST http://localhost:3002/api/send-otp \
   -H "Content-Type: application/json" \
   -d "{\"phone\":\"9876543210\",\"purpose\":\"student_registration\"}"
 ```
@@ -77,7 +77,7 @@ curl -X POST http://localhost:3000/api/send-otp \
 ### Example: verify OTP
 
 ```bash
-curl -X POST http://localhost:3000/api/verify-otp \
+curl -X POST http://localhost:3002/api/verify-otp \
   -H "Content-Type: application/json" \
   -d "{\"phone\":\"9876543210\",\"purpose\":\"student_registration\",\"code\":\"123456\"}"
 ```
