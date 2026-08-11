@@ -67,12 +67,24 @@ function resolveAllowedOrigin(
   return null;
 }
 
-/** Admin UI same-origin, or configured Partner Portal origins. */
+/** Admin UI same-origin (proxy-aware), or configured Partner Portal origins. */
 function resolvePartnerApiOrigin(request: NextRequest): string | null {
   const origin = request.headers.get("origin");
-  // Admin app calling its own /api/partners/* (e.g. admin.careeruttsav.in)
-  if (origin && origin === request.nextUrl.origin) {
-    return origin;
+  if (origin && origin !== "null") {
+    try {
+      const originHost = new URL(origin).host.toLowerCase();
+      const forwarded = request.headers.get("x-forwarded-host");
+      const externalHostRaw = (
+        forwarded?.split(",")[0]?.trim() ||
+        request.headers.get("host") ||
+        ""
+      ).toLowerCase();
+      if (externalHostRaw && originHost === externalHostRaw) {
+        return origin;
+      }
+    } catch {
+      // Malformed Origin — fall through to partner allowlist
+    }
   }
   return resolveAllowedOrigin(request, PARTNER_PORTAL_ORIGINS);
 }
