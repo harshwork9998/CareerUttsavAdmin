@@ -17,6 +17,11 @@ import {
 } from "@/lib/registration-validation";
 import type { Event } from "@/types";
 import {
+  indianMobileFieldError,
+  IndianMobileInput,
+} from "@/components/forms/indian-mobile-input";
+import { normalizeIndianMobileInput } from "@/lib/indian-mobile";
+import {
   applyFormErrors,
   FieldError,
   fieldErrorClass,
@@ -57,10 +62,6 @@ const EMPTY_FORM = {
 
 function isValidEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-}
-
-function phoneDigits(value: string): string {
-  return value.replace(/\D/g, "");
 }
 
 export function AddStudentDialog({
@@ -143,9 +144,11 @@ export function AddStudentDialog({
     if (!form.board) next.board = "Select a board";
     if (form.city.trim().length < 2) next.city = "City is required";
     if (!form.gender) next.gender = "Select gender";
-    if (phoneDigits(form.phone).length < 10) {
-      next.phone = "Student mobile number is required";
-    }
+    const phoneError = indianMobileFieldError(form.phone, {
+      required: true,
+      emptyMessage: "Student mobile number is required",
+    });
+    if (phoneError) next.phone = phoneError;
     if (!isValidEmail(form.email.trim())) {
       next.email = "Enter a valid email address";
     }
@@ -165,7 +168,7 @@ export function AddStudentDialog({
       board: form.board,
       city: form.city.trim(),
       gender: form.gender as CreateStudentRegistrationInput["gender"],
-      phone: form.phone.trim(),
+      phone: normalizeIndianMobileInput(form.phone)!,
       email: form.email.trim(),
       seminarInterests:
         form.seminarInterests.length > 0 ? form.seminarInterests : undefined,
@@ -454,19 +457,15 @@ export function AddStudentDialog({
                 <FieldError message={errors.gender} />
               </div>
 
-              <div
-                className="space-y-2"
-                data-field-error={errors.phone ? "true" : undefined}
-              >
-                <Label htmlFor="as-phone">Student Mobile Number *</Label>
-                <Input
+              <div className="space-y-2 sm:col-span-2">
+                <IndianMobileInput
                   id="as-phone"
+                  label="Student Mobile Number"
+                  required
                   value={form.phone}
-                  onChange={(e) => patch({ phone: e.target.value })}
-                  className={fieldErrorClass(errors.phone)}
-                  aria-invalid={Boolean(errors.phone)}
+                  onChange={(phone) => patch({ phone })}
+                  error={errors.phone}
                 />
-                <FieldError message={errors.phone} />
               </div>
 
               <div

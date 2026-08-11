@@ -22,6 +22,12 @@ import {
   normalizeDeliverableOptions,
 } from "@/constants";
 import { isIndianStateOrUt } from "@/lib/indian-states-uts";
+import {
+  constrainIndianMobileTyping,
+  INDIAN_MOBILE_ERROR,
+  isValidIndianMobile,
+  normalizeIndianMobileInput,
+} from "@/lib/indian-mobile";
 import { eventsService, partnersService, spocsService } from "@/services/api";
 import { DateField } from "@/features/events/event-datetime-fields";
 import {
@@ -620,7 +626,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
   > => {
     const name = managerName.trim();
     const organization = spocOrganization.trim();
-    const phone = managerPhone.trim();
+    const phoneRaw = managerPhone.trim();
     const email = managerEmail.trim();
     const requireComplete = options?.requireComplete ?? false;
 
@@ -641,7 +647,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       };
     }
 
-    const complete = Boolean(name && organization && phone && email);
+    const complete = Boolean(name && organization && phoneRaw && email);
     if (!complete) {
       if (requireComplete) {
         return {
@@ -654,9 +660,14 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
         spocId: undefined,
         organization,
         managerName: name,
-        managerPhone: phone,
+        managerPhone: phoneRaw,
         managerEmail: email,
       };
+    }
+
+    const phone = normalizeIndianMobileInput(phoneRaw);
+    if (!phone) {
+      return { ok: false, error: INDIAN_MOBILE_ERROR };
     }
 
     try {
@@ -1119,6 +1130,12 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       next.primary = "Primary contact needs name, phone & email";
     } else if (!isPartnerPortalEmail(primary.email)) {
       next.primary = "Enter a valid primary contact email";
+    } else {
+      const phoneErr = mobileErrorForSubmit(
+        primary.phone,
+        partner?.primaryContact?.phone ?? ""
+      );
+      if (phoneErr) next.primary = phoneErr;
     }
     if (
       !secondary.name.trim() ||
@@ -1128,6 +1145,12 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       next.secondary = "Secondary contact needs name, phone & email";
     } else if (!isPartnerPortalEmail(secondary.email)) {
       next.secondary = "Enter a valid secondary contact email";
+    } else {
+      const phoneErr = mobileErrorForSubmit(
+        secondary.phone,
+        partner?.secondaryContact?.phone ?? ""
+      );
+      if (phoneErr) next.secondary = phoneErr;
     }
     if (applyFormErrors(setErrors, next)) return;
 
@@ -1135,8 +1158,14 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       name: name.trim(),
       city: city.trim(),
       state: state.trim(),
-      primaryContact: { ...primary },
-      secondaryContact: { ...secondary },
+      primaryContact: {
+        ...primary,
+        phone: canonicalizeMobileOrKeep(primary.phone),
+      },
+      secondaryContact: {
+        ...secondary,
+        phone: canonicalizeMobileOrKeep(secondary.phone),
+      },
       eventIds: partner?.eventIds ?? [],
       relationshipOwner: partner?.relationshipOwner ?? emptyOwner(),
       stage: "New" as const,
@@ -1284,6 +1313,10 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       if (!managerName.trim()) next.mName = "Required";
       if (!spocOrganization.trim()) next.mOrg = "Required";
       if (!managerPhone.trim()) next.mPhone = "Required";
+      else {
+        const phoneErr = mobileErrorForSubmit(managerPhone, "");
+        if (phoneErr) next.mPhone = phoneErr;
+      }
       if (!managerEmail.trim()) next.mEmail = "Required";
     } else if (!spocs.some((s) => s.id === spocChoice)) {
       next.spoc = "Select a SPOC";
@@ -2180,7 +2213,28 @@ function contactFieldHasError(
   if (key === "email" && error.toLowerCase().includes("valid")) {
     return !value.email.trim() || !isPartnerPortalEmail(value.email);
   }
+  if (key === "phone" && error.toLowerCase().includes("mobile")) {
+    return true;
+  }
   return !value[key]?.trim();
+}
+
+function canonicalizeMobileOrKeep(value: string): string {
+  return normalizeIndianMobileInput(value) ?? value.trim();
+}
+
+function mobileErrorForSubmit(
+  value: string,
+  previous: string,
+  options?: { required?: boolean }
+): string | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return options?.required === false ? undefined : "Mobile number is required";
+  }
+  if (trimmed === previous.trim()) return undefined;
+  if (!isValidIndianMobile(trimmed)) return INDIAN_MOBILE_ERROR;
+  return undefined;
 }
 
 function ContactFields({
@@ -2204,27 +2258,37 @@ function ContactFields({
           [
             ["name", "Name"],
             ["designation", "Designation"],
-            ["phone", "Phone"],
+            ["phone", "Mobile Number"],
             ["email", "Email"],
           ] as const
         ).map(([key, label]) => {
           const fieldError = contactFieldHasError(error, key, value);
           return (
-          <div
-            key={key}
-            className="space-y-1.5"
-            data-field-error={fieldError ? "true" : undefined}
-          >
-            <Label>{label}</Label>
-            <Input
-              type={key === "email" ? "email" : "text"}
-              className={fieldErrorClass(fieldError)}
-              aria-invalid={fieldError}
-              value={value[key]}
-              onChange={(e) => onChange({ ...value, [key]: e.target.value })}
-            />
-          </div>
-        );
+            <div
+              key={key}
+              className="space-y-1.5"
+              data-field-error={fieldError ? "true" : undefined}
+            >
+              <Label>{label}</Label>
+              <Input
+                type={key === "email" ? "email" : key === "phone" ? "tel" : "text"}
+                inputMode={key === "phone" ? "numeric" : undefined}
+                autoComplete={key === "phone" ? "tel" : undefined}
+                className={fieldErrorClass(fieldError)}
+                aria-invalid={fieldError}
+                value={value[key]}
+                onChange={(e) =>
+                  onChange({
+                    ...value,
+                    [key]:
+                      key === "phone"
+                        ? constrainIndianMobileTyping(e.target.value)
+                        : e.target.value,
+                  })
+                }
+              />
+            </div>
+          );
         })}
       </div>
     </div>
@@ -2505,12 +2569,19 @@ function ChapterPartnership(props: {
                 className="space-y-1.5"
                 data-field-error={props.errors.mPhone ? "true" : undefined}
               >
-                <Label>Contact number</Label>
+                <Label>Mobile Number</Label>
                 <Input
+                  type="tel"
+                  inputMode="numeric"
+                  autoComplete="tel"
                   className={fieldErrorClass(props.errors.mPhone)}
                   aria-invalid={Boolean(props.errors.mPhone)}
                   value={props.managerPhone}
-                  onChange={(e) => props.setManagerPhone(e.target.value)}
+                  onChange={(e) =>
+                    props.setManagerPhone(
+                      constrainIndianMobileTyping(e.target.value)
+                    )
+                  }
                 />
                 <FieldError message={props.errors.mPhone} />
               </div>

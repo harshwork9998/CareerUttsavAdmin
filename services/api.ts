@@ -1,4 +1,5 @@
 import { generateId } from "@/lib/utils";
+import { validateIndianMobileOnWrite } from "@/lib/indian-mobile";
 import {
   createPartnerApi,
   deletePartnerApi,
@@ -107,8 +108,24 @@ export const universitiesService = {
   getById: (id: string) => simulate(mockUniversities.find((u) => u.id === id) ?? null),
   getByEvent: (eventId: string) =>
     simulate(mockUniversities.filter((u) => u.eventIds.includes(eventId))),
-  update: (id: string, data: Partial<University>) =>
-    simulate({ ...mockUniversities.find((u) => u.id === id)!, ...data }),
+  update: (id: string, data: Partial<University>) => {
+    const existing = mockUniversities.find((u) => u.id === id);
+    if (!existing) {
+      return simulate(null as unknown as University);
+    }
+    if (data.contactPhone !== undefined) {
+      const phone = validateIndianMobileOnWrite(
+        data.contactPhone,
+        existing.contactPhone,
+        { required: false, label: "University contact mobile" }
+      );
+      if (!phone.ok) {
+        return Promise.reject(new Error(phone.error));
+      }
+      data = { ...data, contactPhone: phone.value };
+    }
+    return simulate({ ...existing, ...data });
+  },
 };
 
 export const partnersService = {

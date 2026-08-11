@@ -1,11 +1,14 @@
 import { z } from "zod";
 
-/** Strip non-digits and keep the last 10 digits (handles +91 prefix). */
-export function normalizeIndianMobile(value: string): string {
-  return value.replace(/\D/g, "").slice(-10);
-}
+import {
+  INDIAN_MOBILE_ERROR,
+  normalizeIndianMobileInput,
+} from "@/lib/indian-mobile";
 
-const INDIAN_MOBILE_REGEX = /^[6-9]\d{9}$/;
+/** @deprecated Prefer normalizeIndianMobileInput from @/lib/indian-mobile */
+export function normalizeIndianMobile(value: string): string {
+  return normalizeIndianMobileInput(value) ?? "";
+}
 
 export const emailFieldSchema = z
   .string()
@@ -25,9 +28,16 @@ export const loginPasswordSchema = z
 export const indianMobileFieldSchema = z
   .string()
   .min(1, "Mobile number is required")
-  .transform(normalizeIndianMobile)
-  .refine((value) => INDIAN_MOBILE_REGEX.test(value), {
-    message: "Enter a valid 10-digit Indian mobile number (starts with 6–9)",
+  .transform((value, ctx) => {
+    const mobile = normalizeIndianMobileInput(value);
+    if (!mobile) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: INDIAN_MOBILE_ERROR,
+      });
+      return z.NEVER;
+    }
+    return mobile;
   });
 
 export const loginSchema = z.object({

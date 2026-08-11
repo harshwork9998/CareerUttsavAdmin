@@ -16,6 +16,11 @@ import {
 import { REGISTRATION_KIND_LABELS } from "@/lib/registration-kinds";
 import type { Event, RegistrationKind } from "@/types";
 import {
+  indianMobileFieldError,
+  IndianMobileInput,
+} from "@/components/forms/indian-mobile-input";
+import { normalizeIndianMobileInput } from "@/lib/indian-mobile";
+import {
   applyFormErrors,
   FieldError,
   fieldErrorClass,
@@ -103,10 +108,6 @@ function isValidEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
-function phoneDigits(value: string): string {
-  return value.replace(/\D/g, "");
-}
-
 export function AddKindRegistrationDialog({
   kind,
   open,
@@ -150,9 +151,11 @@ export function AddKindRegistrationDialog({
       if (f.schoolContactName.trim().length < 2) next.schoolContactName = "Name is required";
       if (f.schoolName.trim().length < 2) next.schoolName = "School name is required";
       if (f.schoolCity.trim().length < 2) next.schoolCity = "City is required";
-      if (phoneDigits(f.schoolContactNumber).length < 10) {
-        next.schoolContactNumber = "Contact number is required";
-      }
+      const schoolPhoneError = indianMobileFieldError(f.schoolContactNumber, {
+        required: true,
+        emptyMessage: "Contact number is required",
+      });
+      if (schoolPhoneError) next.schoolContactNumber = schoolPhoneError;
       if (!isValidEmail(f.schoolContactEmail.trim())) {
         next.schoolContactEmail = "Valid email is required";
       }
@@ -163,7 +166,7 @@ export function AddKindRegistrationDialog({
         schoolContactName: f.schoolContactName.trim(),
         schoolName: f.schoolName.trim(),
         schoolCity: f.schoolCity.trim(),
-        schoolContactNumber: f.schoolContactNumber.trim(),
+        schoolContactNumber: normalizeIndianMobileInput(f.schoolContactNumber)!,
         schoolContactEmail: f.schoolContactEmail.trim(),
       };
       return payload;
@@ -178,9 +181,11 @@ export function AddKindRegistrationDialog({
         next.partnerRegInstitutionName = "Institution name is required";
       }
       if (f.partnerRegCity.trim().length < 2) next.partnerRegCity = "City is required";
-      if (phoneDigits(f.partnerRegContactNumber).length < 10) {
-        next.partnerRegContactNumber = "Contact number is required";
-      }
+      const partnerPhoneError = indianMobileFieldError(f.partnerRegContactNumber, {
+        required: true,
+        emptyMessage: "Contact number is required",
+      });
+      if (partnerPhoneError) next.partnerRegContactNumber = partnerPhoneError;
       if (!isValidEmail(f.partnerRegContactEmail.trim())) {
         next.partnerRegContactEmail = "Valid email is required";
       }
@@ -191,7 +196,9 @@ export function AddKindRegistrationDialog({
         partnerRegContactName: f.partnerRegContactName.trim(),
         partnerRegInstitutionName: f.partnerRegInstitutionName.trim(),
         partnerRegCity: f.partnerRegCity.trim(),
-        partnerRegContactNumber: f.partnerRegContactNumber.trim(),
+        partnerRegContactNumber: normalizeIndianMobileInput(
+          f.partnerRegContactNumber
+        )!,
         partnerRegContactEmail: f.partnerRegContactEmail.trim(),
       };
       return payload;
@@ -207,9 +214,11 @@ export function AddKindRegistrationDialog({
     if (!Number.isFinite(age) || age < 10 || age > 25) {
       next.ambassadorAge = "Enter age between 10 and 25";
     }
-    if (phoneDigits(f.ambassadorPhone).length < 10) {
-      next.ambassadorPhone = "Contact number is required";
-    }
+    const ambassadorPhoneError = indianMobileFieldError(f.ambassadorPhone, {
+      required: true,
+      emptyMessage: "Contact number is required",
+    });
+    if (ambassadorPhoneError) next.ambassadorPhone = ambassadorPhoneError;
     if (!isValidEmail(f.ambassadorEmail.trim())) {
       next.ambassadorEmail = "Valid email is required";
     }
@@ -221,7 +230,7 @@ export function AddKindRegistrationDialog({
       ambassadorClass: f.ambassadorClass,
       ambassadorSchoolCollege: f.ambassadorSchoolCollege.trim(),
       ambassadorAge: age,
-      ambassadorPhone: f.ambassadorPhone.trim(),
+      ambassadorPhone: normalizeIndianMobileInput(f.ambassadorPhone)!,
       ambassadorEmail: f.ambassadorEmail.trim(),
     };
     return payload;
@@ -310,9 +319,10 @@ export function AddKindRegistrationDialog({
                   error={errors.schoolCity}
                   onChange={(v) => patch({ schoolCity: v })}
                 />
-                <Field
+                <IndianMobileInput
                   id="schoolContactNumber"
-                  label="Contact Number *"
+                  label="Mobile Number"
+                  required
                   value={(form as SchoolFormState).schoolContactNumber}
                   error={errors.schoolContactNumber}
                   onChange={(v) => patch({ schoolContactNumber: v })}
@@ -360,12 +370,12 @@ export function AddKindRegistrationDialog({
                   error={errors.partnerRegCity}
                   onChange={(v) => patch({ partnerRegCity: v })}
                 />
-                <Field
+                <IndianMobileInput
                   id="partnerRegContactNumber"
-                  label="Contact Number *"
+                  label="Mobile Number"
+                  required
                   value={
-                    (form as PartnerFormState)
-                      .partnerRegContactNumber
+                    (form as PartnerFormState).partnerRegContactNumber
                   }
                   error={errors.partnerRegContactNumber}
                   onChange={(v) => patch({ partnerRegContactNumber: v })}
@@ -445,12 +455,12 @@ export function AddKindRegistrationDialog({
                   error={errors.ambassadorAge}
                   onChange={(v) => patch({ ambassadorAge: v })}
                 />
-                <Field
+                <IndianMobileInput
                   id="ambassadorPhone"
-                  label="Number *"
+                  label="Mobile Number"
+                  required
                   value={
-                    (form as AmbassadorFormState)
-                      .ambassadorPhone
+                    (form as AmbassadorFormState).ambassadorPhone
                   }
                   error={errors.ambassadorPhone}
                   onChange={(v) => patch({ ambassadorPhone: v })}

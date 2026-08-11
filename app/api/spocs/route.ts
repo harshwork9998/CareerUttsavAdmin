@@ -17,13 +17,18 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const body = (await request.json()) as Partial<Spoc>;
-  const validated = validateSpocInput(body);
+  const spocs = loadSpocs();
+  const emailHint = typeof body.email === "string" ? body.email : "";
+  const existing = emailHint ? findSpocByEmail(spocs, emailHint) : null;
+
+  const validated = validateSpocInput(
+    body,
+    existing ? { phone: existing.phone } : null
+  );
   if (!validated.ok) {
     return NextResponse.json({ error: validated.error }, { status: 400 });
   }
 
-  const spocs = loadSpocs();
-  const existing = findSpocByEmail(spocs, validated.data.email);
   if (existing) {
     const updated: Spoc = {
       ...existing,

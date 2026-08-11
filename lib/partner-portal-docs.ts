@@ -5,8 +5,10 @@ import type {
   PartnerSeminarSlotAssignment,
 } from "@/types";
 
+import { isValidIndianMobile } from "@/lib/indian-mobile";
+
 function isValidRepPhone(phone: string): boolean {
-  return /^[6-9]\d{9}$/.test(phone.replace(/\D/g, "").slice(-10));
+  return isValidIndianMobile(phone);
 }
 
 function isRepresentativesRowComplete(

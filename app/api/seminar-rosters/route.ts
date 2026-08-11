@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 
 import {
+  loadRawSeminarRosters,
   loadSeminarRosters,
   upsertSeminarRoster,
 } from "@/lib/server/seminar-rosters-persistence";
 import { loadEvents } from "@/lib/server/events-persistence";
+import { applySeminarSpeakerMobileValidation } from "@/lib/seminar-roster-mobile";
 import { buildValidSeminarSessionKeys } from "@/lib/seminar-roster-links";
 import type { SeminarSessionRoster } from "@/types";
 
@@ -30,8 +32,18 @@ export async function POST(request: Request) {
     );
   }
 
+  const existing = loadRawSeminarRosters().find(
+    (entry) =>
+      entry.eventId === roster.eventId && entry.seminarId === roster.seminarId
+  );
+
+  const mobiles = applySeminarSpeakerMobileValidation(roster, existing);
+  if (!mobiles.ok) {
+    return NextResponse.json({ error: mobiles.error }, { status: 400 });
+  }
+
   const saved = upsertSeminarRoster({
-    ...roster,
+    ...mobiles.roster,
     eventId: roster.eventId,
     seminarId: roster.seminarId,
   });

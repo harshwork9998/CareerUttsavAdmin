@@ -36,7 +36,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     organization: body.organization ?? current.organization,
     phone: body.phone ?? current.phone,
     email: body.email ?? current.email,
-  });
+  }, { phone: current.phone });
   if (!validated.ok) {
     return NextResponse.json({ error: validated.error }, { status: 400 });
   }

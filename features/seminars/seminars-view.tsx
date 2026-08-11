@@ -15,6 +15,12 @@ import {
 import { toast } from "sonner";
 
 import { eventsService, partnersService, seminarsService } from "@/services/api";
+import {
+  constrainIndianMobileTyping,
+  INDIAN_MOBILE_ERROR,
+  isValidIndianMobile,
+} from "@/lib/indian-mobile";
+import { applySeminarSpeakerMobileValidation } from "@/lib/seminar-roster-mobile";
 import { rosterSessionKey } from "@/lib/seminar-roster-links";
 import {
   blockedPartnerForSeat,
@@ -303,9 +309,16 @@ export function SeminarsView() {
 
   const handleSaveRoster = () => {
     if (!draft || !active) return;
-    saveMutation.mutate(
-      rosterFromPanelistSeats(draft, panelistSeats)
+    const roster = rosterFromPanelistSeats(draft, panelistSeats);
+    const checked = applySeminarSpeakerMobileValidation(
+      roster,
+      activeRoster ?? undefined
     );
+    if (!checked.ok) {
+      toast.error(checked.error);
+      return;
+    }
+    saveMutation.mutate(checked.roster);
   };
 
   const selectedSpeaker: SeminarSpeaker | null = useMemo(() => {
@@ -329,6 +342,26 @@ export function SeminarsView() {
     selectedSeatIndex != null
       ? blockedPartnerForSeat(partnerBlocks, selectedSeatIndex)
       : undefined;
+
+  const selectedSpeakerBaselineContact = useMemo(() => {
+    if (!selectedSpeakerId || !activeRoster) return "";
+    if (activeRoster.moderator?.id === selectedSpeakerId) {
+      return activeRoster.moderator.contact ?? "";
+    }
+    return (
+      activeRoster.panelists.find((p) => p.id === selectedSpeakerId)?.contact ??
+      ""
+    );
+  }, [activeRoster, selectedSpeakerId]);
+
+  const selectedSpeakerMobileError = useMemo(() => {
+    if (!selectedSpeaker) return undefined;
+    const contact = selectedSpeaker.contact?.trim() ?? "";
+    if (!contact) return undefined;
+    if (contact === selectedSpeakerBaselineContact.trim()) return undefined;
+    if (!isValidIndianMobile(contact)) return INDIAN_MOBILE_ERROR;
+    return undefined;
+  }, [selectedSpeaker, selectedSpeakerBaselineContact]);
 
   const isModeratorSelected =
     Boolean(draft?.moderator) && draft?.moderator?.id === selectedSpeakerId;
@@ -796,15 +829,30 @@ export function SeminarsView() {
                                 />
                               </div>
                               <div className="space-y-1">
-                                <Label className="text-xs">Contact number</Label>
+                                <Label className="text-xs">Mobile Number</Label>
                                 <Input
+                                  type="tel"
+                                  inputMode="numeric"
+                                  autoComplete="tel"
                                   className="h-9 text-sm"
                                   value={selectedSpeaker.contact ?? ""}
                                   onChange={(e) =>
-                                    updateSpeaker({ contact: e.target.value })
+                                    updateSpeaker({
+                                      contact: constrainIndianMobileTyping(
+                                        e.target.value
+                                      ),
+                                    })
                                   }
-                                  placeholder="From partner portal"
+                                  placeholder="10-digit mobile number"
+                                  aria-invalid={Boolean(
+                                    selectedSpeakerMobileError
+                                  )}
                                 />
+                                {selectedSpeakerMobileError ? (
+                                  <p className="text-xs text-destructive">
+                                    {selectedSpeakerMobileError}
+                                  </p>
+                                ) : null}
                               </div>
                               <div className="space-y-1">
                                 <Label className="text-xs">Designation</Label>

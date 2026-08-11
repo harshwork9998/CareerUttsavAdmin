@@ -5,6 +5,7 @@ import {
   toPublicPartner,
 } from "@/lib/partner-credentials";
 import { loadPartners, savePartners } from "@/lib/server/partners-persistence";
+import { validatePartnerContactPhones } from "@/lib/partner-validation";
 import type { Partner } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -28,8 +29,14 @@ export async function PATCH(request: Request, context: RouteContext) {
   if (idx === -1) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+
+  const phones = validatePartnerContactPhones(patch, partners[idx]);
+  if (!phones.ok) {
+    return NextResponse.json({ error: phones.error }, { status: 400 });
+  }
+
   const updated = applyPartnerCredentialFields(partners[idx], {
-    ...patch,
+    ...phones.patch,
     updatedAt: new Date().toISOString(),
   });
   const next = [...partners];

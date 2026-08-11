@@ -1,4 +1,9 @@
 import { canonicalizeSeminarTitle } from "@/features/dashboard/seminars";
+import {
+  INDIAN_MOBILE_ERROR,
+  normalizeIndianMobileInput,
+  requireIndianMobile,
+} from "@/lib/indian-mobile";
 import { nextRegistrationNumber } from "@/lib/registration-number";
 import type {
   Event,
@@ -106,10 +111,6 @@ function isValidEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
-function phoneDigits(value: string): string {
-  return value.replace(/\D/g, "");
-}
-
 export function normalizeSeminarInterests(
   interests: string[] | undefined
 ): string[] {
@@ -154,10 +155,11 @@ function validateStudentCreate(
     return { ok: false, error: "A valid email address is required" };
   }
 
-  const phone = body.phone?.trim() ?? "";
-  if (phoneDigits(phone).length < 10) {
-    return { ok: false, error: "Student mobile number is required" };
+  const phoneResult = requireIndianMobile(body.phone, "Student mobile number");
+  if (!phoneResult.ok) {
+    return { ok: false, error: phoneResult.error };
   }
+  const phone = phoneResult.mobile;
 
   const phoneVerificationToken =
     typeof body.phoneVerificationToken === "string"
@@ -211,12 +213,17 @@ function validateStudentCreate(
     return { ok: false, error: "City is required" };
   }
 
-  const parentPhone = body.parentPhone?.trim();
-  if (parentPhone && phoneDigits(parentPhone).length < 10) {
-    return {
-      ok: false,
-      error: "Parent mobile number must be at least 10 digits",
-    };
+  const parentPhoneRaw = body.parentPhone?.trim();
+  let parentPhone: string | undefined;
+  if (parentPhoneRaw) {
+    const parent = normalizeIndianMobileInput(parentPhoneRaw);
+    if (!parent) {
+      return {
+        ok: false,
+        error: `Parent mobile number: ${INDIAN_MOBILE_ERROR}`,
+      };
+    }
+    parentPhone = parent;
   }
 
   // Accept any number of seminar picks; public UI may still show "up to 3" copy.
@@ -231,7 +238,7 @@ function validateStudentCreate(
       email,
       phone,
       phoneVerificationToken: phoneVerificationToken || undefined,
-      parentPhone: parentPhone || undefined,
+      parentPhone,
       college,
       classLabel,
       interestedStream,
@@ -265,10 +272,14 @@ function validateSchoolCreate(
     return { ok: false, error: "City is required" };
   }
 
-  const schoolContactNumber = body.schoolContactNumber?.trim() ?? "";
-  if (phoneDigits(schoolContactNumber).length < 10) {
-    return { ok: false, error: "Contact number is required" };
+  const schoolPhone = requireIndianMobile(
+    body.schoolContactNumber,
+    "Contact number"
+  );
+  if (!schoolPhone.ok) {
+    return { ok: false, error: schoolPhone.error };
   }
+  const schoolContactNumber = schoolPhone.mobile;
 
   const schoolContactEmail = body.schoolContactEmail?.trim() ?? "";
   if (!isValidEmail(schoolContactEmail)) {
@@ -311,10 +322,14 @@ function validatePartnerRegistrationCreate(
     return { ok: false, error: "City is required" };
   }
 
-  const partnerRegContactNumber = body.partnerRegContactNumber?.trim() ?? "";
-  if (phoneDigits(partnerRegContactNumber).length < 10) {
-    return { ok: false, error: "Contact number is required" };
+  const partnerPhone = requireIndianMobile(
+    body.partnerRegContactNumber,
+    "Contact number"
+  );
+  if (!partnerPhone.ok) {
+    return { ok: false, error: partnerPhone.error };
   }
+  const partnerRegContactNumber = partnerPhone.mobile;
 
   const partnerRegContactEmail = body.partnerRegContactEmail?.trim() ?? "";
   if (!isValidEmail(partnerRegContactEmail)) {
@@ -365,10 +380,14 @@ function validateAmbassadorCreate(
     return { ok: false, error: "Enter a valid age (10–25)" };
   }
 
-  const ambassadorPhone = body.ambassadorPhone?.trim() ?? "";
-  if (phoneDigits(ambassadorPhone).length < 10) {
-    return { ok: false, error: "Contact number is required" };
+  const ambassadorPhoneResult = requireIndianMobile(
+    body.ambassadorPhone,
+    "Contact number"
+  );
+  if (!ambassadorPhoneResult.ok) {
+    return { ok: false, error: ambassadorPhoneResult.error };
   }
+  const ambassadorPhone = ambassadorPhoneResult.mobile;
 
   const ambassadorEmail = body.ambassadorEmail?.trim() ?? "";
   if (!isValidEmail(ambassadorEmail)) {
