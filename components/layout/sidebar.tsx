@@ -263,7 +263,7 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
                 <div className="flex flex-col gap-0.5">
                   <span>{user?.name ?? "Admin User"}</span>
                   <span className="text-xs font-normal text-muted-foreground">
-                    {user?.email ?? "admin@careeruttsav.com"}
+                    {user?.email ?? "admin@careeruttsav.in"}
                   </span>
                 </div>
               </DropdownMenuLabel>

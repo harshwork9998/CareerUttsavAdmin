@@ -1,8 +1,20 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const PORTAL_ORIGIN =
-  process.env.PARTNER_PORTAL_ORIGIN ?? "http://localhost:3001";
+const DEFAULT_PARTNER_PORTAL_ORIGINS = [
+  "http://localhost:3001",
+  "http://127.0.0.1:3001",
+  "https://partners.careeruttsav.in",
+];
+
+const PARTNER_PORTAL_ORIGINS = (
+  process.env.PARTNER_PORTAL_ORIGINS ??
+  process.env.PARTNER_PORTAL_ORIGIN ??
+  DEFAULT_PARTNER_PORTAL_ORIGINS.join(",")
+)
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 const DEFAULT_PUBLIC_ORIGINS = [
   "http://localhost:8080",
@@ -11,6 +23,9 @@ const DEFAULT_PUBLIC_ORIGINS = [
   "http://127.0.0.1:5500",
   "http://localhost:3002",
   "http://127.0.0.1:3002",
+  "https://new.careeruttsav.in",
+  "https://www.careeruttsav.in",
+  "https://careeruttsav.in",
 ];
 
 const PUBLIC_ORIGINS = (
@@ -71,10 +86,17 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (isPartnerPortalApi(pathname)) {
+    const origin = resolveAllowedOrigin(request, PARTNER_PORTAL_ORIGINS);
     if (request.method === "OPTIONS") {
-      return withCors(new NextResponse(null, { status: 204 }), PORTAL_ORIGIN);
+      if (!origin) {
+        return new NextResponse(null, { status: 403 });
+      }
+      return withCors(new NextResponse(null, { status: 204 }), origin);
     }
-    return withCors(NextResponse.next(), PORTAL_ORIGIN);
+    if (!origin && request.headers.get("origin")) {
+      return NextResponse.json({ error: "Origin not allowed" }, { status: 403 });
+    }
+    return withCors(NextResponse.next(), origin);
   }
 
   if (isPublicRegistrationApi(pathname)) {

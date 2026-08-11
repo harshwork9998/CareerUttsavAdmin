@@ -20,6 +20,7 @@ interface SeedPasswords {
 }
 
 const SEED_PASSWORDS: SeedPasswords = {
+  "admin@careeruttsav.in": "admin123",
   "admin@careeruttsav.com": "admin123",
   "user@careeruttsav.com": "user123",
 };
@@ -40,6 +41,30 @@ function seedStore(): UserAuthRecord[] {
   return seed;
 }
 
+/** Ensure known seed logins exist even if an older users-store.json is already present. */
+function ensureSeedAccounts(records: UserAuthRecord[]): UserAuthRecord[] {
+  const byEmail = new Map(
+    records.map((record) => [normalizeEmail(record.user.email), record])
+  );
+  let changed = false;
+
+  for (const user of mockUsers) {
+    const email = normalizeEmail(user.email);
+    if (byEmail.has(email)) continue;
+    byEmail.set(email, {
+      user,
+      password: SEED_PASSWORDS[email] ?? "changeme",
+    });
+    changed = true;
+  }
+
+  if (!changed) return records;
+
+  const next = Array.from(byEmail.values());
+  saveUserAuthRecords(next);
+  return next;
+}
+
 export function loadUserAuthRecords(): UserAuthRecord[] {
   try {
     if (!fs.existsSync(STORE_PATH)) {
@@ -52,7 +77,7 @@ export function loadUserAuthRecords(): UserAuthRecord[] {
       return seedStore();
     }
 
-    return parsed;
+    return ensureSeedAccounts(parsed);
   } catch {
     return seedStore();
   }

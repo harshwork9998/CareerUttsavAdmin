@@ -1,7 +1,8 @@
 /**
  * OTP delivery provider resolution.
  * - Default: msg91
- * - Mock only when OTP_PROVIDER=mock (never in production)
+ * - Mock when OTP_PROVIDER=mock in local/dev
+ * - Mock on a production host only with explicit ALLOW_MOCK_OTP=true (staging/test)
  */
 
 export type OtpProviderName = "msg91" | "mock";
@@ -17,6 +18,13 @@ export function isProductionEnv(
   return nodeEnv === "production" || vercelEnv === "production";
 }
 
+export function isMockOtpExplicitlyAllowed(
+  raw: string | undefined = process.env.ALLOW_MOCK_OTP
+): boolean {
+  const value = (raw ?? "").trim().toLowerCase();
+  return value === "1" || value === "true" || value === "yes";
+}
+
 export function readOtpProviderName(
   raw = process.env.OTP_PROVIDER
 ): OtpProviderName {
@@ -27,11 +35,13 @@ export function readOtpProviderName(
 
 /**
  * Resolve the active OTP provider.
- * Mock requires explicit OTP_PROVIDER=mock and is refused in production.
+ * Mock requires OTP_PROVIDER=mock. In production NODE_ENV it also needs
+ * ALLOW_MOCK_OTP=true (for hosted staging/testing only).
  * MSG91 requires MSG91_AUTH_KEY + MSG91_TEMPLATE_ID.
  */
 export function resolveOtpProvider(env: {
   OTP_PROVIDER?: string;
+  ALLOW_MOCK_OTP?: string;
   NODE_ENV?: string;
   VERCEL_ENV?: string;
   MSG91_AUTH_KEY?: string;
@@ -41,12 +51,12 @@ export function resolveOtpProvider(env: {
   const production = isProductionEnv(env.NODE_ENV, env.VERCEL_ENV);
 
   if (provider === "mock") {
-    if (production) {
+    if (production && !isMockOtpExplicitlyAllowed(env.ALLOW_MOCK_OTP)) {
       return {
         ok: false,
         status: 503,
         error:
-          "OTP mock provider is not allowed in production. Set OTP_PROVIDER=msg91.",
+          "OTP mock provider is not allowed in production unless ALLOW_MOCK_OTP=true. Prefer OTP_PROVIDER=msg91 with MSG91 keys.",
       };
     }
     return { ok: true, provider: "mock" };

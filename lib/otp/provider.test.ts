@@ -58,7 +58,7 @@ describe("resolveOtpProvider", () => {
     expect(ok).toEqual({ ok: true, provider: "msg91" });
   });
 
-  it("allows mock only outside production", () => {
+  it("allows mock only outside production unless ALLOW_MOCK_OTP=true", () => {
     expect(
       resolveOtpProvider({
         OTP_PROVIDER: "mock",
@@ -80,5 +80,13 @@ describe("resolveOtpProvider", () => {
         VERCEL_ENV: "production",
       })
     ).toMatchObject({ ok: false, status: 503 });
+
+    expect(
+      resolveOtpProvider({
+        OTP_PROVIDER: "mock",
+        NODE_ENV: "production",
+        ALLOW_MOCK_OTP: "true",
+      })
+    ).toEqual({ ok: true, provider: "mock" });
   });
 });
