@@ -67,6 +67,16 @@ function resolveAllowedOrigin(
   return null;
 }
 
+/** Admin UI same-origin, or configured Partner Portal origins. */
+function resolvePartnerApiOrigin(request: NextRequest): string | null {
+  const origin = request.headers.get("origin");
+  // Admin app calling its own /api/partners/* (e.g. admin.careeruttsav.in)
+  if (origin && origin === request.nextUrl.origin) {
+    return origin;
+  }
+  return resolveAllowedOrigin(request, PARTNER_PORTAL_ORIGINS);
+}
+
 function isPartnerPortalApi(pathname: string) {
   return (
     pathname.startsWith("/api/partners") ||
@@ -86,7 +96,7 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (isPartnerPortalApi(pathname)) {
-    const origin = resolveAllowedOrigin(request, PARTNER_PORTAL_ORIGINS);
+    const origin = resolvePartnerApiOrigin(request);
     if (request.method === "OPTIONS") {
       if (!origin) {
         return new NextResponse(null, { status: 403 });
