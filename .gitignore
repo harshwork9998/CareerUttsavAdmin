@@ -29,10 +29,14 @@ temp-partner.json
 .env
 .env*.local
 
-# local persisted stores (dev — survives restarts)
-/data/partners-store.json
-/data/spocs-store.json
-/data/users-store.json
+# runtime JSON persistence under /data (not seed; seed lives in lib/mock-data)
+# keep data/.gitkeep tracked
+/data/*.json
+/data/*.json.backup-*
+/data/*.json.bak
+/data/*.bak
+/data/*-backup*.json
+/data/backups/
 
 # typescript
 *.tsbuildinfo
