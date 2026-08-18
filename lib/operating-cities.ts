@@ -1,5 +1,5 @@
 /** Career Uttsav operating cities — partners and events must use one of these. */
-export const OPERATING_CITIES = ["Bangalore", "Mysore", "Hubli"] as const;
+export const OPERATING_CITIES = ["Bangalore"] as const;
 
 export type OperatingCity = (typeof OPERATING_CITIES)[number];
 

@@ -100,10 +100,7 @@ function formatSeminarTime(time: string): string {
 }
 
 function eventOperatingCity(city: string): OperatingCity {
-  if (city === "Mysore" || city === "Hubli" || city === "Bangalore") {
-    return city;
-  }
-  return "Bangalore";
+  return city.trim() === "Bangalore" ? "Bangalore" : "Bangalore";
 }
 
 function toDateOnly(value: string): string {

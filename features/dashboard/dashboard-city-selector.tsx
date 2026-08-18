@@ -6,8 +6,6 @@ import type { DashboardCityFilter } from "@/types";
 const CITY_TABS: Array<{ value: DashboardCityFilter; label: string }> = [
   { value: "all", label: "Consolidated" },
   { value: "Bangalore", label: "Bangalore" },
-  { value: "Mysore", label: "Mysore" },
-  { value: "Hubli", label: "Hubli" },
 ];
 
 export function DashboardCitySelector({

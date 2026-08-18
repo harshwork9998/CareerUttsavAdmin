@@ -252,9 +252,9 @@ export const mockDashboardData: DashboardData = {
       id: "ra-002",
       type: "event",
       title: "Event live",
-      description: "Career Uttsav Delhi NCR 2026 is now live",
+      description: "Career Uttsav Bengaluru 2026 is upcoming",
       timestamp: "2026-07-05T08:00:00+05:30",
-      link: "/events/evt-002",
+      link: "/events/evt-001",
     },
     {
       id: "ra-003",
@@ -354,15 +354,6 @@ export const mockDashboardData: DashboardData = {
   ],
   upcomingEvents: [
     {
-      id: "evt-002",
-      title: "Career Uttsav Delhi NCR 2026",
-      startDate: "2026-07-05T10:00:00+05:30",
-      city: "New Delhi",
-      status: "Live",
-      registrationCount: 12450,
-      maxCapacity: 20000,
-    },
-    {
       id: "evt-001",
       title: "Career Uttsav Bengaluru 2026",
       startDate: "2026-08-15T09:00:00+05:30",
@@ -370,24 +361,6 @@ export const mockDashboardData: DashboardData = {
       status: "Published",
       registrationCount: 8420,
       maxCapacity: 15000,
-    },
-    {
-      id: "evt-003",
-      title: "Career Uttsav Hubli 2025",
-      startDate: "2025-12-10T09:30:00+05:30",
-      city: "Hubli",
-      status: "Completed",
-      registrationCount: 5890,
-      maxCapacity: 6000,
-    },
-    {
-      id: "evt-006",
-      title: "Career Uttsav Chennai 2026",
-      startDate: "2026-11-08T09:00:00+05:30",
-      city: "Chennai",
-      status: "Draft",
-      registrationCount: 0,
-      maxCapacity: 10000,
     },
   ],
   targets: [

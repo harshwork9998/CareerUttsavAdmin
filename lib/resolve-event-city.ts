@@ -13,7 +13,5 @@ export function resolveEventCity(
   if (title.includes("bangalore") || title.includes("bengaluru")) {
     return "Bangalore";
   }
-  if (title.includes("mysore") || title.includes("mysuru")) return "Mysore";
-  if (title.includes("hubli") || title.includes("hubballi")) return "Hubli";
   return null;
 }

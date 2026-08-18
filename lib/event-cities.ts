@@ -31,7 +31,7 @@ export function formatEventCitiesList(
   return unique.join(separator);
 }
 
-/** e.g. "Bangalore, Mysore & Hubli" */
+/** e.g. "Bangalore & Chennai" when multiple event cities exist */
 export function formatEventCitiesDescription(cities: string[]): string {
   const unique = cities.map((city) => city.trim()).filter(Boolean);
   if (unique.length === 0) return "your cities";

@@ -22,6 +22,7 @@ import {
   normalizeDeliverableOptions,
 } from "@/constants";
 import { isIndianStateOrUt } from "@/lib/indian-states-uts";
+import { CURRENT_EVENT_ID } from "@/lib/current-events";
 import {
   constrainIndianMobileTyping,
   INDIAN_MOBILE_ERROR,
@@ -75,7 +76,6 @@ import {
   partnerHasEventPackages,
   partnerNeedsEventLinkPrune,
   prunePartnerEventLinks,
-  removeEventPartnership,
   resolveEventPartnerships,
   seminarSlotAssignmentsMatchBudget,
   seminarSlotBudgetByEvent,
@@ -105,7 +105,6 @@ import {
   fieldErrorSurfaceClass,
   applyFormErrors,
 } from "@/components/shared/form-field-error";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -160,6 +159,21 @@ const emptyOwner = (): RelationshipOwner => ({
   managerPhone: "",
   managerEmail: "",
 });
+
+/** Default Bangalore event association for new partner journeys. */
+function defaultCurrentEventPartnerships(): PartnerEventPartnership[] {
+  return upsertEventPartnership(
+    [],
+    CURRENT_EVENT_ID,
+    { deliverables: [], seminarSlotCount: 0 },
+    generateId
+  );
+}
+
+function ensureCurrentEventIds(eventIds: string[]): string[] {
+  if (eventIds.includes(CURRENT_EVENT_ID)) return eventIds;
+  return [CURRENT_EVENT_ID, ...eventIds];
+}
 
 function resolveSpocChoice(
   owner: RelationshipOwner | undefined,
@@ -355,10 +369,10 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
   const [spocOrganization, setSpocOrganization] = useState("");
   const [managerPhone, setManagerPhone] = useState("");
   const [managerEmail, setManagerEmail] = useState("");
-  const [eventIds, setEventIds] = useState<string[]>([]);
+  const [eventIds, setEventIds] = useState<string[]>([CURRENT_EVENT_ID]);
   const [eventPartnerships, setEventPartnerships] = useState<
     PartnerEventPartnership[]
-  >([]);
+  >(() => defaultCurrentEventPartnerships());
   const [sponsorshipNotes, setSponsorshipNotes] = useState("");
   const [slotAssignments, setSlotAssignments] = useState<
     PartnerSeminarSlotAssignment[]
@@ -730,7 +744,10 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
         state: state.trim(),
         primaryContact: { ...primary },
         secondaryContact: { ...secondary },
-        eventIds: partner?.eventIds ?? [],
+        eventIds:
+          partner?.eventIds?.length
+            ? partner.eventIds
+            : ensureCurrentEventIds(eventIds),
         relationshipOwner: partner?.relationshipOwner ?? emptyOwner(),
         stage: partner?.stage ?? "New",
         stageRemarks: partner?.stageRemarks ?? [],
@@ -743,7 +760,12 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
         sponsorshipNotes: partner?.sponsorshipNotes,
         deliverables: partner?.deliverables,
         deliverablesConfirmedAt: partner?.deliverablesConfirmedAt,
-        eventPartnerships: partner?.eventPartnerships,
+        eventPartnerships:
+          partner?.eventPartnerships?.length
+            ? partner.eventPartnerships
+            : eventPartnerships.some((ep) => ep.eventId === CURRENT_EVENT_ID)
+              ? eventPartnerships
+              : defaultCurrentEventPartnerships(),
         seminarSlotAssignments: partner?.seminarSlotAssignments,
         seminarSlotsConfirmedAt: partner?.seminarSlotsConfirmedAt,
         totalAmount: partner?.totalAmount,
@@ -1166,7 +1188,16 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
         ...secondary,
         phone: canonicalizeMobileOrKeep(secondary.phone),
       },
-      eventIds: partner?.eventIds ?? [],
+      eventIds:
+        partner?.eventIds?.length
+          ? partner.eventIds
+          : ensureCurrentEventIds(eventIds),
+      eventPartnerships:
+        partner?.eventPartnerships?.length
+          ? partner.eventPartnerships
+          : eventPartnerships.some((ep) => ep.eventId === CURRENT_EVENT_ID)
+            ? eventPartnerships
+            : defaultCurrentEventPartnerships(),
       relationshipOwner: partner?.relationshipOwner ?? emptyOwner(),
       stage: "New" as const,
       stageRemarks: partner?.stageRemarks ?? [],
@@ -1321,9 +1352,9 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     } else if (!spocs.some((s) => s.id === spocChoice)) {
       next.spoc = "Select a SPOC";
     }
-    if (eventIds.length === 0) next.events = "Select at least one event";
+    if (eventIds.length === 0) next.events = "Current Bangalore event is required";
     if (!allEventsHaveTier(eventPartnerships, eventIds)) {
-      next.tier = "Select a tier for each selected event";
+      next.tier = "Select a sponsorship tier";
     }
     for (const eventId of eventIds) {
       const ep = eventPartnerships.find((p) => p.eventId === eventId);
@@ -1354,7 +1385,15 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       data: {
         ...partner,
         ...legacy,
-        eventPartnerships: activePartnerships,
+        eventIds:
+          legacy.eventIds.length > 0
+            ? legacy.eventIds
+            : eventIds.length > 0
+              ? eventIds
+              : [CURRENT_EVENT_ID],
+        eventPartnerships: activePartnerships.length
+          ? activePartnerships
+          : defaultCurrentEventPartnerships(),
         seminarSlotAssignments: nextAssignments,
         relationshipOwner: {
           organization: linked.organization,
@@ -1950,7 +1989,6 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
                     setManagerPhone={setManagerPhone}
                     managerEmail={managerEmail}
                     setManagerEmail={setManagerEmail}
-                    eventIds={eventIds}
                     setEventIds={setEventIds}
                     eventPartnerships={eventPartnerships}
                     setEventPartnerships={setEventPartnerships}
@@ -2409,7 +2447,6 @@ function ChapterPartnership(props: {
   setManagerPhone: (v: string) => void;
   managerEmail: string;
   setManagerEmail: (v: string) => void;
-  eventIds: string[];
   setEventIds: (v: string[] | ((p: string[]) => string[])) => void;
   eventPartnerships: PartnerEventPartnership[];
   setEventPartnerships: (
@@ -2427,6 +2464,9 @@ function ChapterPartnership(props: {
     props.eventPartnerships.find((ep) => ep.eventId === eventId);
 
   const setTierForEvent = (eventId: string, value: string) => {
+    props.setEventIds((prev) =>
+      prev.includes(eventId) ? prev : [...prev, eventId]
+    );
     props.setEventPartnerships((prev) => {
       const existing = partnershipForEvent(eventId);
       if (value === CUSTOM_TIER_OPTION) {
@@ -2481,26 +2521,11 @@ function ChapterPartnership(props: {
     );
   };
 
-  const toggleEvent = (id: string, checked: boolean) => {
-    if (checked) {
-      props.setEventIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
-      props.setEventPartnerships((eps) => {
-        if (eps.some((ep) => ep.eventId === id)) return eps;
-        return upsertEventPartnership(
-          eps,
-          id,
-          {
-            deliverables: [],
-            seminarSlotCount: 0,
-          },
-          generateId
-        );
-      });
-      return;
-    }
-    props.setEventIds((prev) => prev.filter((x) => x !== id));
-    props.setEventPartnerships((eps) => removeEventPartnership(eps, id));
-  };
+  const currentEvent =
+    props.events.find((event) => event.id === CURRENT_EVENT_ID) ??
+    props.events[0];
+  const currentEventId = CURRENT_EVENT_ID;
+  const currentPartnership = partnershipForEvent(currentEventId);
 
   return (
     <div className="space-y-8">
@@ -2606,103 +2631,77 @@ function ChapterPartnership(props: {
 
       <section className="space-y-4">
         <h3 className="text-sm font-semibold tracking-wide uppercase" style={{ color: BRAND[700] }}>
-          Events they will sponsor
+          Sponsorship package
         </h3>
+        <p className="text-sm text-muted-foreground">
+          {currentEvent
+            ? `${currentEvent.title}${currentEvent.city ? ` · ${currentEvent.city}` : ""}`
+            : "Career Uttsav Bangalore"}
+        </p>
         <div
           className={fieldErrorSurfaceClass(
             props.errors.events || props.errors.tier,
-            "space-y-1 rounded-xl border p-3"
+            "space-y-3 rounded-xl border p-4"
           )}
-          style={!(props.errors.events || props.errors.tier) ? { borderColor: LINE.subtle, background: PAPER.muted } : undefined}
-          data-field-error={props.errors.events || props.errors.tier ? "true" : undefined}
+          style={
+            !(props.errors.events || props.errors.tier)
+              ? { borderColor: LINE.subtle, background: PAPER.muted }
+              : undefined
+          }
+          data-field-error={
+            props.errors.events || props.errors.tier ? "true" : undefined
+          }
         >
-          {props.events.length === 0 ? (
-            <p className="px-2 py-3 text-sm text-muted-foreground">No events yet.</p>
-          ) : (
-            props.events.map((event) => {
-              const selected = props.eventIds.includes(event.id);
-              return (
-                <div
-                  key={event.id}
-                  className="flex flex-wrap items-center gap-3 rounded-lg px-2 py-2 hover:bg-white/70 sm:flex-nowrap"
-                >
-                  <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-3">
-                    <Checkbox
-                      checked={selected}
-                      onCheckedChange={(v) => toggleEvent(event.id, v === true)}
-                      className="mt-0.5"
-                    />
-                    <span className="min-w-0">
-                      <span className="block text-sm font-medium">
-                        {event.title}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {event.city}
-                        {event.venue ? ` · ${event.venue}` : ""}
-                      </span>
-                    </span>
-                  </label>
-                  {selected ? (
-                    <div
-                      className="w-full space-y-2 sm:w-[min(100%,280px)] sm:shrink-0"
-                      data-field-error={
-                        props.errors[`tierName-${event.id}`] ||
-                        props.errors.tier
-                          ? "true"
-                          : undefined
-                      }
-                    >
-                      <Select
-                        value={tierSelectValue(partnershipForEvent(event.id)) || undefined}
-                        onValueChange={(v) => setTierForEvent(event.id, v)}
-                      >
-                        <SelectTrigger
-                          className={fieldErrorClass(
-                            props.errors[`tierName-${event.id}`] || props.errors.tier
-                          )}
-                        >
-                          <SelectValue placeholder="Sponsorship tier" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {SPONSORSHIP_TIERS.map((tier) => (
-                            <SelectItem key={tier} value={tier}>
-                              {tier}
-                            </SelectItem>
-                          ))}
-                          <SelectItem value={CUSTOM_TIER_OPTION}>
-                            Custom / other partnership…
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                      {partnershipForEvent(event.id) &&
-                      isCustomPartnership(partnershipForEvent(event.id)!) ? (
-                        <Input
-                          className={fieldErrorClass(
-                            props.errors[`tierName-${event.id}`],
-                            "h-9"
-                          )}
-                          aria-invalid={Boolean(
-                            props.errors[`tierName-${event.id}`]
-                          )}
-                          placeholder="e.g. Title Sponsor, Bronze Partner"
-                          value={
-                            partnershipForEvent(event.id)?.customTierLabel ?? ""
-                          }
-                          onChange={(e) =>
-                            setCustomTierLabel(event.id, e.target.value)
-                          }
-                        />
-                      ) : null}
-                      <FieldError message={props.errors[`tierName-${event.id}`]} />
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })
-          )}
+          <div
+            className="space-y-2"
+            data-field-error={
+              props.errors[`tierName-${currentEventId}`] || props.errors.tier
+                ? "true"
+                : undefined
+            }
+          >
+            <Label>Sponsorship tier</Label>
+            <Select
+              value={tierSelectValue(currentPartnership) || undefined}
+              onValueChange={(v) => setTierForEvent(currentEventId, v)}
+            >
+              <SelectTrigger
+                className={fieldErrorClass(
+                  props.errors[`tierName-${currentEventId}`] || props.errors.tier
+                )}
+              >
+                <SelectValue placeholder="Sponsorship tier" />
+              </SelectTrigger>
+              <SelectContent>
+                {SPONSORSHIP_TIERS.map((tier) => (
+                  <SelectItem key={tier} value={tier}>
+                    {tier}
+                  </SelectItem>
+                ))}
+                <SelectItem value={CUSTOM_TIER_OPTION}>
+                  Custom / other partnership…
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            {currentPartnership && isCustomPartnership(currentPartnership) ? (
+              <Input
+                className={fieldErrorClass(
+                  props.errors[`tierName-${currentEventId}`],
+                  "h-9"
+                )}
+                aria-invalid={Boolean(props.errors[`tierName-${currentEventId}`])}
+                placeholder="e.g. Title Sponsor, Bronze Partner"
+                value={currentPartnership.customTierLabel ?? ""}
+                onChange={(e) =>
+                  setCustomTierLabel(currentEventId, e.target.value)
+                }
+              />
+            ) : null}
+            <FieldError message={props.errors[`tierName-${currentEventId}`]} />
+          </div>
+          <FieldError message={props.errors.events} />
+          <FieldError message={props.errors.tier} />
         </div>
-        <FieldError message={props.errors.events} />
-        <FieldError message={props.errors.tier} />
       </section>
 
       <section className="space-y-4">

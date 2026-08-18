@@ -20,6 +20,7 @@ import {
   filterRegistrationsForEventCatalog,
   registrationMatchesEventFilter,
 } from "@/lib/registration-event-links";
+import { getCurrentEvents } from "@/lib/current-events";
 import {
   registrationMatchesAllSeminars,
   slugifySeminarFilters,
@@ -166,10 +167,14 @@ export function RegistrationsList() {
 
   const registrations = data ?? [];
   const catalogEvents = eventsQuery.data ?? [];
+  const currentEvents = useMemo(
+    () => getCurrentEvents(catalogEvents),
+    [catalogEvents]
+  );
 
   const validEventIdsKey = useMemo(
-    () => catalogEvents.map((event) => event.id).sort().join(","),
-    [catalogEvents]
+    () => currentEvents.map((event) => event.id).sort().join(","),
+    [currentEvents]
   );
 
   useEffect(() => {
@@ -182,9 +187,9 @@ export function RegistrationsList() {
   }, [validEventIdsKey]);
 
   const linkedRegistrations = useMemo(() => {
-    const validIds = new Set(catalogEvents.map((event) => event.id));
+    const validIds = new Set(currentEvents.map((event) => event.id));
     return filterRegistrationsForEventCatalog(registrations, validIds);
-  }, [registrations, catalogEvents]);
+  }, [registrations, currentEvents]);
 
   const kindCounts = useMemo(() => {
     const counts = Object.fromEntries(
@@ -202,7 +207,7 @@ export function RegistrationsList() {
   );
 
   const eventOptions = useMemo(() => {
-    return [...catalogEvents]
+    return [...currentEvents]
       .sort(
         (a, b) =>
           a.city.localeCompare(b.city) || a.title.localeCompare(b.title)
@@ -211,15 +216,15 @@ export function RegistrationsList() {
         label: `${event.city} · ${event.title}`,
         value: event.id,
       }));
-  }, [catalogEvents]);
+  }, [currentEvents]);
 
   const eventTitleById = useMemo(() => {
     const map = new Map<string, string>();
-    for (const event of catalogEvents) {
+    for (const event of currentEvents) {
       map.set(event.id, event.title);
     }
     return map;
-  }, [catalogEvents]);
+  }, [currentEvents]);
 
   const studentRegistrations = useMemo(
     () =>
@@ -267,7 +272,7 @@ export function RegistrationsList() {
       const primary = getPrimarySeminar(registration);
       if (primary !== "—") titles.add(primary);
     }
-    for (const event of catalogEvents) {
+    for (const event of currentEvents) {
       for (const seminar of event.seminars ?? []) {
         const trimmed = seminar.title?.trim();
         if (trimmed) titles.add(trimmed);
@@ -276,7 +281,7 @@ export function RegistrationsList() {
     return [...titles]
       .sort((a, b) => a.localeCompare(b))
       .map((value) => ({ label: value, value }));
-  }, [studentRegistrations, catalogEvents]);
+  }, [studentRegistrations, currentEvents]);
 
   useEffect(() => {
     setClassFilter("all");
@@ -530,7 +535,7 @@ export function RegistrationsList() {
               <DropdownMenuTrigger asChild>
                 <Button
                   className="gap-2"
-                  disabled={catalogEvents.length === 0}
+                  disabled={currentEvents.length === 0}
                 >
                   <Plus className="h-4 w-4" />
                   Add registration
@@ -660,7 +665,7 @@ export function RegistrationsList() {
       <AddStudentDialog
         open={addDialogOpen}
         onOpenChange={setAddDialogOpen}
-        events={catalogEvents}
+        events={currentEvents}
       />
 
       {addKindDialog ? (
@@ -670,7 +675,7 @@ export function RegistrationsList() {
           onOpenChange={(open) => {
             if (!open) setAddKindDialog(null);
           }}
-          events={catalogEvents}
+          events={currentEvents}
         />
       ) : null}
 

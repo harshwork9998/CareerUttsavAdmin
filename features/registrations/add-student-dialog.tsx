@@ -6,6 +6,7 @@ import { Loader2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
 import { registrationsService } from "@/services/api";
+import { CURRENT_EVENT_ID, getCurrentEvent } from "@/lib/current-events";
 import { cn } from "@/lib/utils";
 import {
   REGISTRATION_BOARD_OPTIONS,
@@ -49,7 +50,7 @@ import {
 const EMPTY_FORM = {
   studentName: "",
   college: "",
-  eventId: "",
+  eventId: CURRENT_EVENT_ID,
   classLabel: "",
   interestedStream: "",
   board: "",
@@ -77,34 +78,27 @@ export function AddStudentDialog({
   const [form, setForm] = useState(EMPTY_FORM);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const sortedEvents = useMemo(
-    () =>
-      [...events].sort(
-        (a, b) =>
-          a.city.localeCompare(b.city) || a.title.localeCompare(b.title)
-      ),
-    [events]
-  );
-
-  const selectedEvent = useMemo(
-    () => sortedEvents.find((event) => event.id === form.eventId),
-    [sortedEvents, form.eventId]
-  );
+  const currentEvent = useMemo(() => getCurrentEvent(events), [events]);
 
   const seminarOptions = useMemo(() => {
-    return (selectedEvent?.seminars ?? [])
+    return (currentEvent?.seminars ?? [])
       .map((seminar) => seminar.title?.trim())
       .filter(Boolean) as string[];
-  }, [selectedEvent]);
+  }, [currentEvent]);
 
   useEffect(() => {
     if (!open) return;
-    setForm(EMPTY_FORM);
+    setForm({ ...EMPTY_FORM, eventId: CURRENT_EVENT_ID });
     setErrors({});
   }, [open]);
 
   const patch = (updates: Partial<typeof EMPTY_FORM>) => {
-    setForm((prev) => ({ ...prev, ...updates }));
+    setForm((prev) => ({
+      ...prev,
+      ...updates,
+      // Never clear the current operational event from create flow.
+      eventId: CURRENT_EVENT_ID,
+    }));
   };
 
   const toggleSeminar = (title: string) => {
@@ -138,7 +132,9 @@ export function AddStudentDialog({
     if (form.college.trim().length < 2) {
       next.college = "School/college is required";
     }
-    if (!form.eventId) next.eventId = "Select an event";
+    if (!currentEvent) {
+      next.eventId = "Current Bangalore event is not available";
+    }
     if (!form.classLabel) next.classLabel = "Select a class";
     if (!form.interestedStream) next.interestedStream = "Select a stream";
     if (!form.board) next.board = "Select a board";
@@ -160,7 +156,7 @@ export function AddStudentDialog({
 
     return {
       kind: "student" as const,
-      eventId: form.eventId,
+      eventId: CURRENT_EVENT_ID,
       studentName: form.studentName.trim(),
       college: form.college.trim(),
       classLabel: form.classLabel,
@@ -250,50 +246,21 @@ export function AddStudentDialog({
               </div>
 
               <div
-                className="space-y-2 sm:col-span-2"
-                data-field-error={errors.eventId ? "true" : undefined}
-              >
-                <Label htmlFor="as-event">Event *</Label>
-                <Select
-                  value={form.eventId || undefined}
-                  onValueChange={(value) => {
-                    patch({ eventId: value, seminarInterests: [] });
-                  }}
-                >
-                  <SelectTrigger
-                    id="as-event"
-                    className={fieldErrorClass(errors.eventId)}
-                    aria-invalid={Boolean(errors.eventId)}
-                  >
-                    <SelectValue placeholder="Select event" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sortedEvents.map((event) => (
-                      <SelectItem key={event.id} value={event.id}>
-                        {event.city} · {event.title}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FieldError message={errors.eventId} />
-              </div>
-
-              <div
                 className="space-y-3 sm:col-span-2"
                 data-field-error={errors.seminarInterests ? "true" : undefined}
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <Label>Seminar</Label>
-                  {form.eventId && seminarOptions.length > 0 ? (
+                  {seminarOptions.length > 0 ? (
                     <span className="text-xs tabular-nums text-muted-foreground">
                       {selectedSeminarCount} / {MAX_SEMINAR_INTERESTS} selected
                     </span>
                   ) : null}
                 </div>
 
-                {!form.eventId ? (
+                {!currentEvent ? (
                   <p className="rounded-lg border border-dashed px-3 py-4 text-sm text-muted-foreground">
-                    Select an event first — seminars are loaded from that event.
+                    Current Bangalore event is not available in the catalog.
                   </p>
                 ) : seminarOptions.length === 0 ? (
                   <p className="rounded-lg border border-dashed px-3 py-4 text-sm text-muted-foreground">
@@ -331,7 +298,7 @@ export function AddStudentDialog({
                   Optional — pick up to {MAX_SEMINAR_INTERESTS} seminars for this
                   student.
                 </p>
-                <FieldError message={errors.seminarInterests} />
+                <FieldError message={errors.seminarInterests ?? errors.eventId} />
               </div>
 
               <div

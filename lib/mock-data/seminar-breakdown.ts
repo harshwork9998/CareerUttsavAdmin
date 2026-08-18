@@ -18,9 +18,7 @@ const BOARD_LABELS = ["CBSE", "ICSE", "State", "IB", "Other"] as const;
 const GENDER_LABELS = ["Female", "Male"] as const;
 
 const CITY_SHARE: Record<OperatingCity, number> = {
-  Bangalore: 0.52,
-  Mysore: 0.28,
-  Hubli: 0.2,
+  Bangalore: 1,
 };
 
 /** Stable 0–1 hash from a string (for deterministic mock variation). */

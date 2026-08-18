@@ -656,7 +656,7 @@ export interface StudentRegistrationAnalytics {
   byStream: ChartDataPoint[];
   byBoard: ChartDataPoint[];
   byGender: ChartDataPoint[];
-  /** Event city split (Bangalore / Mysore / Hubli) */
+  /** Event city split (from active event catalog) */
   byCity: ChartDataPoint[];
   /** Hometown / location students entered on the registration form */
   byRegistrantCity: ChartDataPoint[];
@@ -776,7 +776,7 @@ export interface PartnerSalesAnalytics {
   }>;
 }
 
-export type OperatingCity = "Bangalore" | "Mysore" | "Hubli";
+export type OperatingCity = "Bangalore";
 export type DashboardCityFilter = "all" | string;
 
 export interface CityComparisonMetric {

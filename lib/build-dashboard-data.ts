@@ -17,10 +17,7 @@ function getCitySliceTemplate(
     return base.citySlices[city];
   }
   const fallback =
-    base.citySlices.Bangalore ??
-    base.citySlices.Mysore ??
-    base.citySlices.Hubli ??
-    Object.values(base.citySlices)[0];
+    base.citySlices.Bangalore ?? Object.values(base.citySlices)[0];
   if (!fallback) {
     throw new Error("Dashboard mock data is missing city slices.");
   }

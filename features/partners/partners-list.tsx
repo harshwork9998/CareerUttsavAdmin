@@ -20,6 +20,7 @@ import {
   partnerMatchesEventFilter,
   partnerMatchesTierFilter,
 } from "@/lib/partner-event-config";
+import { getCurrentEvents } from "@/lib/current-events";
 import { eventsService, partnersService } from "@/services/api";
 import { cn } from "@/lib/utils";
 import type { Partner, PartnerLifecycleStage } from "@/types";
@@ -312,7 +313,17 @@ export function PartnersList() {
   const partners = useMemo(() => data ?? [], [data]);
 
   const cityOptions = useMemo(() => {
-    const cities = [...new Set(partners.map((p) => p.city).filter(Boolean))].sort();
+    const cities = [
+      ...new Set(
+        partners
+          .map((p) => p.city)
+          .filter((city) => {
+            if (!city) return false;
+            const normalized = city.trim().toLowerCase();
+            return normalized !== "mysore" && normalized !== "hubli";
+          })
+      ),
+    ].sort();
     return cities.map((c) => ({ label: c, value: c }));
   }, [partners]);
 
@@ -326,7 +337,8 @@ export function PartnersList() {
   }, [partners]);
 
   const eventOptions = useMemo(() => {
-    return [...(eventsQuery.data ?? [])]
+    return getCurrentEvents(eventsQuery.data ?? [])
+      .slice()
       .sort(
         (a, b) =>
           a.city.localeCompare(b.city) || a.title.localeCompare(b.title)

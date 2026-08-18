@@ -16,6 +16,10 @@ import { toast } from "sonner";
 
 import { eventsService, partnersService, seminarsService } from "@/services/api";
 import {
+  CURRENT_EVENT_ID,
+  getCurrentEvents,
+} from "@/lib/current-events";
+import {
   constrainIndianMobileTyping,
   INDIAN_MOBILE_ERROR,
   isValidIndianMobile,
@@ -117,7 +121,7 @@ function emptyRoster(eventId: string, seminarId: string): SeminarSessionRoster {
 
 export function SeminarsView() {
   const queryClient = useQueryClient();
-  const [eventFilter, setEventFilter] = useState("all");
+  const [eventFilter, setEventFilter] = useState(CURRENT_EVENT_ID);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [selectedSpeakerId, setSelectedSpeakerId] = useState<string | null>(
     null
@@ -145,7 +149,7 @@ export function SeminarsView() {
 
   const events = useMemo(
     () =>
-      [...(eventsQuery.data ?? [])].sort(
+      getCurrentEvents(eventsQuery.data ?? []).slice().sort(
         (a, b) =>
           a.city.localeCompare(b.city) || a.title.localeCompare(b.title)
       ),
@@ -169,7 +173,9 @@ export function SeminarsView() {
       return;
     }
     if (eventFilter !== "all" && !validIds.has(eventFilter)) {
-      setEventFilter("all");
+      setEventFilter(
+        validIds.has(CURRENT_EVENT_ID) ? CURRENT_EVENT_ID : "all"
+      );
     }
   }, [validEventIdsKey, eventFilter]);
 

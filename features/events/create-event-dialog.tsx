@@ -192,7 +192,7 @@ export function CreateEventDialog({
     const cities = getEventCities(eventsQuery.data ?? []);
     return cities.length > 0
       ? `e.g. ${formatEventCitiesDescription(cities)}`
-      : "e.g. Bangalore, Mysore, Hubli";
+      : "e.g. Bangalore";
   }, [eventsQuery.data]);
 
   const [title, setTitle] = useState("");

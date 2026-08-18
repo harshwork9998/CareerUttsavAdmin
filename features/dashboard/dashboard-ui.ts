@@ -58,11 +58,9 @@ export const STATUS = {
   neutralSoft: "rgba(122, 134, 150, 0.12)",
 } as const;
 
-/** City identities — same color everywhere. */
+/** City identities — same color everywhere. Future cities can extend this map. */
 export const CITY_COLORS: Record<string, string> = {
   Bangalore: BRAND[700],
-  Mysore: "#9A7340",
-  Hubli: TEAL[500],
 };
 
 /** Cohesive chart series — navy → teal → brass family. */

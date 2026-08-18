@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { registrationsService } from "@/services/api";
+import { CURRENT_EVENT_ID, getCurrentEvent } from "@/lib/current-events";
 import {
   REGISTRATION_CLASS_OPTIONS,
   type CreatePartnerRegistrationInput,
@@ -78,7 +79,7 @@ type FormState = SchoolFormState | PartnerFormState | AmbassadorFormState;
 
 const EMPTY_BY_KIND: Record<NonStudentKind, FormState> = {
   school: {
-    eventId: "",
+    eventId: CURRENT_EVENT_ID,
     schoolContactName: "",
     schoolName: "",
     schoolCity: "",
@@ -86,7 +87,7 @@ const EMPTY_BY_KIND: Record<NonStudentKind, FormState> = {
     schoolContactEmail: "",
   },
   partner_registration: {
-    eventId: "",
+    eventId: CURRENT_EVENT_ID,
     partnerRegContactName: "",
     partnerRegInstitutionName: "",
     partnerRegCity: "",
@@ -94,7 +95,7 @@ const EMPTY_BY_KIND: Record<NonStudentKind, FormState> = {
     partnerRegContactEmail: "",
   },
   student_ambassador: {
-    eventId: "",
+    eventId: CURRENT_EVENT_ID,
     ambassadorName: "",
     ambassadorClass: "",
     ambassadorSchoolCollege: "",
@@ -123,28 +124,27 @@ export function AddKindRegistrationDialog({
   const [form, setForm] = useState({ ...EMPTY_BY_KIND[kind] });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const sortedEvents = useMemo(
-    () =>
-      [...events].sort(
-        (a, b) =>
-          a.city.localeCompare(b.city) || a.title.localeCompare(b.title)
-      ),
-    [events]
-  );
+  const currentEvent = useMemo(() => getCurrentEvent(events), [events]);
 
   useEffect(() => {
     if (!open) return;
-    setForm({ ...EMPTY_BY_KIND[kind] });
+    setForm({ ...EMPTY_BY_KIND[kind], eventId: CURRENT_EVENT_ID });
     setErrors({});
   }, [open, kind]);
 
   const patch = (updates: Record<string, string>) => {
-    setForm((prev) => ({ ...prev, ...updates }));
+    setForm((prev) => ({
+      ...prev,
+      ...updates,
+      eventId: CURRENT_EVENT_ID,
+    }));
   };
 
   const validate = (): CreateRegistrationInput | null => {
     const next: Record<string, string> = {};
-    if (!form.eventId) next.eventId = "Select an event";
+    if (!currentEvent) {
+      next.eventId = "Current Bangalore event is not available";
+    }
 
     if (kind === "school") {
       const f = form as SchoolFormState;
@@ -162,7 +162,7 @@ export function AddKindRegistrationDialog({
       if (applyFormErrors(setErrors, next)) return null;
       const payload: CreateSchoolRegistrationInput = {
         kind: "school",
-        eventId: f.eventId,
+        eventId: CURRENT_EVENT_ID,
         schoolContactName: f.schoolContactName.trim(),
         schoolName: f.schoolName.trim(),
         schoolCity: f.schoolCity.trim(),
@@ -192,7 +192,7 @@ export function AddKindRegistrationDialog({
       if (applyFormErrors(setErrors, next)) return null;
       const payload: CreatePartnerRegistrationInput = {
         kind: "partner_registration",
-        eventId: f.eventId,
+        eventId: CURRENT_EVENT_ID,
         partnerRegContactName: f.partnerRegContactName.trim(),
         partnerRegInstitutionName: f.partnerRegInstitutionName.trim(),
         partnerRegCity: f.partnerRegCity.trim(),
@@ -225,7 +225,7 @@ export function AddKindRegistrationDialog({
     if (applyFormErrors(setErrors, next)) return null;
     const payload: CreateStudentAmbassadorRegistrationInput = {
       kind: "student_ambassador",
-      eventId: f.eventId,
+      eventId: CURRENT_EVENT_ID,
       ambassadorName: f.ambassadorName.trim(),
       ambassadorClass: f.ambassadorClass,
       ambassadorSchoolCollege: f.ambassadorSchoolCollege.trim(),
@@ -270,31 +270,9 @@ export function AddKindRegistrationDialog({
           </DialogHeader>
 
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
-            <div
-              className="space-y-2"
-              data-field-error={errors.eventId ? "true" : undefined}
-            >
-              <Label htmlFor={`${kind}-event`}>Event *</Label>
-              <Select
-                value={form.eventId || undefined}
-                onValueChange={(value) => patch({ eventId: value })}
-              >
-                <SelectTrigger
-                  id={`${kind}-event`}
-                  className={fieldErrorClass(errors.eventId)}
-                >
-                  <SelectValue placeholder="Select event" />
-                </SelectTrigger>
-                <SelectContent>
-                  {sortedEvents.map((event) => (
-                    <SelectItem key={event.id} value={event.id}>
-                      {event.city} · {event.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FieldError message={errors.eventId} />
-            </div>
+            {errors.eventId ? (
+              <p className="text-sm text-destructive">{errors.eventId}</p>
+            ) : null}
 
             {kind === "school" && (
               <>

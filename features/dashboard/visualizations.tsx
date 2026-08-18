@@ -15,8 +15,8 @@ import {
 
 const CITY_SCALE = [
   CITY_COLORS.Bangalore,
-  CITY_COLORS.Mysore,
-  CITY_COLORS.Hubli,
+  BRAND[500],
+  "#9A7340",
 ] as const;
 
 export function CityMosaic({
