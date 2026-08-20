@@ -41,6 +41,9 @@ temp-partner.json
 /data/*-backup*.json
 /data/backups/
 
+# local DB import staging (production JSON copies — never commit)
+/tmp/db-import/
+
 # typescript
 *.tsbuildinfo
 
