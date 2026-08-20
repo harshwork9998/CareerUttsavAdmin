@@ -1,0 +1,193 @@
+// CareerUttsavAdmin — Prisma 7 V1 schema (definition only; not migrated yet)
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum EventStatus {
+  Draft
+  Published
+  Live
+  Completed
+  Archived
+}
+
+enum RegistrationKind {
+  student
+  school
+  partner_registration
+  student_ambassador
+}
+
+enum RegistrationStatus {
+  Confirmed
+  CheckedIn @map("Checked In")
+}
+
+enum PaymentStatus {
+  Paid
+  Pending
+  Waived
+}
+
+enum Gender {
+  Male
+  Female
+  Other
+}
+
+// ─── Events ──────────────────────────────────────────────────────────────────
+
+model Event {
+  id                   String      @id
+  title                String
+  slug                 String
+  description          String
+  shortDescription     String?
+  status               EventStatus
+  venue                String
+  address              String
+  city                 String
+  state                String
+  pincode              String
+  startDate            String
+  endDate              String
+  startTime            String
+  endTime              String
+  hallCount            Int
+  registrationDeadline DateTime
+  maxCapacity          Int
+  /// Stored operational counter — do not recalculate from registration row count.
+  registrationCount    Int
+  /// Stored operational counter — do not recalculate from registration row count.
+  checkInCount         Int
+  bannerImage          String?
+  isFeatured           Boolean
+  tags                 String[]
+  createdBy            String
+  createdAt            DateTime
+  updatedAt            DateTime
+
+  seminars      Seminar[]
+  registrations Registration[]
+
+  @@map("events")
+}
+
+// ─── Seminars ────────────────────────────────────────────────────────────────
+
+model Seminar {
+  id            String @id
+  eventId       String
+  title         String
+  date          String
+  startTime     String
+  endTime       String
+  panelistSlots Int
+  hall          Int
+
+  event                Event                 @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  registrationSeminars RegistrationSeminar[]
+
+  @@index([eventId])
+  @@map("seminars")
+}
+
+// ─── Registrations ───────────────────────────────────────────────────────────
+
+model Registration {
+  id                 String             @id
+  registrationNumber String             @unique
+  kind               RegistrationKind
+  eventId            String
+  eventTitle         String
+  status             RegistrationStatus
+  paymentStatus      PaymentStatus
+  registeredAt       DateTime
+  updatedAt          DateTime
+  amount             Decimal?           @db.Decimal(12, 2)
+  checkInTime        DateTime?
+
+  // Student fields
+  studentName      String?
+  email            String?
+  phone            String?
+  parentPhone      String?
+  college          String?
+  classLabel       String?
+  interestedStream String?
+  board            String?
+  gender           Gender?
+  city             String?
+  state            String?
+  course           String?
+  year             String?
+  emailNormalized  String?
+  phoneLast10      String?
+
+  // School fields
+  schoolContactName   String?
+  schoolName          String?
+  schoolCity          String?
+  schoolContactNumber String?
+  schoolContactEmail  String?
+
+  // Exhibitor / partner registration fields (public registration, not Partner Portal)
+  partnerRegContactName     String?
+  partnerRegInstitutionName String?
+  partnerRegCity            String?
+  partnerRegContactNumber   String?
+  partnerRegContactEmail    String?
+
+  // Student ambassador fields
+  ambassadorName          String?
+  ambassadorClass         String?
+  ambassadorSchoolCollege String?
+  ambassadorAge           Int?
+  ambassadorPhone         String?
+  ambassadorEmail         String?
+
+  event                Event                 @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  registrationSeminars RegistrationSeminar[]
+
+  @@unique([eventId, emailNormalized])
+  @@unique([eventId, phoneLast10])
+  @@index([eventId])
+  @@index([kind])
+  @@index([eventId, kind])
+  @@map("registrations")
+}
+
+// ─── Registration ↔ Seminar interests ────────────────────────────────────────
+
+model RegistrationSeminar {
+  id             String  @id
+  registrationId String
+  seminarId      String?
+  seminarTitle   String
+
+  registration Registration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  seminar      Seminar?     @relation(fields: [seminarId], references: [id], onDelete: SetNull)
+
+  @@unique([registrationId, seminarTitle])
+  @@index([registrationId])
+  @@index([seminarId])
+  @@map("registration_seminars")
+}
+
+// ─── Registration number counters (global by prefix) ─────────────────────────
+
+model RegistrationNumberCounter {
+  prefix    String   @id
+  nextValue Int
+  updatedAt DateTime
+
+  @@map("registration_number_counters")
+}

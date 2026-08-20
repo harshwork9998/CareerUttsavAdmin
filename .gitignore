@@ -29,6 +29,9 @@ temp-partner.json
 .env
 .env*.local
 
+# Prisma generated client (run: npx prisma generate)
+/lib/generated/prisma
+
 # runtime JSON persistence under /data (not seed; seed lives in lib/mock-data)
 # keep data/.gitkeep tracked
 /data/*.json
