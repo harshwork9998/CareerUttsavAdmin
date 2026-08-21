@@ -4,7 +4,10 @@ import {
   applyPartnerCredentialFields,
   toPublicPartner,
 } from "@/lib/partner-credentials";
-import { loadPartners, savePartners } from "@/lib/server/partners-persistence";
+import {
+  createPartnerForApi,
+  listPartnersForApi,
+} from "@/lib/server/partner-service";
 import { validatePartnerCreate } from "@/lib/partner-validation";
 import { generateId } from "@/lib/utils";
 import type { Partner } from "@/types";
@@ -12,7 +15,7 @@ import type { Partner } from "@/types";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const partners = loadPartners();
+  const partners = await listPartnersForApi();
   return NextResponse.json(partners.map(toPublicPartner));
 }
 
@@ -36,7 +39,11 @@ export async function POST(request: Request) {
     } as Partner,
     validated.data
   );
-  const partners = loadPartners();
-  savePartners([created, ...partners]);
-  return NextResponse.json(toPublicPartner(created));
+
+  const result = await createPartnerForApi(created);
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error }, { status: result.status });
+  }
+
+  return NextResponse.json(toPublicPartner(result.partner));
 }

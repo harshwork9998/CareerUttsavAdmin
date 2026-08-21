@@ -38,9 +38,8 @@ vi.mock("@/lib/server/events-persistence", () => ({
   saveEvents: vi.fn((events: unknown[]) => events),
 }));
 
-vi.mock("@/lib/server/partners-persistence", () => ({
-  loadPartners: vi.fn(() => []),
-  savePartners: vi.fn((partners: unknown[]) => partners),
+vi.mock("@/lib/server/partner-service", () => ({
+  prunePartnersForEventCatalog: vi.fn(async () => undefined),
 }));
 
 vi.mock("@/lib/server/registrations-persistence", () => ({

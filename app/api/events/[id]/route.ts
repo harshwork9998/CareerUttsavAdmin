@@ -1,15 +1,11 @@
 import { NextResponse } from "next/server";
 
-import {
-  partnerNeedsEventLinkPrune,
-  prunePartnerEventLinks,
-} from "@/lib/partner-event-config";
 import { filterRegistrationsForEventCatalog } from "@/lib/registration-event-links";
 import { filterRostersForEventCatalog } from "@/lib/seminar-roster-links";
 import { getEventForApi } from "@/lib/server/event-service";
 import { getEventWriteBlockedResponse } from "@/lib/server/event-write-guard";
 import { loadEvents, saveEvents } from "@/lib/server/events-persistence";
-import { loadPartners, savePartners } from "@/lib/server/partners-persistence";
+import { prunePartnersForEventCatalog as prunePartnersViaService } from "@/lib/server/partner-service";
 import {
   loadRawRegistrations,
   saveRegistrations,
@@ -18,27 +14,11 @@ import {
   loadRawSeminarRosters,
   saveSeminarRosters,
 } from "@/lib/server/seminar-rosters-persistence";
-import type { Event, Partner } from "@/types";
+import type { Event } from "@/types";
 
 export const dynamic = "force-dynamic";
 
 type RouteContext = { params: Promise<{ id: string }> };
-
-function prunePartnersForEventCatalog(events: Event[]): Partner[] {
-  const validEventIds = new Set(events.map((event) => event.id));
-  const partners = loadPartners();
-  let changed = false;
-
-  const next = partners.map((partner) => {
-    if (!partnerNeedsEventLinkPrune(partner, validEventIds)) {
-      return partner;
-    }
-    changed = true;
-    return prunePartnerEventLinks(partner, validEventIds);
-  });
-
-  return changed ? savePartners(next) : partners;
-}
 
 export async function GET(_request: Request, context: RouteContext) {
   const { id } = await context.params;
@@ -113,7 +93,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
   }
 
   saveEvents(events);
-  prunePartnersForEventCatalog(events);
+  await prunePartnersViaService(events);
   pruneRegistrationsForEventCatalog(events);
   pruneSeminarRostersForEventCatalog(events);
   return NextResponse.json(events);

@@ -2,22 +2,24 @@ import {
   partnerHasPortalPassword,
   verifyStoredPartnerPassword,
 } from "@/lib/partner-credentials";
-import { loadPartners } from "@/lib/server/partners-persistence";
+import { findPartnersByPortalLoginForApi } from "@/lib/server/partner-service";
 import type { Partner } from "@/types";
 
 function normalizeLogin(value: string | undefined): string {
   return value?.trim().toLowerCase() ?? "";
 }
 
-export function findPartnerByPortalLogin(login: string): Partner | undefined {
-  const normalized = normalizeLogin(login);
-  if (!normalized) return undefined;
-  return loadPartners().find((partner) => {
-    return (
-      normalizeLogin(partner.portalLogin) === normalized ||
-      normalizeLogin(partner.portalInviteEmail) === normalized
-    );
-  });
+export async function findPartnerByPortalLogin(
+  login: string
+): Promise<Partner | undefined> {
+  const matches = await findPartnersByPortalLoginForApi(login);
+  return matches[0];
+}
+
+export async function findPartnersByPortalLogin(
+  login: string
+): Promise<Partner[]> {
+  return findPartnersByPortalLoginForApi(login);
 }
 
 export type PartnerPortalAuthResult =
@@ -33,17 +35,18 @@ export type PartnerPortalAuthResult =
       code:
         | "invalid_credentials"
         | "not_activated"
-        | "missing_password";
+        | "missing_password"
+        | "ambiguous_credentials";
     };
 
 /**
  * Authenticate a partner portal login against the Admin partners store.
  * Passwords are verified against a salted hash (never stored as plaintext).
  */
-export function authenticatePartnerPortalLogin(input: {
+export async function authenticatePartnerPortalLogin(input: {
   login: string;
   password: string;
-}): PartnerPortalAuthResult {
+}): Promise<PartnerPortalAuthResult> {
   const login = normalizeLogin(input.login);
   const password = input.password ?? "";
 
@@ -56,7 +59,17 @@ export function authenticatePartnerPortalLogin(input: {
     };
   }
 
-  const partner = findPartnerByPortalLogin(login);
+  const matches = await findPartnersByPortalLoginForApi(login);
+  if (matches.length > 1) {
+    return {
+      ok: false,
+      status: 503,
+      error: "Partner login is ambiguous. Please contact support.",
+      code: "ambiguous_credentials",
+    };
+  }
+
+  const partner = matches[0];
   if (!partner) {
     return {
       ok: false,
@@ -75,8 +88,6 @@ export function authenticatePartnerPortalLogin(input: {
     };
   }
 
-  // Activated once credentials exist; invite-sent stamp is preferred but not required
-  // so draft-saved Chapter 8 credentials still work before "Send email & finish".
   const activated =
     Boolean(partner.portalInviteSentAt) ||
     Boolean(partner.portalLogin && partnerHasPortalPassword(partner));

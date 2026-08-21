@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const result = authenticatePartnerPortalLogin({
+  const result = await authenticatePartnerPortalLogin({
     login: body.login ?? "",
     password: body.password ?? "",
   });

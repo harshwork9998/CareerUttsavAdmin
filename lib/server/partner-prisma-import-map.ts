@@ -122,7 +122,7 @@ function jsonValue<T>(value: T | undefined): Prisma.InputJsonValue | typeof Pris
   return toJsonValue(value);
 }
 
-function resolvePartnershipsForImport(partner: Partner): PartnerEventPartnership[] {
+export function resolvePartnershipsForImport(partner: Partner): PartnerEventPartnership[] {
   if (partner.eventPartnerships?.length) {
     return partner.eventPartnerships;
   }
