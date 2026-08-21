@@ -13,6 +13,8 @@ import {
   canonicalizePartnerForComparison,
   compareExistingPartner,
   comparePartnerScalarFields,
+  deepCanonicalizeStableJson,
+  deepCanonicalizeValue,
   jsonPartnerToExpectedApiShape,
   partnerRowIsExactMatch,
 } from "@/lib/server/partner-reconciliation";
@@ -320,5 +322,313 @@ describe("partner reconciliation", () => {
         )
       )
     ).toEqual([]);
+  });
+
+  describe("deep canonical comparison", () => {
+    it("A: nested objects with different property order compare equal", () => {
+      expect(
+        deepCanonicalizeStableJson({
+          id: "remark-1",
+          remark: "Follow up",
+          createdAt: "2026-06-01T10:00:00.000Z",
+        })
+      ).toBe(
+        deepCanonicalizeStableJson({
+          createdAt: "2026-06-01T10:00:00.000Z",
+          id: "remark-1",
+          remark: "Follow up",
+        })
+      );
+    });
+
+    it("B: stageRemarks with same entries but reordered object keys compare equal", () => {
+      const jsonPartner = basePartner({
+        stageRemarks: [
+          {
+            id: "sr-1",
+            remark: "Needs callback",
+            createdAt: "2026-06-10T10:00:00.000Z",
+          } as unknown as NonNullable<Partner["stageRemarks"]>[number],
+        ],
+      });
+      const dbPartner = mapPrismaPartnerToApi({
+        ...prismaPartnerFromJson(basePartner()),
+        stageRemarks: [
+          {
+            createdAt: "2026-06-10T10:00:00.000Z",
+            id: "sr-1",
+            remark: "Needs callback",
+          },
+        ],
+      } as unknown as PrismaPartnerRecord);
+
+      expect(
+        comparePartnerScalarFields(
+          jsonPartnerToExpectedApiShape(jsonPartner),
+          dbPartner
+        )
+      ).not.toContain("stageRemarks");
+    });
+
+    it("C: meetings with JSONB key order differences compare equal", () => {
+      const jsonPartner = basePartner({
+        meetings: [
+          {
+            id: "mtg-1",
+            meetingAt: "2026-06-18T15:00:00.000Z",
+            notes: "Initial discussion",
+            outcome: "in_discussion",
+          } as unknown as NonNullable<Partner["meetings"]>[number],
+        ],
+      });
+      const dbPartner = mapPrismaPartnerToApi({
+        ...prismaPartnerFromJson(basePartner()),
+        meetings: [
+          {
+            notes: "Initial discussion",
+            outcome: "in_discussion",
+            id: "mtg-1",
+            meetingAt: "2026-06-18T15:00:00.000Z",
+          },
+        ],
+      } as unknown as PrismaPartnerRecord);
+
+      expect(
+        comparePartnerScalarFields(
+          jsonPartnerToExpectedApiShape(jsonPartner),
+          dbPartner
+        )
+      ).not.toContain("meetings");
+    });
+
+    it("D: eventPartnership deliverables with reordered object keys compare equal", () => {
+      const deliverable = {
+        id: "d1",
+        key: "stallSize",
+        label: "Stall",
+        included: true,
+      };
+      const jsonPartner = basePartner({
+        eventPartnerships: [
+          {
+            eventId: "evt-001",
+            sponsorshipTier: "Knowledge Partner (Silver)",
+            deliverables: [deliverable],
+            seminarSlotCount: 0,
+          },
+        ],
+        deliverables: undefined,
+      });
+      const dbPartner = mapPrismaPartnerToApi({
+        ...prismaPartnerFromJson(basePartner()),
+        eventPartnerships: [
+          {
+            id: "pep-partner-002-evt-001",
+            partnerId: "partner-002",
+            eventId: "evt-001",
+            sponsorshipTier: "Knowledge Partner (Silver)",
+            customTierLabel: null,
+            deliverables: [
+              {
+                included: true,
+                key: "stallSize",
+                label: "Stall",
+                id: "d1",
+              },
+            ],
+            seminarSlotCount: 0,
+            seminarSlotAssignments: [],
+          },
+        ],
+      } as unknown as PrismaPartnerRecord);
+
+      expect(
+        comparePartnerScalarFields(
+          jsonPartnerToExpectedApiShape(jsonPartner),
+          dbPartner
+        )
+      ).not.toContain("eventPartnerships");
+    });
+
+    it("E: actual changed nested value is still detected", () => {
+      expect(
+        deepCanonicalizeStableJson({
+          id: "remark-1",
+          remark: "Needs callback",
+        })
+      ).not.toBe(
+        deepCanonicalizeStableJson({
+          remark: "Different note",
+          id: "remark-1",
+        })
+      );
+
+      const comparison = compareExistingPartner(
+        basePartner({
+          stageRemarks: [
+            {
+              id: "sr-1",
+              remark: "Needs callback",
+              createdAt: "2026-06-10T10:00:00.000Z",
+            } as unknown as NonNullable<Partner["stageRemarks"]>[number],
+          ],
+        }),
+        {
+          ...prismaPartnerFromJson(basePartner()),
+          stageRemarks: [
+            {
+              id: "sr-1",
+              remark: "Different note",
+              createdAt: "2026-06-10T10:00:00.000Z",
+            },
+          ],
+        } as unknown as PrismaPartnerRecord
+      );
+
+      expect(comparison.fieldMismatches).toContain("stageRemarks");
+    });
+
+    it("F: array order differences remain detectable", () => {
+      expect(
+        deepCanonicalizeStableJson([
+          { id: "first", remark: "A" },
+          { id: "second", remark: "B" },
+        ])
+      ).not.toBe(
+        deepCanonicalizeStableJson([
+          { id: "second", remark: "B" },
+          { id: "first", remark: "A" },
+        ])
+      );
+    });
+
+    it("treats JSONB key-order differences across partner-001-like fields as exact", () => {
+      const jsonPartner = basePartner({
+        id: "partner-001",
+        stageRemarks: [
+          {
+            id: "sr-1",
+            remark: "Gold package discussion",
+            createdAt: "2026-06-12T10:00:00.000Z",
+          } as unknown as NonNullable<Partner["stageRemarks"]>[number],
+        ],
+        deliverables: [
+          {
+            id: "d1",
+            key: "stallSize",
+            label: "Stall",
+            included: true,
+          },
+        ],
+        portalDocuments: [
+          {
+            id: "doc-1",
+            name: "Agreement.pdf",
+            uploadedAt: "2026-07-01T10:00:00.000Z",
+          } as unknown as NonNullable<Partner["portalDocuments"]>[number],
+        ],
+        portalSeminarSpeakers: [
+          {
+            eventId: "evt-001",
+            seminarId: "sem-001-a",
+            speakerName: "Dr. Rao",
+          } as unknown as NonNullable<Partner["portalSeminarSpeakers"]>[number],
+        ],
+        meetings: [
+          {
+            id: "mtg-1",
+            meetingAt: "2026-06-18T15:00:00.000Z",
+            notes: "Walked through packages",
+            outcome: "in_discussion",
+          } as unknown as NonNullable<Partner["meetings"]>[number],
+        ],
+        eventPartnerships: [
+          {
+            eventId: "evt-001",
+            sponsorshipTier: "Knowledge Partner (Gold)",
+            deliverables: [
+              {
+                id: "d1",
+                key: "stallSize",
+                label: "Stall",
+                included: true,
+              },
+            ],
+            seminarSlotCount: 2,
+          },
+        ],
+      });
+
+      const dbRecord = {
+        ...prismaPartnerFromJson(jsonPartner),
+        stageRemarks: [
+          {
+            createdAt: "2026-06-12T10:00:00.000Z",
+            id: "sr-1",
+            remark: "Gold package discussion",
+          },
+        ],
+        legacyDeliverables: [
+          {
+            included: true,
+            key: "stallSize",
+            label: "Stall",
+            id: "d1",
+          },
+        ],
+        portalDocuments: [
+          {
+            uploadedAt: "2026-07-01T10:00:00.000Z",
+            id: "doc-1",
+            name: "Agreement.pdf",
+          },
+        ],
+        portalSeminarSpeakers: [
+          {
+            speakerName: "Dr. Rao",
+            seminarId: "sem-001-a",
+            eventId: "evt-001",
+          },
+        ],
+        meetings: [
+          {
+            outcome: "in_discussion",
+            notes: "Walked through packages",
+            meetingAt: "2026-06-18T15:00:00.000Z",
+            id: "mtg-1",
+          },
+        ],
+        eventPartnerships: [
+          {
+            id: "pep-partner-001-evt-001",
+            partnerId: "partner-001",
+            eventId: "evt-001",
+            sponsorshipTier: "Knowledge Partner (Gold)",
+            customTierLabel: null,
+            deliverables: [
+              {
+                label: "Stall",
+                included: true,
+                id: "d1",
+                key: "stallSize",
+              },
+            ],
+            seminarSlotCount: 2,
+            seminarSlotAssignments: [],
+          },
+        ],
+      } as unknown as PrismaPartnerRecord;
+
+      const comparison = compareExistingPartner(jsonPartner, dbRecord);
+      expect(comparison.fieldMismatches).toEqual([]);
+      expect(comparison.relationalMismatches.eventPartnerships).toBe(false);
+    });
+
+    it("deepCanonicalizeValue preserves array order while sorting object keys", () => {
+      expect(deepCanonicalizeValue([{ b: 1, a: 2 }, { d: 3, c: 4 }])).toEqual([
+        { a: 2, b: 1 },
+        { c: 4, d: 3 },
+      ]);
+    });
   });
 });

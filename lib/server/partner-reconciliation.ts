@@ -1,4 +1,4 @@
-import type { Partner, PartnerEventPartnership, PartnerSeminarSlotAssignment, Spoc } from "@/types";
+import type { Partner, PartnerEventPartnership, PartnerSeminarSlotAssignment } from "@/types";
 
 import {
   mapPartnerSourceToPrisma,
@@ -103,12 +103,47 @@ function normalizeRelationshipOwner(
   };
 }
 
-function stableJson(value: unknown): string {
-  return JSON.stringify(value ?? null);
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    !(value instanceof Date)
+  );
 }
 
-function sortByKey<T>(items: T[], key: (item: T) => string): T[] {
-  return [...items].sort((left, right) => key(left).localeCompare(key(right)));
+/**
+ * Recursively canonicalize nested plain objects by sorting keys.
+ * Array order is preserved because it may be meaningful in API payloads.
+ */
+export function deepCanonicalizeValue(value: unknown): unknown {
+  if (value === null || value === undefined) {
+    return value;
+  }
+  if (value instanceof Date) {
+    return normalizeRequiredTimestamp(value);
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => deepCanonicalizeValue(item));
+  }
+  if (isPlainObject(value)) {
+    const canonical: Record<string, unknown> = {};
+    for (const key of Object.keys(value).sort((left, right) =>
+      left.localeCompare(right)
+    )) {
+      canonical[key] = deepCanonicalizeValue(value[key]);
+    }
+    return canonical;
+  }
+  return value;
+}
+
+export function deepCanonicalizeStableJson(value: unknown): string {
+  return JSON.stringify(deepCanonicalizeValue(value));
+}
+
+function deepCanonicalValuesEqual(left: unknown, right: unknown): boolean {
+  return deepCanonicalizeStableJson(left) === deepCanonicalizeStableJson(right);
 }
 
 export function jsonPartnerToExpectedApiShape(partner: Partner): Partner {
@@ -186,27 +221,46 @@ export function jsonPartnerToExpectedApiShape(partner: Partner): Partner {
 function normalizePartnerships(
   partnerships: PartnerEventPartnership[] | undefined
 ): PartnerEventPartnership[] {
-  return sortByKey(partnerships ?? [], (partnership) => partnership.eventId).map(
-    (partnership) => ({
-      eventId: partnership.eventId,
-      sponsorshipTier: partnership.sponsorshipTier,
-      customTierLabel: partnership.customTierLabel,
-      deliverables: sortByKey(partnership.deliverables ?? [], (item) => item.id),
-      seminarSlotCount: partnership.seminarSlotCount ?? 0,
-    })
-  );
+  return (partnerships ?? []).map((partnership) => ({
+    eventId: partnership.eventId,
+    sponsorshipTier: partnership.sponsorshipTier,
+    customTierLabel: partnership.customTierLabel,
+    deliverables: partnership.deliverables ?? [],
+    seminarSlotCount: partnership.seminarSlotCount ?? 0,
+  }));
 }
 
 function normalizeSeminarAssignments(
   assignments: PartnerSeminarSlotAssignment[] | undefined
 ): PartnerSeminarSlotAssignment[] {
-  return sortByKey(assignments ?? [], (assignment) =>
-    `${assignment.eventId}:${assignment.seminarId}`
-  ).map((assignment) => ({
+  return (assignments ?? []).map((assignment) => ({
     eventId: assignment.eventId,
     seminarId: assignment.seminarId,
     slots: assignment.slots,
     seminarTitle: assignment.seminarTitle,
+  }));
+}
+
+function normalizeRelationalPartnerships(
+  partnerships: PartnerEventPartnership[]
+): Record<string, unknown>[] {
+  return normalizePartnerships(partnerships).map((partnership) => ({
+    eventId: partnership.eventId,
+    sponsorshipTier: partnership.sponsorshipTier ?? null,
+    customTierLabel: partnership.customTierLabel ?? null,
+    seminarSlotCount: partnership.seminarSlotCount ?? 0,
+    deliverables: partnership.deliverables ?? [],
+  }));
+}
+
+function normalizeRelationalAssignments(
+  assignments: PartnerSeminarSlotAssignment[] | undefined
+): Record<string, unknown>[] {
+  return normalizeSeminarAssignments(assignments).map((assignment) => ({
+    eventId: assignment.eventId,
+    seminarId: assignment.seminarId,
+    slots: assignment.slots,
+    seminarTitle: assignment.seminarTitle ?? null,
   }));
 }
 
@@ -226,13 +280,19 @@ export function canonicalizePartnerForComparison(
     city: partner.city ?? "",
     state: partner.state ?? "",
     stage: partner.stage,
-    primaryContact: normalizeContact(partner.primaryContact),
-    secondaryContact: normalizeContact(partner.secondaryContact),
-    relationshipOwner: normalizeRelationshipOwner(partner.relationshipOwner),
-    stageRemarks: normalizeAlwaysArray(partner.stageRemarks),
+    primaryContact: deepCanonicalizeValue(normalizeContact(partner.primaryContact)),
+    secondaryContact: deepCanonicalizeValue(
+      normalizeContact(partner.secondaryContact)
+    ),
+    relationshipOwner: deepCanonicalizeValue(
+      normalizeRelationshipOwner(partner.relationshipOwner)
+    ),
+    stageRemarks: deepCanonicalizeValue(normalizeAlwaysArray(partner.stageRemarks)),
     sponsorshipTier: normalizeNullableOptional(partner.sponsorshipTier),
     sponsorshipNotes: normalizeNullableOptional(partner.sponsorshipNotes),
-    deliverables: normalizeOptionalCollection(partner.deliverables),
+    deliverables: deepCanonicalizeValue(
+      normalizeOptionalCollection(partner.deliverables)
+    ),
     deliverablesConfirmedAt: normalizeOptionalTimestamp(
       partner.deliverablesConfirmedAt
     ),
@@ -247,30 +307,34 @@ export function canonicalizePartnerForComparison(
     ),
     portalLogin: normalizeNullableOptional(partner.portalLogin),
     portalInviteEmail: normalizeNullableOptional(partner.portalInviteEmail),
-    portalDocuments: normalizeOptionalCollection(partner.portalDocuments),
+    portalDocuments: deepCanonicalizeValue(
+      normalizeOptionalCollection(partner.portalDocuments)
+    ),
     portalFasciaName: normalizeNullableOptional(partner.portalFasciaName),
     portalWebsiteUrl: normalizeNullableOptional(partner.portalWebsiteUrl),
     portalSmsContent: normalizeNullableOptional(partner.portalSmsContent),
-    portalSeminarSpeakers: normalizeOptionalCollection(
-      partner.portalSeminarSpeakers
+    portalSeminarSpeakers: deepCanonicalizeValue(
+      normalizeOptionalCollection(partner.portalSeminarSpeakers)
     ),
-    portalRepresentatives: normalizeOptionalCollection(
-      partner.portalRepresentatives
+    portalRepresentatives: deepCanonicalizeValue(
+      normalizeOptionalCollection(partner.portalRepresentatives)
     ),
     contactedAt: normalizeNullableOptional(partner.contactedAt),
     contactedNotes: normalizeNullableOptional(partner.contactedNotes),
     meetingAt: normalizeNullableOptional(partner.meetingAt),
     meetingNotes: normalizeNullableOptional(partner.meetingNotes),
-    meetings: normalizeAlwaysArray(partner.meetings),
+    meetings: deepCanonicalizeValue(normalizeAlwaysArray(partner.meetings)),
     notProceedingAt: normalizeNullableOptional(partner.notProceedingAt),
     notProceedingReason: normalizeNullableOptional(partner.notProceedingReason),
     createdAt: normalizeRequiredTimestamp(partner.createdAt),
     updatedAt: normalizeRequiredTimestamp(partner.updatedAt),
     eventIds,
-    eventPartnerships:
-      eventPartnerships.length > 0 ? eventPartnerships : undefined,
-    seminarSlotAssignments:
-      seminarSlotAssignments.length > 0 ? seminarSlotAssignments : undefined,
+    eventPartnerships: deepCanonicalizeValue(
+      eventPartnerships.length > 0 ? eventPartnerships : undefined
+    ),
+    seminarSlotAssignments: deepCanonicalizeValue(
+      seminarSlotAssignments.length > 0 ? seminarSlotAssignments : undefined
+    ),
   };
 }
 
@@ -337,7 +401,10 @@ export function comparePartnerScalarFields(
 
   for (const field of Object.keys(expectedCanonical)) {
     if (
-      stableJson(expectedCanonical[field]) !== stableJson(actualCanonical[field])
+      !deepCanonicalValuesEqual(
+        expectedCanonical[field],
+        actualCanonical[field]
+      )
     ) {
       mismatches.push(field);
     }
@@ -357,60 +424,41 @@ export function comparePartnerRelationalState(
     .map((link) => `${link.partnerId}:${link.eventId}`)
     .sort((left, right) => left.localeCompare(right));
 
-  const expectedPartnerships = normalizePartnerships(
+  const expectedPartnerships = normalizeRelationalPartnerships(
     resolvePartnershipsForImport(jsonPartner)
-  ).map((partnership) =>
-    stableJson({
-      eventId: partnership.eventId,
-      sponsorshipTier: partnership.sponsorshipTier ?? null,
-      customTierLabel: partnership.customTierLabel ?? null,
-      seminarSlotCount: partnership.seminarSlotCount ?? 0,
-      deliverables: partnership.deliverables ?? [],
-    })
   );
-  const actualPartnerships = dbRecord.eventPartnerships
-    .map((partnership) =>
-      stableJson({
-        eventId: partnership.eventId,
-        sponsorshipTier: partnership.sponsorshipTier,
-        customTierLabel: partnership.customTierLabel,
-        seminarSlotCount: partnership.seminarSlotCount,
-        deliverables: Array.isArray(partnership.deliverables)
-          ? partnership.deliverables
-          : [],
-      })
-    )
-    .sort((left, right) => left.localeCompare(right));
+  const actualPartnerships = dbRecord.eventPartnerships.map((partnership) => ({
+    eventId: partnership.eventId,
+    sponsorshipTier: partnership.sponsorshipTier,
+    customTierLabel: partnership.customTierLabel,
+    seminarSlotCount: partnership.seminarSlotCount,
+    deliverables: Array.isArray(partnership.deliverables)
+      ? partnership.deliverables
+      : [],
+  }));
 
-  const expectedAssignments = normalizeSeminarAssignments(
+  const expectedAssignments = normalizeRelationalAssignments(
     jsonPartner.seminarSlotAssignments
-  ).map((assignment) =>
-    stableJson({
-      eventId: assignment.eventId,
+  );
+  const actualAssignments = dbRecord.eventPartnerships.flatMap((partnership) =>
+    partnership.seminarSlotAssignments.map((assignment) => ({
+      eventId: partnership.eventId,
       seminarId: assignment.seminarId,
       slots: assignment.slots,
-      seminarTitle: assignment.seminarTitle ?? null,
-    })
+      seminarTitle: assignment.seminarTitle,
+    }))
   );
-  const actualAssignments = dbRecord.eventPartnerships
-    .flatMap((partnership) =>
-      partnership.seminarSlotAssignments.map((assignment) =>
-        stableJson({
-          eventId: partnership.eventId,
-          seminarId: assignment.seminarId,
-          slots: assignment.slots,
-          seminarTitle: assignment.seminarTitle,
-        })
-      )
-    )
-    .sort((left, right) => left.localeCompare(right));
 
   return {
-    eventLinks: stableJson(expectedLinks) !== stableJson(actualLinks),
-    eventPartnerships:
-      stableJson(expectedPartnerships) !== stableJson(actualPartnerships),
-    seminarSlotAssignments:
-      stableJson(expectedAssignments) !== stableJson(actualAssignments),
+    eventLinks: !deepCanonicalValuesEqual(expectedLinks, actualLinks),
+    eventPartnerships: !deepCanonicalValuesEqual(
+      expectedPartnerships,
+      actualPartnerships
+    ),
+    seminarSlotAssignments: !deepCanonicalValuesEqual(
+      expectedAssignments,
+      actualAssignments
+    ),
   };
 }
 
