@@ -3,6 +3,7 @@
  */
 import fs from "node:fs";
 import type { Registration, RegistrationKind } from "../../types";
+import type { Event } from "../../types";
 
 export const TARGET_EVENT_ID = "evt-001";
 
@@ -95,6 +96,20 @@ export function readRegistrationSource(sourcePath: string): Registration[] {
   }
 
   return parsed as Registration[];
+}
+
+export function readEventSource(sourcePath: string): Event[] {
+  if (!fs.existsSync(sourcePath)) {
+    throw new Error(`Source file not found: ${sourcePath}`);
+  }
+
+  const raw = fs.readFileSync(sourcePath, "utf-8");
+  const parsed = JSON.parse(raw) as unknown;
+  if (!Array.isArray(parsed)) {
+    throw new Error("Source file must contain a JSON array of events");
+  }
+
+  return parsed as Event[];
 }
 
 export function isLegacyNullableStudentField(
