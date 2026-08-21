@@ -48,48 +48,59 @@ export const PARTNER_AUTH_FIELDS = [
   "portalInviteSentAt",
 ] as const;
 
-const PARTNER_SCALAR_FIELDS = [
-  "name",
-  "city",
-  "state",
-  "stage",
-  "primaryContact",
-  "secondaryContact",
-  "relationshipOwner",
-  "stageRemarks",
-  "sponsorshipTier",
-  "sponsorshipNotes",
-  "deliverables",
-  "deliverablesConfirmedAt",
-  "seminarSlotsConfirmedAt",
-  "totalAmount",
-  "discountAmount",
-  "netAmount",
-  "commercialsConfirmedAt",
-  "portalLogin",
-  "portalInviteEmail",
-  "portalDocuments",
-  "portalFasciaName",
-  "portalWebsiteUrl",
-  "portalSmsContent",
-  "portalSeminarSpeakers",
-  "portalRepresentatives",
-  "contactedAt",
-  "contactedNotes",
-  "meetingAt",
-  "meetingNotes",
-  "meetings",
-  "notProceedingAt",
-  "notProceedingReason",
-  "createdAt",
-  "updatedAt",
-] as const;
-
 function normalizeDate(value: Date | string | null | undefined): number | null {
   if (value === null || value === undefined) return null;
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return null;
   return date.getTime();
+}
+
+function normalizeNullableOptional<T>(value: T | null | undefined): T | undefined {
+  if (value === null || value === undefined) return undefined;
+  return value;
+}
+
+function normalizeRequiredTimestamp(value: unknown): number | null {
+  return normalizeDate(value as Date | string | null | undefined);
+}
+
+function normalizeOptionalTimestamp(value: unknown): number | undefined {
+  const timestamp = normalizeRequiredTimestamp(value);
+  return timestamp === null ? undefined : timestamp;
+}
+
+function normalizeAlwaysArray<T>(value: T[] | null | undefined): T[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function normalizeOptionalCollection<T>(
+  value: T[] | null | undefined
+): T[] | undefined {
+  if (!Array.isArray(value) || value.length === 0) return undefined;
+  return value;
+}
+
+function normalizeContact(
+  contact: Partner["primaryContact"] | undefined
+): Partner["primaryContact"] {
+  return {
+    name: contact?.name ?? "",
+    designation: contact?.designation ?? "",
+    phone: contact?.phone ?? "",
+    email: contact?.email ?? "",
+  };
+}
+
+function normalizeRelationshipOwner(
+  owner: Partner["relationshipOwner"] | undefined
+): NonNullable<Partner["relationshipOwner"]> {
+  return {
+    organization: owner?.organization ?? "",
+    spocId: owner?.spocId ?? undefined,
+    managerName: owner?.managerName ?? "",
+    managerPhone: owner?.managerPhone ?? "",
+    managerEmail: owner?.managerEmail ?? "",
+  };
 }
 
 function stableJson(value: unknown): string {
@@ -199,6 +210,70 @@ function normalizeSeminarAssignments(
   }));
 }
 
+export function canonicalizePartnerForComparison(
+  partner: Partner
+): Record<string, unknown> {
+  const eventIds = [...(partner.eventIds ?? [])].sort((left, right) =>
+    left.localeCompare(right)
+  );
+  const eventPartnerships = normalizePartnerships(partner.eventPartnerships);
+  const seminarSlotAssignments = normalizeSeminarAssignments(
+    partner.seminarSlotAssignments
+  );
+
+  return {
+    name: partner.name,
+    city: partner.city ?? "",
+    state: partner.state ?? "",
+    stage: partner.stage,
+    primaryContact: normalizeContact(partner.primaryContact),
+    secondaryContact: normalizeContact(partner.secondaryContact),
+    relationshipOwner: normalizeRelationshipOwner(partner.relationshipOwner),
+    stageRemarks: normalizeAlwaysArray(partner.stageRemarks),
+    sponsorshipTier: normalizeNullableOptional(partner.sponsorshipTier),
+    sponsorshipNotes: normalizeNullableOptional(partner.sponsorshipNotes),
+    deliverables: normalizeOptionalCollection(partner.deliverables),
+    deliverablesConfirmedAt: normalizeOptionalTimestamp(
+      partner.deliverablesConfirmedAt
+    ),
+    seminarSlotsConfirmedAt: normalizeOptionalTimestamp(
+      partner.seminarSlotsConfirmedAt
+    ),
+    totalAmount: normalizeNullableOptional(partner.totalAmount),
+    discountAmount: normalizeNullableOptional(partner.discountAmount),
+    netAmount: normalizeNullableOptional(partner.netAmount),
+    commercialsConfirmedAt: normalizeOptionalTimestamp(
+      partner.commercialsConfirmedAt
+    ),
+    portalLogin: normalizeNullableOptional(partner.portalLogin),
+    portalInviteEmail: normalizeNullableOptional(partner.portalInviteEmail),
+    portalDocuments: normalizeOptionalCollection(partner.portalDocuments),
+    portalFasciaName: normalizeNullableOptional(partner.portalFasciaName),
+    portalWebsiteUrl: normalizeNullableOptional(partner.portalWebsiteUrl),
+    portalSmsContent: normalizeNullableOptional(partner.portalSmsContent),
+    portalSeminarSpeakers: normalizeOptionalCollection(
+      partner.portalSeminarSpeakers
+    ),
+    portalRepresentatives: normalizeOptionalCollection(
+      partner.portalRepresentatives
+    ),
+    contactedAt: normalizeNullableOptional(partner.contactedAt),
+    contactedNotes: normalizeNullableOptional(partner.contactedNotes),
+    meetingAt: normalizeNullableOptional(partner.meetingAt),
+    meetingNotes: normalizeNullableOptional(partner.meetingNotes),
+    meetings: normalizeAlwaysArray(partner.meetings),
+    notProceedingAt: normalizeNullableOptional(partner.notProceedingAt),
+    notProceedingReason: normalizeNullableOptional(partner.notProceedingReason),
+    createdAt: normalizeRequiredTimestamp(partner.createdAt),
+    updatedAt: normalizeRequiredTimestamp(partner.updatedAt),
+    eventIds,
+    eventPartnerships:
+      eventPartnerships.length > 0 ? eventPartnerships : undefined,
+    seminarSlotAssignments:
+      seminarSlotAssignments.length > 0 ? seminarSlotAssignments : undefined,
+  };
+}
+
 export function normalizePartnerForComparison(partner: Partner): Partner {
   const normalized = jsonPartnerToExpectedApiShape(partner);
   return {
@@ -206,10 +281,14 @@ export function normalizePartnerForComparison(partner: Partner): Partner {
     eventIds: [...(normalized.eventIds ?? [])].sort((left, right) =>
       left.localeCompare(right)
     ),
-    eventPartnerships: normalizePartnerships(normalized.eventPartnerships),
-    seminarSlotAssignments: normalizeSeminarAssignments(
-      normalized.seminarSlotAssignments
-    ),
+    eventPartnerships:
+      normalizePartnerships(normalized.eventPartnerships).length > 0
+        ? normalizePartnerships(normalized.eventPartnerships)
+        : undefined,
+    seminarSlotAssignments:
+      normalizeSeminarAssignments(normalized.seminarSlotAssignments).length > 0
+        ? normalizeSeminarAssignments(normalized.seminarSlotAssignments)
+        : undefined,
   };
 }
 
@@ -252,41 +331,19 @@ export function comparePartnerScalarFields(
   expected: Partner,
   actual: Partner
 ): string[] {
+  const expectedCanonical = canonicalizePartnerForComparison(expected);
+  const actualCanonical = canonicalizePartnerForComparison(actual);
   const mismatches: string[] = [];
 
-  for (const field of PARTNER_SCALAR_FIELDS) {
-    if (stableJson(expected[field]) !== stableJson(actual[field])) {
+  for (const field of Object.keys(expectedCanonical)) {
+    if (
+      stableJson(expectedCanonical[field]) !== stableJson(actualCanonical[field])
+    ) {
       mismatches.push(field);
     }
   }
 
-  const expectedEventIds = [...(expected.eventIds ?? [])].sort((left, right) =>
-    left.localeCompare(right)
-  );
-  const actualEventIds = [...(actual.eventIds ?? [])].sort((left, right) =>
-    left.localeCompare(right)
-  );
-  if (stableJson(expectedEventIds) !== stableJson(actualEventIds)) {
-    mismatches.push("eventIds");
-  }
-
-  const expectedPartnerships = normalizePartnerships(expected.eventPartnerships);
-  const actualPartnerships = normalizePartnerships(actual.eventPartnerships);
-  if (stableJson(expectedPartnerships) !== stableJson(actualPartnerships)) {
-    mismatches.push("eventPartnerships");
-  }
-
-  const expectedAssignments = normalizeSeminarAssignments(
-    expected.seminarSlotAssignments
-  );
-  const actualAssignments = normalizeSeminarAssignments(
-    actual.seminarSlotAssignments
-  );
-  if (stableJson(expectedAssignments) !== stableJson(actualAssignments)) {
-    mismatches.push("seminarSlotAssignments");
-  }
-
-  return [...new Set(mismatches)];
+  return mismatches;
 }
 
 export function comparePartnerRelationalState(
@@ -365,12 +422,8 @@ export function compareExistingPartner(
   authMismatches: string[];
   relationalMismatches: PartnerRelationalMismatch;
 } {
-  const expectedApi = normalizePartnerForComparison(
-    jsonPartnerToExpectedApiShape(jsonPartner)
-  );
-  const actualApi = normalizePartnerForComparison(
-    mapPrismaPartnerToApi(dbRecord)
-  );
+  const expectedApi = jsonPartnerToExpectedApiShape(jsonPartner);
+  const actualApi = mapPrismaPartnerToApi(dbRecord);
 
   return {
     fieldMismatches: comparePartnerScalarFields(expectedApi, actualApi),

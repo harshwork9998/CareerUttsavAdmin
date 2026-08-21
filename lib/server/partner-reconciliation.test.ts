@@ -10,10 +10,10 @@ import {
   summarizePartnerReconciliationPlan,
 } from "@/lib/server/partner-reconciliation-plan";
 import {
+  canonicalizePartnerForComparison,
   compareExistingPartner,
-  comparePartnerAuthFields,
+  comparePartnerScalarFields,
   jsonPartnerToExpectedApiShape,
-  normalizePartnerForComparison,
   partnerRowIsExactMatch,
 } from "@/lib/server/partner-reconciliation";
 import type { Partner } from "@/types";
@@ -220,26 +220,105 @@ describe("partner reconciliation", () => {
   it("treats matching Prisma API output as exact partner match", () => {
     const jsonPartner = basePartner();
     const dbRecord = prismaPartnerFromJson(jsonPartner);
-    const apiShape = mapPrismaPartnerToApi(dbRecord);
-    const normalizedJson = normalizePartnerForComparison(
-      jsonPartnerToExpectedApiShape(jsonPartner)
-    );
-    const normalizedDb = normalizePartnerForComparison(apiShape);
+    const comparison = compareExistingPartner(jsonPartner, dbRecord);
 
-    expect(normalizedJson.updatedAt).toBe(normalizedDb.updatedAt);
-    expect(comparePartnerAuthFields(jsonPartner, dbRecord)).toEqual([]);
+    expect(comparison.fieldMismatches).toEqual([]);
+    expect(comparison.authMismatches).toEqual([]);
+    expect(comparison.relationalMismatches).toEqual({
+      eventLinks: false,
+      eventPartnerships: false,
+      seminarSlotAssignments: false,
+    });
+    expect(
+      partnerRowIsExactMatch({
+        id: jsonPartner.id,
+        exactMatch: false,
+        fieldMismatches: comparison.fieldMismatches,
+        authMismatches: comparison.authMismatches,
+        relationalMismatches: comparison.relationalMismatches,
+      })
+    ).toBe(true);
+  });
 
-    const row = {
-      id: jsonPartner.id,
-      exactMatch: false,
-      fieldMismatches: [],
-      authMismatches: [],
-      relationalMismatches: {
-        eventLinks: false,
-        eventPartnerships: false,
-        seminarSlotAssignments: false,
+  it("treats identical ISO string and Prisma Date timestamps as exact", () => {
+    const createdAt = "2026-06-01T10:00:00+05:30";
+    const updatedAt = "2026-08-20T12:34:56.789Z";
+    const jsonPartner = basePartner({ createdAt, updatedAt });
+    const dbRecord = prismaPartnerFromJson(jsonPartner);
+
+    const comparison = compareExistingPartner(jsonPartner, dbRecord);
+    expect(comparison.fieldMismatches).not.toContain("createdAt");
+    expect(comparison.fieldMismatches).not.toContain("updatedAt");
+  });
+
+  it("treats API-equivalent empty stageRemarks and meetings as exact", () => {
+    const jsonPartner = basePartner({
+      stageRemarks: undefined,
+      meetings: undefined,
+    });
+    const dbRecord = prismaPartnerFromJson(basePartner());
+
+    const comparison = compareExistingPartner(jsonPartner, dbRecord);
+    expect(comparison.fieldMismatches).not.toContain("stageRemarks");
+    expect(comparison.fieldMismatches).not.toContain("meetings");
+  });
+
+  it("still detects true relational differences", () => {
+    const jsonPartner = basePartner({
+      eventPartnerships: [
+        {
+          eventId: "evt-001",
+          sponsorshipTier: "Knowledge Partner (Gold)",
+          deliverables: [{ id: "d1", key: "stallSize", label: "Stall", included: true }],
+          seminarSlotCount: 2,
+        },
+      ],
+    });
+    const dbRecord = prismaPartnerFromJson(basePartner());
+
+    const comparison = compareExistingPartner(jsonPartner, dbRecord);
+    expect(
+      comparison.fieldMismatches.includes("eventPartnerships") ||
+        comparison.relationalMismatches.eventPartnerships
+    ).toBe(true);
+  });
+
+  it("still detects true relationshipOwner differences", () => {
+    const jsonPartner = basePartner({
+      relationshipOwner: {
+        organization: "IES",
+        spocId: "i738eqyb8",
+        managerName: "Meera Joshi",
+        managerPhone: "9886130001",
+        managerEmail: "meera.joshi@iesedu.in",
       },
-    };
-    expect(partnerRowIsExactMatch(row)).toBe(true);
+    });
+    const dbRecord = prismaPartnerFromJson(basePartner());
+
+    const comparison = compareExistingPartner(jsonPartner, dbRecord);
+    expect(comparison.fieldMismatches).toContain("relationshipOwner");
+  });
+
+  it("canonicalizes timestamp fields to numeric instants", () => {
+    const createdAt = "2026-06-01T10:00:00+05:30";
+    const updatedAt = "2026-08-20T12:34:56.789Z";
+
+    expect(
+      canonicalizePartnerForComparison(basePartner({ createdAt, updatedAt }))
+        .createdAt
+    ).toBe(new Date(createdAt).getTime());
+    expect(
+      canonicalizePartnerForComparison(
+        mapPrismaPartnerToApi(prismaPartnerFromJson(basePartner({ createdAt, updatedAt })))
+      ).createdAt
+    ).toBe(new Date(createdAt).getTime());
+    expect(
+      comparePartnerScalarFields(
+        jsonPartnerToExpectedApiShape(basePartner({ createdAt, updatedAt })),
+        mapPrismaPartnerToApi(
+          prismaPartnerFromJson(basePartner({ createdAt, updatedAt }))
+        )
+      )
+    ).toEqual([]);
   });
 });
