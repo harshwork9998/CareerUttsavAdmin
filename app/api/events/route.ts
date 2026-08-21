@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 
 import { loadEvents, saveEvents } from "@/lib/server/events-persistence";
+import { listEventsForApi } from "@/lib/server/event-service";
 import { generateId } from "@/lib/utils";
 import type { Event } from "@/types";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  return NextResponse.json(loadEvents());
+  return NextResponse.json(await listEventsForApi());
 }
 
 export async function POST(request: Request) {

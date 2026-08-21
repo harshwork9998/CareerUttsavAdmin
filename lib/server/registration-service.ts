@@ -11,6 +11,7 @@ import {
   validateRegistrationCreate,
   type CreateRegistrationInput,
 } from "@/lib/registration-validation";
+import { listEventsForApi } from "@/lib/server/event-service";
 import { loadEvents, saveEvents } from "@/lib/server/events-persistence";
 import { isPrismaRegistrationPersistence } from "@/lib/server/registration-persistence-mode";
 import {
@@ -107,7 +108,7 @@ export async function getRegistrationForApi(
 
   const registration = loadRawRegistrations().find((entry) => entry.id === id);
   if (!registration) return null;
-  return resolveRegistration(registration, loadEvents());
+  return resolveRegistration(registration, await listEventsForApi());
 }
 
 export async function checkStudentRegistrationDuplicate(input: {
@@ -155,7 +156,7 @@ export async function createRegistrationForApi(
   },
   request: Request
 ): Promise<RegistrationCreateResult> {
-  const events = loadEvents();
+  const events = await listEventsForApi();
   const validated = validateRegistrationCreate(body, events);
   if (!validated.ok) {
     return {
@@ -314,7 +315,7 @@ export async function patchRegistrationForApi(
   const next = [...registrations];
   next[idx] = updated;
   saveRegistrations(next);
-  return resolveRegistration(updated, loadEvents());
+  return resolveRegistration(updated, await listEventsForApi());
 }
 
 export async function deleteRegistrationForApi(

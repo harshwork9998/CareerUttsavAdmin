@@ -6,6 +6,7 @@ import {
 } from "@/lib/partner-event-config";
 import { filterRegistrationsForEventCatalog } from "@/lib/registration-event-links";
 import { filterRostersForEventCatalog } from "@/lib/seminar-roster-links";
+import { getEventForApi } from "@/lib/server/event-service";
 import { loadEvents, saveEvents } from "@/lib/server/events-persistence";
 import { loadPartners, savePartners } from "@/lib/server/partners-persistence";
 import {
@@ -40,7 +41,7 @@ function prunePartnersForEventCatalog(events: Event[]): Partner[] {
 
 export async function GET(_request: Request, context: RouteContext) {
   const { id } = await context.params;
-  const event = loadEvents().find((entry) => entry.id === id);
+  const event = await getEventForApi(id);
   if (!event) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }

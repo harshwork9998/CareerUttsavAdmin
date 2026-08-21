@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { buildRegistrationTrendSeries } from "@/lib/registration-time-series";
-import { loadEvents } from "@/lib/server/events-persistence";
-import { loadRegistrations } from "@/lib/server/registrations-persistence";
+import { listEventsForApi } from "@/lib/server/event-service";
+import { listRegistrationsForApi } from "@/lib/server/registration-service";
 
 export const dynamic = "force-dynamic";
 
@@ -19,9 +19,14 @@ export async function GET(request: Request) {
     );
   }
 
+  const [registrations, events] = await Promise.all([
+    listRegistrationsForApi(),
+    listEventsForApi(),
+  ]);
+
   const series = buildRegistrationTrendSeries({
-    registrations: loadRegistrations(),
-    events: loadEvents(),
+    registrations,
+    events,
     city,
     from,
     to,
