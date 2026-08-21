@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { loadEvents, saveEvents } from "@/lib/server/events-persistence";
 import { listEventsForApi } from "@/lib/server/event-service";
+import { getEventWriteBlockedResponse } from "@/lib/server/event-write-guard";
 import { generateId } from "@/lib/utils";
 import type { Event } from "@/types";
 
@@ -12,6 +13,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const blocked = getEventWriteBlockedResponse();
+  if (blocked) return blocked;
+
   const body = (await request.json()) as Omit<
     Event,
     "id" | "createdAt" | "updatedAt"

@@ -7,6 +7,7 @@ import {
 import { filterRegistrationsForEventCatalog } from "@/lib/registration-event-links";
 import { filterRostersForEventCatalog } from "@/lib/seminar-roster-links";
 import { getEventForApi } from "@/lib/server/event-service";
+import { getEventWriteBlockedResponse } from "@/lib/server/event-write-guard";
 import { loadEvents, saveEvents } from "@/lib/server/events-persistence";
 import { loadPartners, savePartners } from "@/lib/server/partners-persistence";
 import {
@@ -49,6 +50,9 @@ export async function GET(_request: Request, context: RouteContext) {
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
+  const blocked = getEventWriteBlockedResponse();
+  if (blocked) return blocked;
+
   const { id } = await context.params;
   const patch = (await request.json()) as Partial<Event>;
 
@@ -98,6 +102,9 @@ function pruneSeminarRostersForEventCatalog(events: Event[]): void {
 }
 
 export async function DELETE(_request: Request, context: RouteContext) {
+  const blocked = getEventWriteBlockedResponse();
+  if (blocked) return blocked;
+
   const { id } = await context.params;
   const current = loadEvents();
   const events = current.filter((entry) => entry.id !== id);
