@@ -10,6 +10,7 @@ import {
 import {
   __resetOtpStoreForTests,
   __setOtpStoreForTests,
+  loadOtpChallenges,
 } from "@/lib/otp/persistence";
 import {
   consumePhoneVerification,
@@ -154,6 +155,45 @@ describe("OTP service (mock provider)", () => {
       code: MOCK_OTP_CODE,
     });
     expect(locked).toMatchObject({ ok: false, status: 429 });
+  });
+
+  it("resets verification attempts and expiry after resend following lockout", async () => {
+    vi.useFakeTimers();
+    const base = new Date("2026-01-01T00:00:00.000Z");
+    vi.setSystemTime(base);
+
+    await sendOtp({ phone: PHONE, purpose: "student_registration" });
+
+    for (let i = 0; i < OTP_CONFIG.maxVerifyAttempts; i += 1) {
+      await verifyOtp({
+        phone: PHONE,
+        purpose: "student_registration",
+        code: "000000",
+      });
+    }
+
+    const stillLocked = await verifyOtp({
+      phone: PHONE,
+      purpose: "student_registration",
+      code: MOCK_OTP_CODE,
+    });
+    expect(stillLocked).toMatchObject({ ok: false, status: 429 });
+
+    vi.advanceTimersByTime(OTP_CONFIG.resendCooldownMs + 1);
+    const resent = await sendOtp({
+      phone: PHONE,
+      purpose: "student_registration",
+    });
+    expect(resent.ok).toBe(true);
+
+    const verified = await verifyOtp({
+      phone: PHONE,
+      purpose: "student_registration",
+      code: MOCK_OTP_CODE,
+    });
+    expect(verified.ok).toBe(true);
+    if (!verified.ok) return;
+    expect(verified.verificationToken).toMatch(/^[a-f0-9]{64}$/);
   });
 
   it("treats locally expired challenges as expired", async () => {
@@ -352,5 +392,87 @@ describe("OTP service (MSG91 fetch)", () => {
     expect(fetchMock.mock.calls[1]?.[1]?.method).toBe("GET");
 
     vi.useRealTimers();
+  });
+
+  it("keeps locked challenge unchanged when resend provider fails", async () => {
+    vi.useFakeTimers();
+    const base = new Date("2026-01-01T00:00:00.000Z");
+    vi.setSystemTime(base);
+
+    const verifyError = {
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({ type: "error", message: "invalid otp" }),
+    };
+    const retryError = {
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({ type: "error", message: "retry failed" }),
+    };
+
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ type: "success" }),
+        })
+        .mockResolvedValueOnce(verifyError)
+        .mockResolvedValueOnce(verifyError)
+        .mockResolvedValueOnce(verifyError)
+        .mockResolvedValueOnce(verifyError)
+        .mockResolvedValueOnce(verifyError)
+        .mockResolvedValueOnce(retryError)
+    );
+
+    await sendOtp({ phone: PHONE, purpose: "student_registration" });
+
+    for (let i = 0; i < OTP_CONFIG.maxVerifyAttempts; i += 1) {
+      await verifyOtp({
+        phone: PHONE,
+        purpose: "student_registration",
+        code: "111111",
+      });
+    }
+
+    const locked = await verifyOtp({
+      phone: PHONE,
+      purpose: "student_registration",
+      code: "222222",
+    });
+    expect(locked).toMatchObject({ ok: false, status: 429 });
+
+    const beforeResend = loadOtpChallenges().find(
+      (c) => c.phone === PHONE && c.purpose === "student_registration"
+    );
+    expect(beforeResend?.attempts).toBe(OTP_CONFIG.maxVerifyAttempts);
+
+    vi.advanceTimersByTime(OTP_CONFIG.resendCooldownMs + 1);
+    const failedResend = await sendOtp({
+      phone: PHONE,
+      purpose: "student_registration",
+    });
+    expect(failedResend).toMatchObject({ ok: false, status: 502 });
+
+    const afterFailedResend = loadOtpChallenges().find(
+      (c) => c.phone === PHONE && c.purpose === "student_registration"
+    );
+    expect(afterFailedResend?.attempts).toBe(OTP_CONFIG.maxVerifyAttempts);
+    expect(afterFailedResend?.expiresAt).toBe(beforeResend?.expiresAt);
+    expect(afterFailedResend?.lastSentAt).toBe(beforeResend?.lastSentAt);
+    expect(afterFailedResend?.requestTimestamps).toEqual(
+      beforeResend?.requestTimestamps
+    );
+
+    const stillLocked = await verifyOtp({
+      phone: PHONE,
+      purpose: "student_registration",
+      code: "222222",
+    });
+    expect(stillLocked).toMatchObject({ ok: false, status: 429 });
   });
 });

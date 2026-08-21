@@ -211,7 +211,11 @@ export async function sendOtp(input: {
     existingValid.requestTimestamps = nextTimestamps;
     existingValid.lastSentAt = nowIso;
     existingValid.updatedAt = nowIso;
-    // Keep original expiresAt so retry continues the same OTP window
+    existingValid.expiresAt = expiresAt;
+    existingValid.attempts = 0;
+    existingValid.verifiedAt = undefined;
+    existingValid.verificationTokenHash = undefined;
+    existingValid.verificationTokenExpiresAt = undefined;
     challenges = challenges.map((c) =>
       c.id === existingValid.id ? existingValid : c
     );
