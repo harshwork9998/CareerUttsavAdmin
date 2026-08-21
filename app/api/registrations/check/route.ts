@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
 
-import {
-  DUPLICATE_STUDENT_REGISTRATION_MESSAGE,
-  findStudentRegistrationDuplicate,
-} from "@/lib/registration-duplicates";
-import { loadRawRegistrations } from "@/lib/server/registrations-persistence";
+import { checkStudentRegistrationDuplicate } from "@/lib/server/registration-service";
 
 export const dynamic = "force-dynamic";
 
@@ -26,26 +22,11 @@ export async function GET(request: Request) {
     );
   }
 
-  const duplicate = findStudentRegistrationDuplicate(loadRawRegistrations(), {
+  const result = await checkStudentRegistrationDuplicate({
     ...(eventId ? { eventId } : {}),
     ...(email ? { email } : {}),
     ...(phone ? { phone } : {}),
   });
 
-  return NextResponse.json(
-    {
-      duplicate: Boolean(duplicate),
-      message: duplicate ? DUPLICATE_STUDENT_REGISTRATION_MESSAGE : null,
-      registration: duplicate
-        ? {
-            id: duplicate.id,
-            registrationNumber: duplicate.registrationNumber,
-            studentName: duplicate.studentName,
-            email: duplicate.email,
-            phone: duplicate.phone,
-          }
-        : null,
-    },
-    { headers: NO_STORE_HEADERS }
-  );
+  return NextResponse.json(result, { headers: NO_STORE_HEADERS });
 }
