@@ -75,8 +75,10 @@ model Event {
   createdAt            DateTime
   updatedAt            DateTime
 
-  seminars      Seminar[]
-  registrations Registration[]
+  seminars                 Seminar[]
+  registrations            Registration[]
+  partnerEventLinks        PartnerEventLink[]
+  partnerEventPartnerships PartnerEventPartnership[]
 
   @@map("events")
 }
@@ -93,8 +95,9 @@ model Seminar {
   panelistSlots Int
   hall          Int
 
-  event                Event                 @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  registrationSeminars RegistrationSeminar[]
+  event                        Event                         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  registrationSeminars         RegistrationSeminar[]
+  partnerSeminarSlotAssignments PartnerSeminarSlotAssignment[]
 
   @@index([eventId])
   @@map("seminars")
@@ -190,4 +193,137 @@ model RegistrationNumberCounter {
   updatedAt DateTime
 
   @@map("registration_number_counters")
+}
+
+// ─── SPOCs (relationship managers) ───────────────────────────────────────────
+
+model Spoc {
+  id              String   @id
+  name            String
+  organization    String
+  phone           String
+  email           String
+  emailNormalized String   @unique
+  createdAt       DateTime
+  updatedAt       DateTime
+
+  partners Partner[] @relation("PartnerRelationshipSpoc")
+
+  @@index([organization])
+  @@map("spocs")
+}
+
+// ─── Partners (sales + portal) ───────────────────────────────────────────────
+
+model Partner {
+  id        String @id
+  name      String
+  city      String @default("")
+  state     String @default("")
+  stage     String
+
+  primaryContact   Json
+  secondaryContact Json
+
+  relationshipOrganization String  @default("")
+  relationshipManagerName  String  @default("")
+  relationshipManagerPhone String  @default("")
+  relationshipManagerEmail String  @default("")
+  relationshipSpocId       String?
+  relationshipSpoc         Spoc?   @relation("PartnerRelationshipSpoc", fields: [relationshipSpocId], references: [id], onDelete: SetNull)
+
+  stageRemarks Json @default("[]")
+  meetings     Json @default("[]")
+
+  contactedAt     String?
+  contactedNotes  String?
+  meetingAt       String?
+  meetingNotes    String?
+  notProceedingAt     String?
+  notProceedingReason String?
+
+  sponsorshipTier   String?
+  sponsorshipNotes  String?
+  /// Legacy flat deliverable checklist when eventPartnerships was not used.
+  legacyDeliverables Json?
+  deliverablesConfirmedAt DateTime?
+  seminarSlotsConfirmedAt DateTime?
+
+  totalAmount            Decimal? @db.Decimal(12, 2)
+  discountAmount         Decimal? @db.Decimal(12, 2)
+  netAmount              Decimal? @db.Decimal(12, 2)
+  commercialsConfirmedAt DateTime?
+
+  portalLogin                     String?
+  portalLoginNormalized           String? @unique
+  portalInviteEmail               String?
+  portalInviteEmailNormalized     String? @unique
+  portalPasswordHash              String?
+  portalAuthVersion               Int     @default(0)
+  portalPasswordChangedAt         DateTime?
+  portalPasswordPromptSkippedAt   DateTime?
+  portalInviteSentAt              DateTime?
+
+  portalDocuments       Json?
+  portalFasciaName      String?
+  portalWebsiteUrl      String?
+  portalSmsContent      String?
+  portalSeminarSpeakers Json?
+  portalRepresentatives Json?
+
+  createdAt DateTime
+  updatedAt DateTime
+
+  eventLinks        PartnerEventLink[]
+  eventPartnerships PartnerEventPartnership[]
+
+  @@index([stage])
+  @@index([relationshipSpocId])
+  @@map("partners")
+}
+
+model PartnerEventLink {
+  partnerId String
+  eventId   String
+
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  event   Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@id([partnerId, eventId])
+  @@index([eventId])
+  @@map("partner_event_links")
+}
+
+model PartnerEventPartnership {
+  id               String  @id
+  partnerId        String
+  eventId          String
+  sponsorshipTier  String?
+  customTierLabel  String?
+  deliverables     Json    @default("[]")
+  seminarSlotCount Int     @default(0)
+
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  event   Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  seminarSlotAssignments PartnerSeminarSlotAssignment[]
+
+  @@unique([partnerId, eventId])
+  @@index([eventId])
+  @@map("partner_event_partnerships")
+}
+
+model PartnerSeminarSlotAssignment {
+  id            String @id
+  partnershipId String
+  seminarId     String
+  slots         Int
+  seminarTitle  String?
+
+  partnership PartnerEventPartnership @relation(fields: [partnershipId], references: [id], onDelete: Cascade)
+  seminar     Seminar                 @relation(fields: [seminarId], references: [id], onDelete: Restrict)
+
+  @@unique([partnershipId, seminarId])
+  @@index([seminarId])
+  @@map("partner_seminar_slot_assignments")
 }
