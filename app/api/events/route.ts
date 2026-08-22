@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 
-import { loadEvents, saveEvents } from "@/lib/server/events-persistence";
 import { listEventsForApi } from "@/lib/server/event-service";
 import { getEventWriteBlockedResponse } from "@/lib/server/event-write-guard";
-import { generateId } from "@/lib/utils";
+import { createEventForApi } from "@/lib/server/event-write-service";
 import type { Event } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -29,21 +28,10 @@ export async function POST(request: Request) {
     );
   }
 
-  const now = new Date().toISOString();
-  const created: Event = {
-    ...body,
-    city,
-    id: generateId(),
-    seminars: body.seminars ?? [],
-    startTime: body.startTime ?? "09:00",
-    endTime: body.endTime ?? "18:00",
-    hallCount: body.hallCount ?? 1,
-    venue: body.venue ?? "",
-    createdAt: now,
-    updatedAt: now,
-  };
+  const result = await createEventForApi(body);
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error }, { status: result.status });
+  }
 
-  const events = [created, ...loadEvents()];
-  saveEvents(events);
-  return NextResponse.json(created);
+  return NextResponse.json(result.data);
 }

@@ -1,15 +1,11 @@
 import { NextResponse } from "next/server";
 
-import { filterRegistrationsForEventCatalog } from "@/lib/registration-event-links";
 import { getEventForApi } from "@/lib/server/event-service";
 import { getEventWriteBlockedResponse } from "@/lib/server/event-write-guard";
-import { loadEvents, saveEvents } from "@/lib/server/events-persistence";
-import { prunePartnersForEventCatalog as prunePartnersViaService } from "@/lib/server/partner-service";
-import { pruneSeminarRostersForEventCatalog } from "@/lib/server/seminar-roster-service";
 import {
-  loadRawRegistrations,
-  saveRegistrations,
-} from "@/lib/server/registrations-persistence";
+  deleteEventForApi,
+  patchEventForApi,
+} from "@/lib/server/event-write-service";
 import type { Event } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -39,34 +35,12 @@ export async function PATCH(request: Request, context: RouteContext) {
     );
   }
 
-  const events = loadEvents();
-  const idx = events.findIndex((entry) => entry.id === id);
-  if (idx === -1) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const result = await patchEventForApi(id, patch);
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error }, { status: result.status });
   }
 
-  const updated: Event = {
-    ...events[idx],
-    ...patch,
-    ...(patch.city !== undefined ? { city: patch.city.trim() } : {}),
-    id: events[idx].id,
-    updatedAt: new Date().toISOString(),
-  };
-
-  const next = [...events];
-  next[idx] = updated;
-  saveEvents(next);
-  await pruneSeminarRostersForEventCatalog(next);
-  return NextResponse.json(updated);
-}
-
-function pruneRegistrationsForEventCatalog(events: Event[]): void {
-  const validEventIds = new Set(events.map((event) => event.id));
-  const registrations = loadRawRegistrations();
-  const next = filterRegistrationsForEventCatalog(registrations, validEventIds);
-  if (next.length !== registrations.length) {
-    saveRegistrations(next);
-  }
+  return NextResponse.json(result.data);
 }
 
 export async function DELETE(_request: Request, context: RouteContext) {
@@ -74,15 +48,10 @@ export async function DELETE(_request: Request, context: RouteContext) {
   if (blocked) return blocked;
 
   const { id } = await context.params;
-  const current = loadEvents();
-  const events = current.filter((entry) => entry.id !== id);
-  if (events.length === current.length) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const result = await deleteEventForApi(id);
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error }, { status: result.status });
   }
 
-  saveEvents(events);
-  await prunePartnersViaService(events);
-  pruneRegistrationsForEventCatalog(events);
-  await pruneSeminarRostersForEventCatalog(events);
-  return NextResponse.json(events);
+  return NextResponse.json(result.data);
 }
