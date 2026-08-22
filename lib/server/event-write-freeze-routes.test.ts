@@ -47,9 +47,8 @@ vi.mock("@/lib/server/registrations-persistence", () => ({
   saveRegistrations: vi.fn((registrations: unknown[]) => registrations),
 }));
 
-vi.mock("@/lib/server/seminar-rosters-persistence", () => ({
-  loadRawSeminarRosters: vi.fn(() => []),
-  saveSeminarRosters: vi.fn((rosters: unknown[]) => rosters),
+vi.mock("@/lib/server/seminar-roster-service", () => ({
+  pruneSeminarRostersForEventCatalog: vi.fn(async () => undefined),
 }));
 
 import { POST } from "@/app/api/events/route";

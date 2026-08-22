@@ -1,19 +1,15 @@
 import { NextResponse } from "next/server";
 
 import { filterRegistrationsForEventCatalog } from "@/lib/registration-event-links";
-import { filterRostersForEventCatalog } from "@/lib/seminar-roster-links";
 import { getEventForApi } from "@/lib/server/event-service";
 import { getEventWriteBlockedResponse } from "@/lib/server/event-write-guard";
 import { loadEvents, saveEvents } from "@/lib/server/events-persistence";
 import { prunePartnersForEventCatalog as prunePartnersViaService } from "@/lib/server/partner-service";
+import { pruneSeminarRostersForEventCatalog } from "@/lib/server/seminar-roster-service";
 import {
   loadRawRegistrations,
   saveRegistrations,
 } from "@/lib/server/registrations-persistence";
-import {
-  loadRawSeminarRosters,
-  saveSeminarRosters,
-} from "@/lib/server/seminar-rosters-persistence";
 import type { Event } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -60,7 +56,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   const next = [...events];
   next[idx] = updated;
   saveEvents(next);
-  pruneSeminarRostersForEventCatalog(next);
+  await pruneSeminarRostersForEventCatalog(next);
   return NextResponse.json(updated);
 }
 
@@ -70,14 +66,6 @@ function pruneRegistrationsForEventCatalog(events: Event[]): void {
   const next = filterRegistrationsForEventCatalog(registrations, validEventIds);
   if (next.length !== registrations.length) {
     saveRegistrations(next);
-  }
-}
-
-function pruneSeminarRostersForEventCatalog(events: Event[]): void {
-  const rosters = loadRawSeminarRosters();
-  const next = filterRostersForEventCatalog(rosters, events);
-  if (next.length !== rosters.length) {
-    saveSeminarRosters(next);
   }
 }
 
@@ -95,6 +83,6 @@ export async function DELETE(_request: Request, context: RouteContext) {
   saveEvents(events);
   await prunePartnersViaService(events);
   pruneRegistrationsForEventCatalog(events);
-  pruneSeminarRostersForEventCatalog(events);
+  await pruneSeminarRostersForEventCatalog(events);
   return NextResponse.json(events);
 }
