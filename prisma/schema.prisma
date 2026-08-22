@@ -79,6 +79,7 @@ model Event {
   registrations            Registration[]
   partnerEventLinks        PartnerEventLink[]
   partnerEventPartnerships PartnerEventPartnership[]
+  seminarSessionRosters    SeminarSessionRoster[]
 
   @@map("events")
 }
@@ -95,12 +96,36 @@ model Seminar {
   panelistSlots Int
   hall          Int
 
-  event                        Event                         @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  registrationSeminars         RegistrationSeminar[]
+  event                         Event                          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  registrationSeminars          RegistrationSeminar[]
   partnerSeminarSlotAssignments PartnerSeminarSlotAssignment[]
+  seminarSessionRoster          SeminarSessionRoster?
 
+  @@unique([id, eventId])
   @@index([eventId])
   @@map("seminars")
+}
+
+// ─── Seminar session speaker rosters (Admin-managed stage programming) ───────
+
+model SeminarSessionRoster {
+  eventId    String
+  seminarId  String
+  /// Moderator speaker JSON, or null when unset.
+  moderator  Json?
+  /// Ordered panelist speaker JSON array — order is meaningful.
+  panelists  Json     @default("[]")
+  topicBrief String?
+  notes      String?
+  updatedAt  DateTime
+
+  event   Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  seminar Seminar @relation(fields: [seminarId, eventId], references: [id, eventId], onDelete: Cascade)
+
+  @@id([eventId, seminarId])
+  @@unique([seminarId, eventId])
+  @@index([seminarId])
+  @@map("seminar_session_rosters")
 }
 
 // ─── Registrations ───────────────────────────────────────────────────────────
@@ -216,11 +241,11 @@ model Spoc {
 // ─── Partners (sales + portal) ───────────────────────────────────────────────
 
 model Partner {
-  id        String @id
-  name      String
-  city      String @default("")
-  state     String @default("")
-  stage     String
+  id    String @id
+  name  String
+  city  String @default("")
+  state String @default("")
+  stage String
 
   primaryContact   Json
   secondaryContact Json
@@ -235,34 +260,34 @@ model Partner {
   stageRemarks Json @default("[]")
   meetings     Json @default("[]")
 
-  contactedAt     String?
-  contactedNotes  String?
-  meetingAt       String?
-  meetingNotes    String?
+  contactedAt         String?
+  contactedNotes      String?
+  meetingAt           String?
+  meetingNotes        String?
   notProceedingAt     String?
   notProceedingReason String?
 
-  sponsorshipTier   String?
-  sponsorshipNotes  String?
+  sponsorshipTier         String?
+  sponsorshipNotes        String?
   /// Legacy flat deliverable checklist when eventPartnerships was not used.
-  legacyDeliverables Json?
+  legacyDeliverables      Json?
   deliverablesConfirmedAt DateTime?
   seminarSlotsConfirmedAt DateTime?
 
-  totalAmount            Decimal? @db.Decimal(12, 2)
-  discountAmount         Decimal? @db.Decimal(12, 2)
-  netAmount              Decimal? @db.Decimal(12, 2)
+  totalAmount            Decimal?  @db.Decimal(12, 2)
+  discountAmount         Decimal?  @db.Decimal(12, 2)
+  netAmount              Decimal?  @db.Decimal(12, 2)
   commercialsConfirmedAt DateTime?
 
-  portalLogin                     String?
-  portalLoginNormalized           String? @unique
-  portalInviteEmail               String?
-  portalInviteEmailNormalized     String? @unique
-  portalPasswordHash              String?
-  portalAuthVersion               Int     @default(0)
-  portalPasswordChangedAt         DateTime?
-  portalPasswordPromptSkippedAt   DateTime?
-  portalInviteSentAt              DateTime?
+  portalLogin                   String?
+  portalLoginNormalized         String?   @unique
+  portalInviteEmail             String?
+  portalInviteEmailNormalized   String?   @unique
+  portalPasswordHash            String?
+  portalAuthVersion             Int       @default(0)
+  portalPasswordChangedAt       DateTime?
+  portalPasswordPromptSkippedAt DateTime?
+  portalInviteSentAt            DateTime?
 
   portalDocuments       Json?
   portalFasciaName      String?
@@ -314,7 +339,7 @@ model PartnerEventPartnership {
 }
 
 model PartnerSeminarSlotAssignment {
-  id            String @id
+  id            String  @id
   partnershipId String
   seminarId     String
   slots         Int
