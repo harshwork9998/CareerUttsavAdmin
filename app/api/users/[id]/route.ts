@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 
-import { ROLE_ID_BY_NAME } from "@/constants";
-import { findUserById, updateUserRecord } from "@/lib/server/users-persistence";
-import type { RoleName, User } from "@/types";
+import { requireSuperuser } from "@/lib/server/admin-auth";
+import {
+  findAdminUserById,
+  updateAdminUser,
+} from "@/lib/server/admin-user-service";
+import { isAdminUserError } from "@/lib/server/admin-user-errors";
+import type { User } from "@/types";
 
 export const dynamic = "force-dynamic";
 
@@ -10,18 +14,24 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireSuperuser();
+  if (auth instanceof NextResponse) return auth;
+
   const { id } = await params;
   const body = (await request.json()) as Partial<User>;
 
-  if (!findUserById(id)) {
+  const existing = await findAdminUserById(id);
+  if (!existing) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  const patch = { ...body };
-  if (patch.role && patch.role in ROLE_ID_BY_NAME) {
-    patch.roleId = ROLE_ID_BY_NAME[patch.role as RoleName];
+  try {
+    const updated = await updateAdminUser(id, body);
+    return NextResponse.json(updated);
+  } catch (error) {
+    if (isAdminUserError(error)) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    throw error;
   }
-
-  const updated = updateUserRecord(id, patch);
-  return NextResponse.json(updated);
 }

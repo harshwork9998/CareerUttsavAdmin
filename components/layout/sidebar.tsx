@@ -84,9 +84,10 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
       .toUpperCase() ?? "AD";
 
   const handleLogout = () => {
-    logout();
-    onNavigate?.();
-    router.push("/login");
+    void logout().finally(() => {
+      onNavigate?.();
+      router.push("/login");
+    });
   };
 
   const clearCollapseTimer = () => {

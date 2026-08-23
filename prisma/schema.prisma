@@ -352,3 +352,38 @@ model PartnerSeminarSlotAssignment {
   @@index([seminarId])
   @@map("partner_seminar_slot_assignments")
 }
+
+// ─── Admin users / auth ──────────────────────────────────────────────────────
+
+enum AdminUserStatus {
+  Active
+  Inactive
+  Suspended
+  PendingApproval @map("Pending Approval")
+  Rejected
+}
+
+enum AdminRole {
+  user
+  superuser
+}
+
+model AdminUser {
+  id           String          @id
+  name         String
+  email        String          @unique
+  phone        String?
+  avatar       String?
+  role         AdminRole
+  roleId       String
+  status       AdminUserStatus
+  department   String?
+  passwordHash String
+  lastLogin    DateTime?
+  createdAt    DateTime
+  updatedAt    DateTime
+
+  @@index([role])
+  @@index([status])
+  @@map("admin_users")
+}

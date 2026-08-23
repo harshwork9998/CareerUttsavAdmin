@@ -18,6 +18,7 @@ async function postAuth<TBody extends object>(
   const response = await fetch(`${AUTH_API_BASE}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify(body),
   });
 
@@ -55,6 +56,25 @@ export async function register(payload: RegisterPayload): Promise<AuthApiRespons
     email: payload.email.trim(),
     mobile: payload.mobile,
     password: payload.password,
+  });
+}
+
+/** Restore session from HttpOnly cookie. */
+export async function fetchCurrentUser(): Promise<User | null> {
+  const response = await fetch(`${AUTH_API_BASE}/me`, {
+    cache: "no-store",
+    credentials: "include",
+  });
+  if (!response.ok) return null;
+  const data = (await response.json().catch(() => null)) as { user?: User } | null;
+  return data?.user ?? null;
+}
+
+/** Clear server session cookie. */
+export async function logout(): Promise<void> {
+  await fetch(`${AUTH_API_BASE}/logout`, {
+    method: "POST",
+    credentials: "include",
   });
 }
 

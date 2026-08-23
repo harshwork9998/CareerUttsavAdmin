@@ -11,7 +11,10 @@ async function parseJson<T>(res: Response): Promise<T> {
 }
 
 export async function fetchAllUsers(): Promise<User[]> {
-  const res = await fetch("/api/users", { cache: "no-store" });
+  const res = await fetch("/api/users", {
+    cache: "no-store",
+    credentials: "include",
+  });
   return parseJson<User[]>(res);
 }
 
@@ -21,6 +24,7 @@ export async function createUserApi(
   const res = await fetch("/api/users", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify(user),
   });
   return parseJson<User>(res);
@@ -33,6 +37,7 @@ export async function updateUserApi(
   const res = await fetch(`/api/users/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify(data),
   });
   return parseJson<User>(res);
@@ -45,6 +50,7 @@ export async function reviewUserApi(
   const res = await fetch(`/api/users/${id}/review`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify(payload),
   });
   return parseJson<{ success: boolean; user: User; message?: string }>(res);

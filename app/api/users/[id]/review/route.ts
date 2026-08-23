@@ -1,11 +1,16 @@
 import { NextResponse } from "next/server";
 
-import { ROLES } from "@/constants";
+import { requireSuperuser } from "@/lib/server/admin-auth";
 import {
   sendAccountApprovedEmail,
   sendAccountRejectedEmail,
 } from "@/lib/server/auth-email-service";
-import { findUserById, reviewUserAccount } from "@/lib/server/users-persistence";
+import {
+  findAdminUserById,
+  reviewAdminUserAccount,
+} from "@/lib/server/admin-user-service";
+import { isAdminUserError } from "@/lib/server/admin-user-errors";
+import { ROLES } from "@/constants";
 import type { RoleName } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +19,9 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireSuperuser();
+  if (auth instanceof NextResponse) return auth;
+
   const { id } = await params;
   const body = (await request.json()) as {
     action?: "approve" | "reject";
@@ -24,7 +32,7 @@ export async function POST(
     return NextResponse.json({ error: "Invalid review action" }, { status: 400 });
   }
 
-  const existing = findUserById(id);
+  const existing = await findAdminUserById(id);
   if (!existing) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
@@ -45,30 +53,34 @@ export async function POST(
       );
     }
 
-    const approved = reviewUserAccount(id, "approve", role);
-    if (!approved) {
-      return NextResponse.json({ error: "Unable to approve account" }, { status: 400 });
+    try {
+      const approved = await reviewAdminUserAccount(id, "approve", role);
+      await sendAccountApprovedEmail(approved);
+      return NextResponse.json({
+        success: true,
+        user: approved,
+        message: `Account approved. An email was sent to ${approved.email}.`,
+      });
+    } catch (error) {
+      if (isAdminUserError(error)) {
+        return NextResponse.json({ error: error.message }, { status: error.status });
+      }
+      throw error;
     }
+  }
 
-    await sendAccountApprovedEmail(approved);
-
+  try {
+    const rejected = await reviewAdminUserAccount(id, "reject");
+    await sendAccountRejectedEmail(rejected);
     return NextResponse.json({
       success: true,
-      user: approved,
-      message: `Account approved. An email was sent to ${approved.email}.`,
+      user: rejected,
+      message: `Account request rejected for ${rejected.email}.`,
     });
+  } catch (error) {
+    if (isAdminUserError(error)) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    throw error;
   }
-
-  const rejected = reviewUserAccount(id, "reject");
-  if (!rejected) {
-    return NextResponse.json({ error: "Unable to reject account" }, { status: 400 });
-  }
-
-  await sendAccountRejectedEmail(rejected);
-
-  return NextResponse.json({
-    success: true,
-    user: rejected,
-    message: `Account request rejected for ${rejected.email}.`,
-  });
 }

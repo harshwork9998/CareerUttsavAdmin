@@ -1,0 +1,14 @@
+import { NextResponse } from "next/server";
+
+import { getAuthenticatedAdminUser } from "@/lib/server/admin-auth";
+
+export const dynamic = "force-dynamic";
+
+export async function GET() {
+  const user = await getAuthenticatedAdminUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  return NextResponse.json({ user });
+}

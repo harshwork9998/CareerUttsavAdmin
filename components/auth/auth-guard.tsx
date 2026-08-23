@@ -19,27 +19,35 @@ export function AuthGuard({ children }: AuthGuardProps) {
   const pathname = usePathname();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const user = useAuthStore((s) => s.user);
-  const [hydrated, setHydrated] = useState(false);
+  const hydrated = useAuthStore((s) => s.hydrated);
+  const restoreSession = useAuthStore((s) => s.restoreSession);
+  const [storeHydrated, setStoreHydrated] = useState(false);
 
   useEffect(() => {
-    setHydrated(true);
+    setStoreHydrated(true);
   }, []);
 
   useEffect(() => {
-    if (hydrated && !isAuthenticated) {
-      router.replace("/login");
-    }
-  }, [hydrated, isAuthenticated, router]);
+    if (!storeHydrated) return;
+    void restoreSession();
+  }, [storeHydrated, restoreSession]);
 
   useEffect(() => {
-    if (!hydrated || !isAuthenticated || !user) return;
+    if (!storeHydrated || !hydrated) return;
+    if (!isAuthenticated) {
+      router.replace("/login");
+    }
+  }, [storeHydrated, hydrated, isAuthenticated, router]);
+
+  useEffect(() => {
+    if (!storeHydrated || !hydrated || !isAuthenticated || !user) return;
 
     if (!canAccessRoute(user.role, pathname)) {
       router.replace(getDefaultRouteForRole(user.role));
     }
-  }, [hydrated, isAuthenticated, user, pathname, router]);
+  }, [storeHydrated, hydrated, isAuthenticated, user, pathname, router]);
 
-  if (!hydrated) {
+  if (!storeHydrated || !hydrated) {
     return <PageSkeleton />;
   }
 
