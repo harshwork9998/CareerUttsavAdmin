@@ -43,15 +43,25 @@ export async function updateUserApi(
   return parseJson<User>(res);
 }
 
+export type ReviewUserApiResponse = {
+  success: boolean;
+  user: User;
+  message?: string;
+  notification?: {
+    attempted: boolean;
+    sent: boolean;
+  };
+};
+
 export async function reviewUserApi(
   id: string,
   payload: { action: "approve" | "reject"; role?: "user" | "superuser" }
-): Promise<{ success: boolean; user: User; message?: string }> {
+): Promise<ReviewUserApiResponse> {
   const res = await fetch(`/api/users/${id}/review`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
     body: JSON.stringify(payload),
   });
-  return parseJson<{ success: boolean; user: User; message?: string }>(res);
+  return parseJson<ReviewUserApiResponse>(res);
 }

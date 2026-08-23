@@ -14,6 +14,7 @@ export type SendEmailInput = {
   to: string | string[];
   subject: string;
   html: string;
+  text?: string;
   from?: string;
   replyTo?: string;
   tags?: { name: string; value: string }[];
@@ -117,6 +118,7 @@ export async function sendEmail(
       to: input.to,
       subject: input.subject,
       html: input.html,
+      text: input.text,
       replyTo: input.replyTo,
       tags: input.tags,
       attachments: input.attachments?.map((attachment) => ({

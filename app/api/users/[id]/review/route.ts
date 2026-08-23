@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 
 import { requireSuperuser } from "@/lib/server/admin-auth";
 import {
-  sendAccountApprovedEmail,
-  sendAccountRejectedEmail,
-} from "@/lib/server/auth-email-service";
+  buildAdminReviewSuccessMessage,
+  sendAdminAccountApprovedEmail,
+  sendAdminAccountRejectedEmail,
+} from "@/lib/server/admin-auth-email";
 import {
   findAdminUserById,
   reviewAdminUserAccount,
@@ -55,11 +56,15 @@ export async function POST(
 
     try {
       const approved = await reviewAdminUserAccount(id, "approve", role);
-      await sendAccountApprovedEmail(approved);
+      const notification = await sendAdminAccountApprovedEmail(approved);
       return NextResponse.json({
         success: true,
         user: approved,
-        message: `Account approved. An email was sent to ${approved.email}.`,
+        message: buildAdminReviewSuccessMessage("approve", notification),
+        notification: {
+          attempted: notification.attempted,
+          sent: notification.sent,
+        },
       });
     } catch (error) {
       if (isAdminUserError(error)) {
@@ -71,11 +76,15 @@ export async function POST(
 
   try {
     const rejected = await reviewAdminUserAccount(id, "reject");
-    await sendAccountRejectedEmail(rejected);
+    const notification = await sendAdminAccountRejectedEmail(rejected);
     return NextResponse.json({
       success: true,
       user: rejected,
-      message: `Account request rejected for ${rejected.email}.`,
+      message: buildAdminReviewSuccessMessage("reject", notification),
+      notification: {
+        attempted: notification.attempted,
+        sent: notification.sent,
+      },
     });
   } catch (error) {
     if (isAdminUserError(error)) {
