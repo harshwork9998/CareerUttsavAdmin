@@ -1,7 +1,9 @@
 import {
   extractNormalizedWhatsAppMessages,
+  extractNormalizedWhatsAppStatuses,
   maskWaId,
   parseMetaWebhookPayload,
+  safeLogWhatsAppDeliveryStatus,
   type NormalizedWhatsAppMessage,
 } from "@/lib/server/whatsapp/meta-webhook";
 import {
@@ -148,7 +150,7 @@ async function processInboundUserMessage(
     });
   }
 
-  dispatchWhatsAppBotActions(actions);
+  await dispatchWhatsAppBotActions(waId, actions);
   await markWhatsAppInboundMessageProcessed(message.messageId);
 }
 
@@ -162,5 +164,10 @@ export async function processVerifiedWhatsAppWebhook(rawBody: string): Promise<v
   const messages = extractNormalizedWhatsAppMessages(payload);
   for (const message of messages) {
     await processInboundUserMessage(message);
+  }
+
+  const statuses = extractNormalizedWhatsAppStatuses(payload);
+  for (const status of statuses) {
+    safeLogWhatsAppDeliveryStatus(status);
   }
 }

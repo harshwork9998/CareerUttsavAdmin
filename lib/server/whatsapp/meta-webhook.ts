@@ -38,7 +38,12 @@ type MetaWebhookMessage = {
 type MetaWebhookChangeValue = {
   messaging_product?: string;
   messages?: MetaWebhookMessage[];
-  statuses?: Array<{ id?: string; status?: string }>;
+  statuses?: Array<{
+    id?: string;
+    status?: string;
+    timestamp?: string;
+    recipient_id?: string;
+  }>;
 };
 
 type MetaWebhookChange = {
@@ -196,6 +201,48 @@ export function extractNormalizedWhatsAppMessages(
   }
 
   return messages;
+}
+
+export type NormalizedWhatsAppStatus = {
+  messageId: string;
+  status: string;
+  recipientId?: string;
+  timestamp?: string;
+};
+
+export function extractNormalizedWhatsAppStatuses(
+  payload: MetaWebhookPayload
+): NormalizedWhatsAppStatus[] {
+  const statuses: NormalizedWhatsAppStatus[] = [];
+
+  for (const entry of payload.entry ?? []) {
+    for (const change of entry.changes ?? []) {
+      for (const status of change.value?.statuses ?? []) {
+        if (!status.id || !status.status) {
+          continue;
+        }
+        statuses.push({
+          messageId: status.id,
+          status: status.status,
+          recipientId: status.recipient_id,
+          timestamp: status.timestamp,
+        });
+      }
+    }
+  }
+
+  return statuses;
+}
+
+export function safeLogWhatsAppDeliveryStatus(
+  status: NormalizedWhatsAppStatus
+): void {
+  console.info("[whatsapp-webhook] delivery status", {
+    messageId: status.messageId,
+    status: status.status,
+    recipient: status.recipientId ? maskWaId(status.recipientId) : undefined,
+    timestamp: status.timestamp,
+  });
 }
 
 export function maskWaId(waId: string): string {

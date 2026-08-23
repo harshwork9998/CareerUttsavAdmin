@@ -200,10 +200,20 @@ describe("whatsapp webhook processor", () => {
       ],
     });
 
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
     await processVerifiedWhatsAppWebhook(rawBody);
 
     expect(claimMock).not.toHaveBeenCalled();
     expect(processTurnMock).not.toHaveBeenCalled();
+    expect(dispatchMock).not.toHaveBeenCalled();
+    expect(
+      infoSpy.mock.calls.some(
+        (call) =>
+          call[0] === "[whatsapp-webhook] delivery status" &&
+          call[1]?.status === "delivered"
+      )
+    ).toBe(true);
+    infoSpy.mockRestore();
   });
 
   it("processes a text message through the conversation engine", async () => {
@@ -222,7 +232,10 @@ describe("whatsapp webhook processor", () => {
       messageType: "text",
     });
     expect(processTurnMock).toHaveBeenCalledOnce();
-    expect(dispatchMock).toHaveBeenCalledOnce();
+    expect(dispatchMock).toHaveBeenCalledWith(
+      "919876543210",
+      expect.any(Array)
+    );
     expect(markProcessedMock).toHaveBeenCalledWith("wamid.text");
   });
 

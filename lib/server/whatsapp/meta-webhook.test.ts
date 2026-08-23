@@ -4,10 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   computeMetaWebhookSignature,
   extractNormalizedWhatsAppMessages,
+  extractNormalizedWhatsAppStatuses,
   handleMetaWebhookVerification,
   maskWaId,
   parseMetaWebhookPayload,
   safeLogIncomingWhatsAppMessage,
+  safeLogWhatsAppDeliveryStatus,
   verifyMetaWebhookSignature,
 } from "@/lib/server/whatsapp/meta-webhook";
 
@@ -179,6 +181,13 @@ describe("meta webhook payload handling", () => {
     expect(payload).not.toBeNull();
     const messages = extractNormalizedWhatsAppMessages(payload!);
     expect(messages).toHaveLength(0);
+    const statuses = extractNormalizedWhatsAppStatuses(payload!);
+    expect(statuses).toHaveLength(1);
+    expect(statuses[0]).toMatchObject({
+      messageId: expect.stringContaining("wamid."),
+      status: "delivered",
+      recipientId: "16315551181",
+    });
   });
 
   it("handles unknown webhook shapes safely", () => {
@@ -212,6 +221,29 @@ describe("safeLogIncomingWhatsAppMessage", () => {
     expect(JSON.stringify(logArgs)).not.toContain("hello there");
     expect(JSON.stringify(logArgs)).not.toContain("16315551181");
 
+    infoSpy.mockRestore();
+  });
+});
+
+describe("safeLogWhatsAppDeliveryStatus", () => {
+  it("logs only non-sensitive delivery status fields", () => {
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+    safeLogWhatsAppDeliveryStatus({
+      messageId: "wamid.status",
+      status: "delivered",
+      recipientId: "16315551181",
+      timestamp: "1504902988",
+    });
+
+    expect(infoSpy).toHaveBeenCalledOnce();
+    const logArgs = infoSpy.mock.calls[0]!;
+    expect(logArgs[1]).toMatchObject({
+      messageId: "wamid.status",
+      status: "delivered",
+      recipient: "****1181",
+      timestamp: "1504902988",
+    });
+    expect(JSON.stringify(logArgs)).not.toContain("16315551181");
     infoSpy.mockRestore();
   });
 });

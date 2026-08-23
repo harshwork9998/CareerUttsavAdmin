@@ -198,7 +198,7 @@ function resumePromptActions(): WhatsAppBotAction[] {
       buttons: [
         {
           id: REGISTRATION_INTERACTIVE_IDS.CONTINUE,
-          title: "Continue Registration",
+          title: "Continue",
         },
         {
           id: REGISTRATION_INTERACTIVE_IDS.RESTART,
