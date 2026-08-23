@@ -87,7 +87,7 @@ export function RegisterDialog({ open, onOpenChange }: RegisterDialogProps) {
       setStatus("success");
       setFeedbackMessage(
         result.message ??
-          "Account submitted for approval. You'll receive an email once a superuser approves your access."
+          "Account created successfully. Awaiting administrator approval."
       );
       queryClient.invalidateQueries({ queryKey: ["users"] });
       return;

@@ -56,6 +56,7 @@ vi.mock("@/lib/server/prisma", () => ({
 import {
   authenticatePrismaAdminUser,
   createPrismaAdminUser,
+  createPrismaRegisteredAdminUser,
   listPrismaAdminUsers,
   updatePrismaAdminUser,
 } from "@/lib/server/admin-user-prisma-store";
@@ -190,5 +191,38 @@ describe("admin user prisma store", () => {
     expect(updateData.id).toBeUndefined();
     expect(updateData.createdAt).toBeUndefined();
     expect(updateData.lastLogin).toBeUndefined();
+  });
+
+  it("creates self-registered user as Pending Approval with user role", async () => {
+    findUniqueMock.mockResolvedValue(null);
+    createMock.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
+      ...data,
+      lastLogin: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }));
+
+    const user = await createPrismaRegisteredAdminUser({
+      fullName: "New Admin",
+      email: "new.admin@careeruttsav.in",
+      mobile: "9876543210",
+      password: "securepass",
+    });
+
+    expect(user.status).toBe("Pending Approval");
+    expect(user.role).toBe("user");
+    expect(user.roleId).toBe(ROLE_ID_BY_NAME.user);
+    expect("passwordHash" in user).toBe(false);
+
+    const createData = createMock.mock.calls[0]![0] as {
+      data: { status: string; role: string; roleId: string; passwordHash: string };
+    };
+    expect(createData.data.status).toBe("PendingApproval");
+    expect(createData.data.role).toBe("user");
+    expect(createData.data.roleId).toBe(ROLE_ID_BY_NAME.user);
+    expect(isAdminPasswordHash(createData.data.passwordHash)).toBe(true);
+    expect(createData.data.passwordHash).not.toBe("securepass");
+    expect(createData.data).not.toHaveProperty("password");
+    expect(createData.data).not.toHaveProperty("confirmPassword");
   });
 });

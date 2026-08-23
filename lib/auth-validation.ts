@@ -49,21 +49,49 @@ export const forgotPasswordSchema = z.object({
   email: emailFieldSchema,
 });
 
-export const registerSchema = z
-  .object({
-    fullName: z
-      .string()
-      .min(1, "Full name is required")
-      .min(2, "Full name must be at least 2 characters"),
-    email: emailFieldSchema,
-    mobile: indianMobileFieldSchema,
-    password: passwordFieldSchema,
+/** Shared registration fields — used by client form and server API. */
+export const registerFieldsSchema = z.object({
+  fullName: z
+    .string()
+    .min(1, "Full name is required")
+    .min(2, "Full name must be at least 2 characters"),
+  email: emailFieldSchema,
+  mobile: indianMobileFieldSchema,
+  password: passwordFieldSchema,
+});
+
+/** Client-only: includes confirmPassword match validation. */
+export const registerSchema = registerFieldsSchema
+  .extend({
     confirmPassword: z.string().min(1, "Please confirm your password"),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords do not match",
     path: ["confirmPassword"],
   });
+
+/** Server API: confirmPassword is validated client-side only. */
+export const registerApiSchema = registerFieldsSchema;
+
+const REGISTER_FIELD_ERRORS: Record<string, string> = {
+  fullName: "Full name is required",
+  email: "Please enter a valid email address",
+  mobile: INDIAN_MOBILE_ERROR,
+  password: "Password must be at least 8 characters",
+};
+
+/** Map Zod issues to safe user-facing registration errors. */
+export function formatRegisterApiError(error: z.ZodError): string {
+  const issue = error.issues[0];
+  if (!issue) return "Invalid registration data";
+
+  if (issue.message && issue.message !== "Invalid input") {
+    return issue.message;
+  }
+
+  const field = String(issue.path[0] ?? "");
+  return REGISTER_FIELD_ERRORS[field] ?? "Invalid registration data";
+}
 
 export const resetPasswordSchema = z
   .object({

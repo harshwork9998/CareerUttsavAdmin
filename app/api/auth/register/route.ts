@@ -5,19 +5,25 @@ import {
   isAdminEmailRegistered,
 } from "@/lib/server/admin-user-service";
 import { isAdminUserError } from "@/lib/server/admin-user-errors";
-import { registerSchema } from "@/lib/auth-validation";
+import {
+  formatRegisterApiError,
+  registerApiSchema,
+} from "@/lib/auth-validation";
 
 export const dynamic = "force-dynamic";
 
+const REGISTRATION_SUCCESS_MESSAGE =
+  "Account created successfully. Awaiting administrator approval.";
+
 export async function POST(request: Request) {
   const body = await request.json();
-  const parsed = registerSchema.safeParse(body);
+  const parsed = registerApiSchema.safeParse(body);
 
   if (!parsed.success) {
     return NextResponse.json(
       {
         success: false,
-        error: parsed.error.issues[0]?.message ?? "Invalid registration data",
+        error: formatRegisterApiError(parsed.error),
       },
       { status: 400 }
     );
@@ -34,8 +40,7 @@ export async function POST(request: Request) {
     await createRegisteredAdminUser(parsed.data);
     return NextResponse.json({
       success: true,
-      message:
-        "Account submitted for approval. You'll receive an email once a superuser approves your access.",
+      message: REGISTRATION_SUCCESS_MESSAGE,
     });
   } catch (error) {
     if (isAdminUserError(error)) {
