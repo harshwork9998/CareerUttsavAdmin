@@ -15,6 +15,7 @@ export type PrismaAdminUserRecord = {
   status: PrismaAdminUserStatus;
   department: string | null;
   passwordHash: string;
+  authVersion: number;
   lastLogin: Date | null;
   createdAt: Date;
   updatedAt: Date;

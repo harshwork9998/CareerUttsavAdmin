@@ -7,6 +7,8 @@ import {
   createPrismaRegisteredAdminUser,
   deletePrismaAdminUser,
   findPrismaAdminUserById,
+  findPrismaAdminUserRecordById,
+  getPrismaAdminUserAuthVersion,
   isPrismaAdminEmailRegistered,
   listPrismaAdminUsers,
   reviewPrismaAdminUserAccount,
@@ -57,6 +59,14 @@ export async function findAdminUserById(id: string): Promise<User | null> {
     return findPrismaAdminUserById(id);
   }
   return findUserById(id);
+}
+
+export async function getAdminUserAuthVersion(userId: string): Promise<number> {
+  if (isPrismaAdminUserPersistence()) {
+    const version = await getPrismaAdminUserAuthVersion(userId);
+    return version ?? 0;
+  }
+  return 0;
 }
 
 export async function isAdminEmailRegistered(email: string): Promise<boolean> {

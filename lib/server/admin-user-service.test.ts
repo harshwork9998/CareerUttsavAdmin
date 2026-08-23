@@ -35,6 +35,8 @@ vi.mock("@/lib/server/admin-user-prisma-store", () => ({
   createPrismaRegisteredAdminUser: vi.fn(),
   deletePrismaAdminUser: vi.fn(),
   findPrismaAdminUserById: vi.fn(),
+  findPrismaAdminUserRecordById: vi.fn(),
+  getPrismaAdminUserAuthVersion: vi.fn(),
   isPrismaAdminEmailRegistered: vi.fn(),
   listPrismaAdminUsers: vi.fn(),
   reviewPrismaAdminUserAccount: vi.fn(),

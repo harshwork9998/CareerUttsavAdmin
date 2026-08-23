@@ -338,6 +338,96 @@ export async function findPrismaAdminUserRecordById(
   return prisma.adminUser.findUnique({ where: { id } });
 }
 
+export async function findPrismaAdminUserRecordByEmail(
+  email: string
+): Promise<PrismaAdminUserRecord | null> {
+  const normalized = email.trim().toLowerCase();
+  return prisma.adminUser.findUnique({ where: { email: normalized } });
+}
+
+export async function getPrismaAdminUserAuthVersion(
+  userId: string
+): Promise<number | null> {
+  const record = await prisma.adminUser.findUnique({
+    where: { id: userId },
+    select: { authVersion: true },
+  });
+  return record?.authVersion ?? null;
+}
+
+export async function createPrismaPasswordResetToken(input: {
+  userId: string;
+  tokenHash: string;
+  expiresAt: Date;
+}): Promise<string> {
+  return prisma.$transaction(async (tx) => {
+    await tx.adminPasswordResetToken.deleteMany({
+      where: { userId: input.userId, usedAt: null },
+    });
+    const created = await tx.adminPasswordResetToken.create({
+      data: {
+        userId: input.userId,
+        tokenHash: input.tokenHash,
+        expiresAt: input.expiresAt,
+      },
+    });
+    return created.id;
+  });
+}
+
+export async function revokeUnusedPrismaResetTokensForUser(
+  userId: string
+): Promise<void> {
+  await prisma.adminPasswordResetToken.deleteMany({
+    where: { userId, usedAt: null },
+  });
+}
+
+export async function resetAdminPasswordWithPrismaToken(input: {
+  tokenHash: string;
+  passwordHash: string;
+}): Promise<void> {
+  const now = new Date();
+
+  await prisma.$transaction(async (tx) => {
+    const token = await tx.adminPasswordResetToken.findUnique({
+      where: { tokenHash: input.tokenHash },
+      include: { user: true },
+    });
+
+    if (
+      !token ||
+      token.usedAt !== null ||
+      token.expiresAt <= now ||
+      token.user.status !== "Active"
+    ) {
+      throw new AdminUserError(400, "Reset link is invalid or has expired.");
+    }
+
+    await tx.adminUser.update({
+      where: { id: token.userId },
+      data: {
+        passwordHash: input.passwordHash,
+        authVersion: { increment: 1 },
+        updatedAt: now,
+      },
+    });
+
+    await tx.adminPasswordResetToken.update({
+      where: { id: token.id },
+      data: { usedAt: now },
+    });
+
+    await tx.adminPasswordResetToken.deleteMany({
+      where: {
+        userId: token.userId,
+        id: { not: token.id },
+        usedAt: null,
+      },
+    });
+  });
+}
+
 export async function countActivePrismaSuperusers(): Promise<number> {
   return prisma.adminUser.count({
     where: { role: "superuser", status: "Active" },

@@ -39,6 +39,7 @@ const rejectedUser: User = {
 
 vi.mock("@/lib/server/admin-user-service", () => ({
   findAdminUserById: vi.fn(),
+  getAdminUserAuthVersion: vi.fn(),
   reviewAdminUserAccount: vi.fn(),
 }));
 
@@ -70,6 +71,7 @@ import {
 } from "@/lib/server/admin-auth-email";
 import {
   findAdminUserById,
+  getAdminUserAuthVersion,
   reviewAdminUserAccount,
 } from "@/lib/server/admin-user-service";
 import { cookies } from "next/headers";
@@ -84,6 +86,7 @@ describe("admin review route notifications", () => {
   beforeEach(() => {
     process.env.ADMIN_SESSION_SECRET = "test-admin-session-secret-value";
     vi.clearAllMocks();
+    vi.mocked(getAdminUserAuthVersion).mockResolvedValue(0);
     vi.mocked(findAdminUserById).mockImplementation(async (id) => {
       if (id === activeSuperuser.id) return activeSuperuser;
       if (id === pendingUser.id) return pendingUser;

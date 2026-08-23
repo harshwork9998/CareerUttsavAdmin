@@ -30,6 +30,7 @@ function makeUser(overrides: Partial<User> = {}): User {
 
 vi.mock("@/lib/server/admin-user-service", () => ({
   findAdminUserById: vi.fn(),
+  getAdminUserAuthVersion: vi.fn(),
   updateAdminUser: vi.fn(),
   deleteAdminUser: vi.fn(),
 }));
@@ -43,6 +44,7 @@ import { DELETE, PATCH } from "@/app/api/users/[id]/route";
 import {
   deleteAdminUser,
   findAdminUserById,
+  getAdminUserAuthVersion,
   updateAdminUser,
 } from "@/lib/server/admin-user-service";
 import { AdminUserError } from "@/lib/server/admin-user-errors";
@@ -58,6 +60,7 @@ describe("DELETE /api/users/[id] route", () => {
   beforeEach(() => {
     process.env.ADMIN_SESSION_SECRET = "test-admin-session-secret-value";
     vi.clearAllMocks();
+    vi.mocked(getAdminUserAuthVersion).mockResolvedValue(0);
     vi.mocked(findAdminUserById).mockImplementation(async (id) => {
       if (id === actorSuperuser.id) return actorSuperuser;
       if (id === makeUser().id) return makeUser();
@@ -142,6 +145,7 @@ describe("deleted user session security", () => {
   beforeEach(() => {
     process.env.ADMIN_SESSION_SECRET = "test-admin-session-secret-value";
     vi.clearAllMocks();
+    vi.mocked(getAdminUserAuthVersion).mockResolvedValue(0);
   });
 
   afterEach(() => {
@@ -172,6 +176,7 @@ describe("activate/deactivate still works", () => {
   beforeEach(() => {
     process.env.ADMIN_SESSION_SECRET = "test-admin-session-secret-value";
     vi.clearAllMocks();
+    vi.mocked(getAdminUserAuthVersion).mockResolvedValue(0);
     vi.mocked(findAdminUserById).mockImplementation(async (id) => {
       if (id === actorSuperuser.id) return actorSuperuser;
       if (id === makeUser().id) return makeUser();

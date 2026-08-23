@@ -104,6 +104,12 @@ export const resetPasswordSchema = z
     path: ["confirmPassword"],
   });
 
+/** Server API: confirmPassword is validated client-side only. */
+export const resetPasswordApiSchema = z.object({
+  token: z.string().min(1, "Reset token is required"),
+  password: passwordFieldSchema,
+});
+
 export type LoginFormValues = z.infer<typeof loginSchema>;
 export type ForgotPasswordFormValues = z.infer<typeof forgotPasswordSchema>;
 export type RegisterFormValues = z.infer<typeof registerSchema>;

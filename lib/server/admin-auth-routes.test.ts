@@ -26,6 +26,7 @@ vi.mock("@/lib/server/admin-user-service", () => ({
   authenticateAdminUser: vi.fn(),
   listAdminUsers: vi.fn(),
   findAdminUserById: vi.fn(),
+  getAdminUserAuthVersion: vi.fn(),
   updateAdminUser: vi.fn(),
 }));
 
@@ -41,6 +42,7 @@ import { PATCH as userPatch } from "@/app/api/users/[id]/route";
 import {
   authenticateAdminUser,
   findAdminUserById,
+  getAdminUserAuthVersion,
   listAdminUsers,
   updateAdminUser,
 } from "@/lib/server/admin-user-service";
@@ -55,7 +57,7 @@ describe("admin auth routes", () => {
 
   beforeEach(() => {
     process.env.ADMIN_SESSION_SECRET = "test-admin-session-secret-value";
-    vi.clearAllMocks();
+    vi.mocked(getAdminUserAuthVersion).mockResolvedValue(0);
     vi.mocked(listAdminUsers).mockResolvedValue([activeSuperuser]);
     vi.mocked(findAdminUserById).mockImplementation(async (id) => {
       if (id === activeSuperuser.id) return activeSuperuser;

@@ -8,6 +8,15 @@ export const ADMIN_APPROVED_EMAIL_SUBJECT =
 export const ADMIN_REJECTED_EMAIL_SUBJECT =
   "Update on your Career Uttsav Admin account request";
 
+export const ADMIN_PASSWORD_RESET_EMAIL_SUBJECT =
+  "Reset your Career Uttsav Admin password";
+
+export type AdminPasswordResetEmailInput = {
+  name: string;
+  email: string;
+  resetUrl: string;
+};
+
 export type AdminAuthEmailNotificationResult = {
   attempted: boolean;
   sent: boolean;
@@ -113,7 +122,42 @@ Career Uttsav Team`;
   return { subject: ADMIN_REJECTED_EMAIL_SUBJECT, html, text };
 }
 
-function logEmailFailure(kind: "approved" | "rejected", error: string): void {
+export function buildAdminPasswordResetEmailContent(
+  input: AdminPasswordResetEmailInput
+): { subject: string; html: string; text: string } {
+  const name = input.name.trim() || "there";
+
+  const text = `Hello ${name},
+
+We received a request to reset the password for your Career Uttsav Admin account.
+
+Reset Password:
+${input.resetUrl}
+
+This link will expire in 30 minutes.
+
+If you did not request a password reset, you can ignore this email.
+
+Regards,
+Career Uttsav Team`;
+
+  const html = buildSimpleHtmlEmail([
+    `Hello ${name},`,
+    "We received a request to reset the password for your Career Uttsav Admin account.",
+    `Reset Password: ${input.resetUrl}`,
+    "This link will expire in 30 minutes.",
+    "If you did not request a password reset, you can ignore this email.",
+    "Regards,",
+    "Career Uttsav Team",
+  ]);
+
+  return { subject: ADMIN_PASSWORD_RESET_EMAIL_SUBJECT, html, text };
+}
+
+function logEmailFailure(
+  kind: "approved" | "rejected" | "password-reset",
+  error: string
+): void {
   console.error(`[admin-auth-email] ${kind} notification failed: ${error}`);
 }
 
@@ -172,6 +216,27 @@ export async function sendAdminAccountRejectedEmail(
 
   if (!result.ok) {
     logEmailFailure("rejected", result.error);
+    return { attempted: true, sent: false };
+  }
+
+  return { attempted: true, sent: true };
+}
+
+export async function sendAdminPasswordResetEmail(
+  input: AdminPasswordResetEmailInput
+): Promise<AdminAuthEmailNotificationResult> {
+  const content = buildAdminPasswordResetEmailContent(input);
+
+  const result = await sendEmail({
+    to: input.email,
+    subject: content.subject,
+    html: content.html,
+    text: content.text,
+    tags: [{ name: "category", value: "admin-password-reset" }],
+  });
+
+  if (!result.ok) {
+    logEmailFailure("password-reset", result.error);
     return { attempted: true, sent: false };
   }
 

@@ -10,8 +10,14 @@ const REMEMBER_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 type SessionPayload = {
   v: number;
   userId: string;
+  authVersion: number;
   iat: number;
   exp: number;
+};
+
+export type VerifiedAdminSession = {
+  userId: string;
+  authVersion: number;
 };
 
 function getSessionSecret(): string {
@@ -34,7 +40,7 @@ function decodePayload(encoded: string): SessionPayload | null {
   try {
     const parsed = JSON.parse(
       Buffer.from(encoded, "base64url").toString("utf-8")
-    ) as SessionPayload;
+    ) as Partial<SessionPayload>;
     if (
       typeof parsed.v !== "number" ||
       typeof parsed.userId !== "string" ||
@@ -43,7 +49,14 @@ function decodePayload(encoded: string): SessionPayload | null {
     ) {
       return null;
     }
-    return parsed;
+    return {
+      v: parsed.v,
+      userId: parsed.userId,
+      authVersion:
+        typeof parsed.authVersion === "number" ? parsed.authVersion : 0,
+      iat: parsed.iat,
+      exp: parsed.exp,
+    };
   } catch {
     return null;
   }
@@ -57,6 +70,7 @@ function sign(encodedPayload: string): string {
 
 export function createAdminSessionToken(input: {
   userId: string;
+  authVersion?: number;
   rememberMe?: boolean;
 }): string {
   const now = Date.now();
@@ -64,6 +78,7 @@ export function createAdminSessionToken(input: {
   const payload: SessionPayload = {
     v: SESSION_VERSION,
     userId: input.userId,
+    authVersion: input.authVersion ?? 0,
     iat: now,
     exp: now + ttl,
   };
@@ -71,9 +86,7 @@ export function createAdminSessionToken(input: {
   return `${encoded}.${sign(encoded)}`;
 }
 
-export function verifyAdminSessionToken(token: string | undefined): {
-  userId: string;
-} | null {
+export function verifyAdminSessionToken(token: string | undefined): VerifiedAdminSession | null {
   if (!token) return null;
   const [encoded, signature] = token.split(".");
   if (!encoded || !signature) return null;
@@ -88,7 +101,10 @@ export function verifyAdminSessionToken(token: string | undefined): {
   if (!payload || payload.v !== SESSION_VERSION) return null;
   if (payload.exp <= Date.now()) return null;
 
-  return { userId: payload.userId };
+  return {
+    userId: payload.userId,
+    authVersion: payload.authVersion,
+  };
 }
 
 export function adminSessionCookieOptions(rememberMe = false) {
@@ -104,10 +120,14 @@ export function adminSessionCookieOptions(rememberMe = false) {
   };
 }
 
-export async function getAdminSessionUserId(): Promise<string | null> {
+export async function getAdminSession(): Promise<VerifiedAdminSession | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(ADMIN_SESSION_COOKIE)?.value;
-  const session = verifyAdminSessionToken(token);
+  return verifyAdminSessionToken(token);
+}
+
+export async function getAdminSessionUserId(): Promise<string | null> {
+  const session = await getAdminSession();
   return session?.userId ?? null;
 }
 

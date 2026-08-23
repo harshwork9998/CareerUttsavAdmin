@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 
 import { authLookupToResponse } from "@/lib/server/admin-auth";
-import { authenticateAdminUser } from "@/lib/server/admin-user-service";
+import {
+  authenticateAdminUser,
+  getAdminUserAuthVersion,
+} from "@/lib/server/admin-user-service";
 import {
   buildAdminSessionSetCookie,
   createAdminSessionToken,
@@ -39,6 +42,7 @@ export async function POST(request: Request) {
 
   const token = createAdminSessionToken({
     userId: result.user.id,
+    authVersion: await getAdminUserAuthVersion(result.user.id),
     rememberMe: Boolean(body.rememberMe),
   });
 

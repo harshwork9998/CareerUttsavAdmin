@@ -3,17 +3,23 @@ import { NextResponse } from "next/server";
 import { isSuperuser, loginBlockedMessage } from "@/lib/access-control";
 import {
   findAdminUserById,
+  getAdminUserAuthVersion,
   type AdminAuthLookupResult,
 } from "@/lib/server/admin-user-service";
-import { getAdminSessionUserId } from "@/lib/server/admin-session";
+import { getAdminSession } from "@/lib/server/admin-session";
 import type { User } from "@/types";
 
 export async function getAuthenticatedAdminUser(): Promise<User | null> {
-  const userId = await getAdminSessionUserId();
-  if (!userId) return null;
+  const session = await getAdminSession();
+  if (!session) return null;
 
-  const user = await findAdminUserById(userId);
+  const user = await findAdminUserById(session.userId);
   if (!user || user.status !== "Active") {
+    return null;
+  }
+
+  const authVersion = await getAdminUserAuthVersion(session.userId);
+  if (session.authVersion !== authVersion) {
     return null;
   }
 

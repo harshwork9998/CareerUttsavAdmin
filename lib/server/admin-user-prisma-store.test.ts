@@ -13,6 +13,7 @@ const baseRecord = {
   createdAt: new Date("2024-01-15T10:00:00.000Z"),
   updatedAt: new Date("2024-01-15T10:00:00.000Z"),
   passwordHash: hashAdminPassword("admin123"),
+  authVersion: 0,
   phone: null,
   avatar: null,
   department: null,

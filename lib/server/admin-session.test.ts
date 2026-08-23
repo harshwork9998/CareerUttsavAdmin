@@ -21,23 +21,27 @@ describe("admin session", () => {
   });
 
   it("creates and verifies a signed session token", () => {
-    const token = createAdminSessionToken({ userId: "usr-001" });
+    const token = createAdminSessionToken({
+      userId: "usr-001",
+      authVersion: 0,
+    });
     const session = verifyAdminSessionToken(token);
     expect(session?.userId).toBe("usr-001");
+    expect(session?.authVersion).toBe(0);
   });
 
   it("rejects tampered tokens", () => {
-    const token = createAdminSessionToken({ userId: "usr-001" });
+    const token = createAdminSessionToken({ userId: "usr-001", authVersion: 0 });
     const tampered = `${token}x`;
     expect(verifyAdminSessionToken(tampered)).toBeNull();
   });
 
   it("rejects expired tokens", () => {
-    const token = createAdminSessionToken({ userId: "usr-001" });
+    const token = createAdminSessionToken({ userId: "usr-001", authVersion: 0 });
     const [encoded] = token.split(".");
     const payload = JSON.parse(
       Buffer.from(encoded!, "base64url").toString("utf-8")
-    ) as { v: number; userId: string; iat: number; exp: number };
+    ) as { v: number; userId: string; authVersion?: number; iat: number; exp: number };
     payload.exp = Date.now() - 1000;
     const expiredEncoded = Buffer.from(JSON.stringify(payload)).toString(
       "base64url"
