@@ -2,8 +2,10 @@ import { ROLE_ID_BY_NAME } from "@/constants";
 import { isPrismaAdminUserPersistence } from "@/lib/server/admin-user-persistence-mode";
 import {
   authenticatePrismaAdminUser,
+  countActivePrismaSuperusers,
   createPrismaAdminUser,
   createPrismaRegisteredAdminUser,
+  deletePrismaAdminUser,
   findPrismaAdminUserById,
   isPrismaAdminEmailRegistered,
   listPrismaAdminUsers,
@@ -16,8 +18,10 @@ import {
 import { AdminUserError, isAdminUserError } from "@/lib/server/admin-user-errors";
 import {
   authenticateUser,
+  countActiveSuperusers,
   createRegisteredUser,
   createUserRecord,
+  deleteUserRecord,
   findUserById,
   isEmailRegistered,
   loadUsers,
@@ -146,6 +150,47 @@ export async function updateAdminPassword(
     return updatePrismaAdminPassword(email, password);
   }
   return updateStoredPassword(email, password);
+}
+
+async function countActiveAdminSuperusers(): Promise<number> {
+  if (isPrismaAdminUserPersistence()) {
+    return countActivePrismaSuperusers();
+  }
+  return countActiveSuperusers();
+}
+
+export async function deleteAdminUser(
+  id: string,
+  options: { actorUserId: string }
+): Promise<void> {
+  const existing = await findAdminUserById(id);
+  if (!existing) {
+    throw new AdminUserError(404, "User not found");
+  }
+
+  if (id === options.actorUserId) {
+    throw new AdminUserError(409, "You cannot delete your own account.");
+  }
+
+  if (existing.role === "superuser" && existing.status === "Active") {
+    const activeSuperuserCount = await countActiveAdminSuperusers();
+    if (activeSuperuserCount <= 1) {
+      throw new AdminUserError(
+        409,
+        "At least one active superuser must remain."
+      );
+    }
+  }
+
+  if (isPrismaAdminUserPersistence()) {
+    await deletePrismaAdminUser(id);
+    return;
+  }
+
+  const deleted = deleteUserRecord(id);
+  if (!deleted) {
+    throw new AdminUserError(404, "User not found");
+  }
 }
 
 export { AdminUserError, isAdminUserError };

@@ -24,15 +24,19 @@ vi.mock("@/lib/server/users-persistence", () => ({
   reviewUserAccount: vi.fn(),
   updateStoredPassword: vi.fn(),
   updateUserRecord: vi.fn(),
+  countActiveSuperusers: vi.fn(),
+  deleteUserRecord: vi.fn(),
 }));
 
 vi.mock("@/lib/server/admin-user-prisma-store", () => ({
   authenticatePrismaAdminUser: vi.fn(),
-  listPrismaAdminUsers: vi.fn(),
+  countActivePrismaSuperusers: vi.fn(),
+  createPrismaAdminUser: vi.fn(),
+  createPrismaRegisteredAdminUser: vi.fn(),
+  deletePrismaAdminUser: vi.fn(),
   findPrismaAdminUserById: vi.fn(),
   isPrismaAdminEmailRegistered: vi.fn(),
-  createPrismaRegisteredAdminUser: vi.fn(),
-  createPrismaAdminUser: vi.fn(),
+  listPrismaAdminUsers: vi.fn(),
   reviewPrismaAdminUserAccount: vi.fn(),
   updatePrismaAdminPassword: vi.fn(),
   updatePrismaAdminUser: vi.fn(),
@@ -41,16 +45,20 @@ vi.mock("@/lib/server/admin-user-prisma-store", () => ({
 import {
   authenticatePrismaAdminUser,
   createPrismaAdminUser,
+  deletePrismaAdminUser,
+  findPrismaAdminUserById,
   listPrismaAdminUsers,
 } from "@/lib/server/admin-user-prisma-store";
 import {
   authenticateAdminUser,
   createAdminUser,
+  deleteAdminUser,
   listAdminUsers,
 } from "@/lib/server/admin-user-service";
 import {
   authenticateUser,
   createUserRecord,
+  deleteUserRecord,
   loadUsers,
 } from "@/lib/server/users-persistence";
 
@@ -118,5 +126,19 @@ describe("admin user service routing", () => {
     process.env.ADMIN_USER_PERSISTENCE = "prisma";
     await listAdminUsers();
     expect(loadUsers).not.toHaveBeenCalled();
+  });
+
+  it("uses Prisma delete backend without writing JSON", async () => {
+    process.env.ADMIN_USER_PERSISTENCE = "prisma";
+    vi.mocked(findPrismaAdminUserById).mockResolvedValue({
+      ...sampleUser,
+      id: "usr-target",
+    });
+    vi.mocked(deletePrismaAdminUser).mockResolvedValue(undefined);
+
+    await deleteAdminUser("usr-target", { actorUserId: "usr-super" });
+
+    expect(deletePrismaAdminUser).toHaveBeenCalledWith("usr-target");
+    expect(deleteUserRecord).not.toHaveBeenCalled();
   });
 });

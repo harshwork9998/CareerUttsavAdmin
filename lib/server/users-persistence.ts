@@ -282,6 +282,20 @@ export function updateStoredPassword(email: string, password: string): boolean {
   return true;
 }
 
+export function countActiveSuperusers(): number {
+  return loadUsers().filter(
+    (user) => user.role === "superuser" && user.status === "Active"
+  ).length;
+}
+
+export function deleteUserRecord(id: string): boolean {
+  const records = loadUserAuthRecords();
+  const next = records.filter((record) => record.user.id !== id);
+  if (next.length === records.length) return false;
+  saveUserAuthRecords(next);
+  return true;
+}
+
 export function getUsersStorePath() {
   return STORE_PATH;
 }

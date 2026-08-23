@@ -33,6 +33,7 @@ import {
 } from "@/lib/registrations-api-client";
 import {
   createUserApi,
+  deleteUserApi,
   fetchAllUsers,
   reviewUserApi,
   updateUserApi,
@@ -178,6 +179,7 @@ export const usersService = {
     id: string,
     payload: { action: "approve" | "reject"; role?: "user" | "superuser" }
   ) => simulate(reviewUserApi(id, payload)),
+  delete: (id: string) => simulate(deleteUserApi(id)),
 };
 
 export const dashboardService = {

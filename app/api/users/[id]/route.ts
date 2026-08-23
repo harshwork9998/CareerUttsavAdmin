@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { requireSuperuser } from "@/lib/server/admin-auth";
 import {
+  deleteAdminUser,
   findAdminUserById,
   updateAdminUser,
 } from "@/lib/server/admin-user-service";
@@ -28,6 +29,29 @@ export async function PATCH(
   try {
     const updated = await updateAdminUser(id, body);
     return NextResponse.json(updated);
+  } catch (error) {
+    if (isAdminUserError(error)) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    throw error;
+  }
+}
+
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const auth = await requireSuperuser();
+  if (auth instanceof NextResponse) return auth;
+
+  const { id } = await params;
+
+  try {
+    await deleteAdminUser(id, { actorUserId: auth.user.id });
+    return NextResponse.json({
+      success: true,
+      message: "User deleted successfully.",
+    });
   } catch (error) {
     if (isAdminUserError(error)) {
       return NextResponse.json({ error: error.message }, { status: error.status });

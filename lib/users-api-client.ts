@@ -65,3 +65,13 @@ export async function reviewUserApi(
   });
   return parseJson<ReviewUserApiResponse>(res);
 }
+
+export async function deleteUserApi(
+  id: string
+): Promise<{ success: boolean; message: string }> {
+  const res = await fetch(`/api/users/${id}`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+  return parseJson<{ success: boolean; message: string }>(res);
+}

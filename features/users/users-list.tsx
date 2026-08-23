@@ -6,7 +6,7 @@ import { useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { KeyRound, Mail, ShieldAlert, UserCog, UserPlus, UserX } from "lucide-react";
+import { KeyRound, Mail, ShieldAlert, Trash2, UserCog, UserPlus, UserX } from "lucide-react";
 
 import { toast } from "sonner";
 
@@ -96,11 +96,23 @@ import {
 
 } from "@/components/ui/dropdown-menu";
 
+import {
+
+  Tooltip,
+
+  TooltipContent,
+
+  TooltipProvider,
+
+  TooltipTrigger,
+
+} from "@/components/ui/tooltip";
+
 import { MoreHorizontal } from "lucide-react";
 
 
 
-type DialogType = "deactivate" | "reset" | null;
+type DialogType = "deactivate" | "reset" | "delete" | null;
 
 
 
@@ -228,6 +240,88 @@ export function UsersList() {
 
 
 
+  const deleteMutation = useMutation({
+
+    mutationFn: (id: string) => usersService.delete(id),
+
+    onSuccess: (result) => {
+
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+
+      toast.success(result.message ?? "User deleted successfully.");
+
+      setDialogType(null);
+
+      setSelectedUser(null);
+
+    },
+
+    onError: (error: Error) => {
+
+      toast.error(error.message || "Unable to delete user");
+
+    },
+
+  });
+
+
+
+  const activeSuperuserCount =
+
+    data?.filter((user) => user.role === "superuser" && user.status === "Active")
+
+      .length ?? 0;
+
+
+
+  const canDeleteUser = (user: User) => {
+
+    if (user.id === currentUser?.id) return false;
+
+    if (
+
+      user.role === "superuser" &&
+
+      user.status === "Active" &&
+
+      activeSuperuserCount <= 1
+
+    ) {
+
+      return false;
+
+    }
+
+    return true;
+
+  };
+
+
+
+  const getDeleteDisabledReason = (user: User) => {
+
+    if (user.id === currentUser?.id) return null;
+
+    if (
+
+      user.role === "superuser" &&
+
+      user.status === "Active" &&
+
+      activeSuperuserCount <= 1
+
+    ) {
+
+      return "At least one active superuser must remain.";
+
+    }
+
+    return null;
+
+  };
+
+
+
   if (!isSuperuser(currentUser)) {
 
     return (
@@ -277,6 +371,14 @@ export function UsersList() {
   const handleConfirm = async () => {
 
     if (!selectedUser || !dialogType) return;
+
+    if (dialogType === "delete") {
+
+      await deleteMutation.mutateAsync(selectedUser.id);
+
+      return;
+
+    }
 
     if (dialogType === "deactivate") {
 
@@ -452,23 +554,101 @@ export function UsersList() {
 
         const user = row.original;
 
+        const deleteDisabledReason = getDeleteDisabledReason(user);
+
+        const showDeleteAction = user.id !== currentUser?.id;
+
+
+
+        const deleteMenuItem = (
+
+          <DropdownMenuItem
+
+            className="text-destructive"
+
+            disabled={!canDeleteUser(user)}
+
+            onClick={() => {
+
+              if (!canDeleteUser(user)) return;
+
+              setSelectedUser(user);
+
+              setDialogType("delete");
+
+            }}
+
+          >
+
+            <Trash2 className="mr-2 h-4 w-4" />
+
+            Delete User
+
+          </DropdownMenuItem>
+
+        );
+
+
+
         if (user.status === "Pending Approval") {
 
           return (
 
-            <Button
+            <DropdownMenu>
 
-              size="sm"
+              <DropdownMenuTrigger asChild>
 
-              variant="outline"
+                <Button variant="ghost" size="icon" className="h-8 w-8">
 
-              onClick={() => setReviewUser(user)}
+                  <MoreHorizontal className="h-4 w-4" />
 
-            >
+                </Button>
 
-              Review
+              </DropdownMenuTrigger>
 
-            </Button>
+              <DropdownMenuContent align="end">
+
+                <DropdownMenuItem onClick={() => setReviewUser(user)}>
+
+                  <ShieldAlert className="mr-2 h-4 w-4" />
+
+                  Review
+
+                </DropdownMenuItem>
+
+                <DropdownMenuSeparator />
+
+                {showDeleteAction ? (
+
+                  deleteDisabledReason ? (
+
+                    <TooltipProvider>
+
+                      <Tooltip>
+
+                        <TooltipTrigger asChild>
+
+                          <div>{deleteMenuItem}</div>
+
+                        </TooltipTrigger>
+
+                        <TooltipContent>{deleteDisabledReason}</TooltipContent>
+
+                      </Tooltip>
+
+                    </TooltipProvider>
+
+                  ) : (
+
+                    deleteMenuItem
+
+                  )
+
+                ) : null}
+
+              </DropdownMenuContent>
+
+            </DropdownMenu>
 
           );
 
@@ -531,6 +711,36 @@ export function UsersList() {
                 {user.status === "Active" ? "Deactivate" : "Activate"}
 
               </DropdownMenuItem>
+
+              <DropdownMenuSeparator />
+
+              {showDeleteAction ? (
+
+                deleteDisabledReason ? (
+
+                  <TooltipProvider>
+
+                    <Tooltip>
+
+                      <TooltipTrigger asChild>
+
+                        <div>{deleteMenuItem}</div>
+
+                      </TooltipTrigger>
+
+                      <TooltipContent>{deleteDisabledReason}</TooltipContent>
+
+                    </Tooltip>
+
+                  </TooltipProvider>
+
+                ) : (
+
+                  deleteMenuItem
+
+                )
+
+              ) : null}
 
             </DropdownMenuContent>
 
@@ -800,35 +1010,67 @@ export function UsersList() {
 
         title={
 
-          dialogType === "reset"
+          dialogType === "delete"
 
-            ? "Reset Password"
+            ? "Delete User?"
 
-            : selectedUser?.status === "Active"
+            : dialogType === "reset"
 
-              ? "Deactivate User"
+              ? "Reset Password"
 
-              : "Activate User"
+              : selectedUser?.status === "Active"
+
+                ? "Deactivate User"
+
+                : "Activate User"
 
         }
 
         description={
 
-          dialogType === "reset"
+          dialogType === "delete"
 
-            ? `Send a password reset email to ${selectedUser?.email}?`
+            ? `This will permanently delete ${selectedUser?.name}'s account. They will no longer be able to access Career Uttsav Admin.\n\nThis action cannot be undone.`
 
-            : dialogType === "deactivate" && selectedUser?.status === "Active"
+            : dialogType === "reset"
 
-              ? `${selectedUser?.name} will lose access to the admin dashboard.`
+              ? `Send a password reset email to ${selectedUser?.email}?`
 
-              : `${selectedUser?.name} will regain access to the admin dashboard.`
+              : dialogType === "deactivate" && selectedUser?.status === "Active"
+
+                ? `${selectedUser?.name} will lose access to the admin dashboard.`
+
+                : `${selectedUser?.name} will regain access to the admin dashboard.`
 
         }
 
-        confirmLabel={dialogType === "reset" ? "Send Reset Email" : "Confirm"}
+        confirmLabel={
 
-        variant={dialogType === "deactivate" && selectedUser?.status === "Active" ? "destructive" : "default"}
+          dialogType === "delete"
+
+            ? "Delete User"
+
+            : dialogType === "reset"
+
+              ? "Send Reset Email"
+
+              : "Confirm"
+
+        }
+
+        variant={
+
+          dialogType === "delete" ||
+
+          (dialogType === "deactivate" && selectedUser?.status === "Active")
+
+            ? "destructive"
+
+            : "default"
+
+        }
+
+        loading={deleteMutation.isPending}
 
         onConfirm={handleConfirm}
 

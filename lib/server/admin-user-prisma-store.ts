@@ -337,3 +337,13 @@ export async function findPrismaAdminUserRecordById(
 ): Promise<PrismaAdminUserRecord | null> {
   return prisma.adminUser.findUnique({ where: { id } });
 }
+
+export async function countActivePrismaSuperusers(): Promise<number> {
+  return prisma.adminUser.count({
+    where: { role: "superuser", status: "Active" },
+  });
+}
+
+export async function deletePrismaAdminUser(id: string): Promise<void> {
+  await prisma.adminUser.delete({ where: { id } });
+}
