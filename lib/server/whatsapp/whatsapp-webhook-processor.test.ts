@@ -45,7 +45,17 @@ vi.mock("@/lib/server/whatsapp/registration-conversation", async () => {
   };
 });
 
+vi.mock("@/lib/server/registration-service", () => ({
+  getRegistrationForApi: vi.fn(),
+}));
+
+vi.mock("@/lib/server/whatsapp/whatsapp-registration-completion", () => ({
+  completeWhatsAppRegistrationForConversation: vi.fn(),
+}));
+
 import { processVerifiedWhatsAppWebhook } from "@/lib/server/whatsapp/whatsapp-webhook-processor";
+import { completeWhatsAppRegistrationForConversation } from "@/lib/server/whatsapp/whatsapp-registration-completion";
+import { getRegistrationForApi } from "@/lib/server/registration-service";
 
 const baseConversation: WhatsAppConversationState = {
   waId: "919876543210",
@@ -60,6 +70,7 @@ const baseConversation: WhatsAppConversationState = {
   college: null,
   city: null,
   selectedSeminarIds: [],
+  completedRegistrationId: null,
 };
 
 function buildTextWebhook(messageId: string, body: string) {
@@ -98,10 +109,25 @@ describe("whatsapp webhook processor", () => {
     saveConversationMock.mockImplementation(async (state: WhatsAppConversationState) => state);
     deleteExpiredMock.mockResolvedValue(undefined);
     getSeminarsMock.mockResolvedValue([{ id: "sem-001", title: "AI Careers" }]);
+    vi.mocked(getRegistrationForApi).mockResolvedValue(null);
     processTurnMock.mockReturnValue({
-      conversation: baseConversation,
-      actions: [{ type: "TEXT", body: "Please enter your email address." }],
+      conversation: {
+        ...baseConversation,
+        status: "READY_TO_REGISTER",
+        currentStep: "READY_TO_REGISTER",
+      },
+      actions: [],
       refreshExpiry: true,
+    });
+    vi.mocked(completeWhatsAppRegistrationForConversation).mockResolvedValue({
+      status: "SUCCESS",
+      actions: [{ type: "TEXT", body: "done" }],
+      conversation: {
+        ...baseConversation,
+        status: "COMPLETED",
+        currentStep: "COMPLETED",
+        completedRegistrationId: "reg-001",
+      },
     });
   });
 
@@ -113,7 +139,7 @@ describe("whatsapp webhook processor", () => {
     await processVerifiedWhatsAppWebhook(rawBody);
 
     expect(processTurnMock).toHaveBeenCalledTimes(1);
-    expect(saveConversationMock).toHaveBeenCalledTimes(1);
+    expect(saveConversationMock).toHaveBeenCalledTimes(2);
     expect(markProcessedMock).toHaveBeenCalledTimes(1);
   });
 
@@ -181,6 +207,11 @@ describe("whatsapp webhook processor", () => {
   });
 
   it("processes a text message through the conversation engine", async () => {
+    processTurnMock.mockReturnValue({
+      conversation: baseConversation,
+      actions: [{ type: "TEXT", body: "Please enter your email address." }],
+      refreshExpiry: true,
+    });
     await processVerifiedWhatsAppWebhook(
       buildTextWebhook("wamid.text", "aarav@example.com")
     );
@@ -193,6 +224,15 @@ describe("whatsapp webhook processor", () => {
     expect(processTurnMock).toHaveBeenCalledOnce();
     expect(dispatchMock).toHaveBeenCalledOnce();
     expect(markProcessedMock).toHaveBeenCalledWith("wamid.text");
+  });
+
+  it("invokes registration completion when conversation becomes READY_TO_REGISTER", async () => {
+    await processVerifiedWhatsAppWebhook(
+      buildTextWebhook("wamid.ready", "finish")
+    );
+    expect(completeWhatsAppRegistrationForConversation).toHaveBeenCalledWith(
+      "919876543210"
+    );
   });
 
   it("does not log full phone numbers or message bodies", async () => {

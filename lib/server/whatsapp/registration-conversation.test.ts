@@ -31,13 +31,15 @@ const seminarOptions: SeminarOption[] = [
 function turn(
   conversation: WhatsAppConversationState | null,
   message: { text?: string; interactiveId?: string },
-  waId = "919876543210"
+  waId = "919876543210",
+  completedRegistrationNumber?: string | null
 ) {
   return processRegistrationConversationTurn({
     conversation,
     message,
     seminarOptions,
     waId,
+    completedRegistrationNumber,
   });
 }
 
@@ -331,7 +333,7 @@ describe("whatsapp registration conversation engine", () => {
     expect(result.conversation.currentStep).toBe("CANCELLED");
   });
 
-  it("does not silently restart READY_TO_REGISTER conversations", () => {
+  it("does not silently restart COMPLETED conversations", () => {
     let conversation = turn(null, { text: "hi" }).conversation;
     conversation = turn(conversation, { text: "Aarav Sharma" }).conversation;
     conversation = turn(conversation, { text: "aarav@example.com" }).conversation;
@@ -356,8 +358,52 @@ describe("whatsapp registration conversation engine", () => {
       interactiveId: REGISTRATION_INTERACTIVE_IDS.FINISH,
     }).conversation;
 
-    const result = turn(conversation, { text: "hi" });
+    const result = turn(conversation, { text: "hi" }, "919876543210", "CU-BLR-2026-00042");
     expect(result.conversation.status).toBe("READY_TO_REGISTER");
     expect(result.conversation.studentName).toBe("Aarav Sharma");
+  });
+
+  it("shows already registered messaging for COMPLETED conversations", () => {
+    const completed = {
+      ...createInitialConversationState("919876543210"),
+      status: "COMPLETED" as const,
+      currentStep: "COMPLETED" as const,
+      completedRegistrationId: "reg-001",
+    };
+    const result = turn(
+      completed,
+      { text: "hello" },
+      "919876543210",
+      "CU-BLR-2026-00042"
+    );
+    expect(
+      result.actions.some(
+        (action) =>
+          action.type === "TEXT" &&
+          action.body.includes("already registered")
+      )
+    ).toBe(true);
+    expect(
+      result.actions.some(
+        (action) =>
+          action.type === "TEXT" &&
+          action.body.includes("CU-BLR-2026-00042")
+      )
+    ).toBe(true);
+    expect(result.conversation.status).toBe("COMPLETED");
+  });
+
+  it("allows a fresh registration after an email-duplicate cancellation", () => {
+    const cancelled = {
+      ...createInitialConversationState("919876543210"),
+      status: "CANCELLED" as const,
+      currentStep: "CANCELLED" as const,
+      completedRegistrationId: null,
+    };
+    const result = turn(cancelled, {
+      interactiveId: REGISTRATION_INTERACTIVE_IDS.START,
+    });
+    expect(result.conversation.currentStep).toBe("AWAITING_NAME");
+    expect(result.conversation.status).toBe("ACTIVE");
   });
 });

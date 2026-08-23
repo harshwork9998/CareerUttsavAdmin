@@ -56,6 +56,7 @@ export type WhatsAppConversationState = {
   college: string | null;
   city: string | null;
   selectedSeminarIds: string[];
+  completedRegistrationId: string | null;
 };
 
 export type SeminarOption = {
@@ -86,6 +87,13 @@ export type WhatsAppBotAction =
       body: string;
       buttonText: string;
       sections: Array<{ title: string; rows: WhatsAppBotListRow[] }>;
+    }
+  | {
+      type: "MEDIA";
+      mimeType: "image/png";
+      filename: string;
+      contentBase64: string;
+      caption?: string;
     };
 
 export type IncomingConversationMessage = {
@@ -117,6 +125,7 @@ export function createInitialConversationState(waId: string): WhatsAppConversati
     college: null,
     city: null,
     selectedSeminarIds: [],
+    completedRegistrationId: null,
   };
 }
 
@@ -127,6 +136,7 @@ export function resetConversationAnswers(
     ...createInitialConversationState(conversation.waId),
     status: "ACTIVE",
     currentStep: "AWAITING_NAME",
+    completedRegistrationId: null,
   };
 }
 
@@ -320,10 +330,29 @@ function seminarSelectionActions(
   return actions;
 }
 
+function alreadyRegisteredActions(
+  registrationNumber?: string | null
+): WhatsAppBotAction[] {
+  const actions: WhatsAppBotAction[] = [
+    {
+      type: "TEXT",
+      body: "You're already registered for Career Uttsav.",
+    },
+  ];
+  if (registrationNumber) {
+    actions.push({
+      type: "TEXT",
+      body: `Registration Number:\n${registrationNumber}`,
+    });
+  }
+  return actions;
+}
+
 function promptForStep(
   step: WhatsAppConversationStep,
   seminarOptions: SeminarOption[],
-  conversation: WhatsAppConversationState
+  conversation: WhatsAppConversationState,
+  completedRegistrationNumber?: string | null
 ): WhatsAppBotAction[] {
   switch (step) {
     case "AWAITING_START":
@@ -367,12 +396,7 @@ function promptForStep(
         },
       ];
     case "COMPLETED":
-      return [
-        {
-          type: "TEXT",
-          body: "Your registration has already been completed.",
-        },
-      ];
+      return alreadyRegisteredActions(completedRegistrationNumber);
     case "CANCELLED":
       return welcomeActions();
     default:
@@ -384,7 +408,8 @@ function withStep(
   conversation: WhatsAppConversationState,
   step: WhatsAppConversationStep,
   seminarOptions: SeminarOption[],
-  refreshExpiry = true
+  refreshExpiry = true,
+  completedRegistrationNumber?: string | null
 ): ConversationTurnResult {
   const next: WhatsAppConversationState = {
     ...conversation,
@@ -400,7 +425,7 @@ function withStep(
   };
   return {
     conversation: next,
-    actions: promptForStep(step, seminarOptions, next),
+    actions: promptForStep(step, seminarOptions, next, completedRegistrationNumber),
     refreshExpiry,
   };
 }
@@ -408,7 +433,8 @@ function withStep(
 function handleGlobalControls(
   conversation: WhatsAppConversationState,
   message: IncomingConversationMessage,
-  seminarOptions: SeminarOption[]
+  seminarOptions: SeminarOption[],
+  completedRegistrationNumber?: string | null
 ): ConversationTurnResult | null {
   const text = message.text?.trim() ?? "";
   const interactiveId = message.interactiveId;
@@ -434,7 +460,8 @@ function handleGlobalControls(
         actions: promptForStep(
           conversation.currentStep,
           seminarOptions,
-          conversation
+          conversation,
+          completedRegistrationNumber
         ),
         refreshExpiry: false,
       };
@@ -453,9 +480,29 @@ function handleGlobalControls(
       actions: promptForStep(
         conversation.currentStep,
         seminarOptions,
-        conversation
+        conversation,
+        completedRegistrationNumber
       ),
       refreshExpiry: true,
+    };
+  }
+
+  if (conversation.status === "CANCELLED") {
+    if (
+      interactiveId === REGISTRATION_INTERACTIVE_IDS.START ||
+      (text && isGreetingText(text))
+    ) {
+      const reset = resetConversationAnswers(conversation);
+      return {
+        conversation: reset,
+        actions: [{ type: "TEXT", body: "Please enter your full name." }],
+        refreshExpiry: true,
+      };
+    }
+    return {
+      conversation,
+      actions: welcomeActions(),
+      refreshExpiry: false,
     };
   }
 
@@ -476,12 +523,25 @@ function handleGlobalControls(
     conversation.status === "READY_TO_REGISTER" ||
     conversation.status === "COMPLETED"
   ) {
+    if (
+      conversation.status === "COMPLETED" &&
+      ((text && isGreetingText(text)) ||
+        interactiveId === REGISTRATION_INTERACTIVE_IDS.START)
+    ) {
+      return {
+        conversation,
+        actions: alreadyRegisteredActions(completedRegistrationNumber),
+        refreshExpiry: false,
+      };
+    }
+
     return {
       conversation,
       actions: promptForStep(
         conversation.currentStep,
         seminarOptions,
-        conversation
+        conversation,
+        completedRegistrationNumber
       ),
       refreshExpiry: false,
     };
@@ -495,6 +555,7 @@ export function processRegistrationConversationTurn(input: {
   message: IncomingConversationMessage;
   seminarOptions: SeminarOption[];
   waId: string;
+  completedRegistrationNumber?: string | null;
 }): ConversationTurnResult {
   const normalizedWaId = normalizeWaId(input.waId);
   let conversation =
@@ -510,7 +571,8 @@ export function processRegistrationConversationTurn(input: {
   const global = handleGlobalControls(
     conversation,
     input.message,
-    input.seminarOptions
+    input.seminarOptions,
+    input.completedRegistrationNumber
   );
   if (global) {
     return global;

@@ -36,6 +36,7 @@ export function mapPrismaConversationToState(
     college: record.college,
     city: record.city,
     selectedSeminarIds: parseSelectedSeminarIds(record.selectedSeminarIds),
+    completedRegistrationId: record.completedRegistrationId,
   };
 }
 
@@ -56,6 +57,7 @@ export function mapStateToPrismaConversationData(
     college: state.college,
     city: state.city,
     selectedSeminarIds: state.selectedSeminarIds,
+    completedRegistrationId: state.completedRegistrationId ?? null,
     expiresAt,
   };
 }

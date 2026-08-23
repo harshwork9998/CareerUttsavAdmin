@@ -10,6 +10,7 @@ import {
   buildRegistrationFromInput,
   validateRegistrationCreate,
   type CreateRegistrationInput,
+  type CreateStudentRegistrationInput,
 } from "@/lib/registration-validation";
 import { listEventsForApi } from "@/lib/server/event-service";
 import { loadEvents, saveEvents } from "@/lib/server/events-persistence";
@@ -149,6 +150,154 @@ export async function checkStudentRegistrationDuplicate(input: {
   };
 }
 
+export type StudentRegistrationCreateOptions = {
+  requirePhoneVerification?: boolean;
+  phoneVerificationToken?: string;
+  request?: Request;
+  clientHint?: string;
+};
+
+export async function createStudentRegistration(
+  body: Partial<CreateStudentRegistrationInput>,
+  options: StudentRegistrationCreateOptions = {}
+): Promise<RegistrationCreateResult> {
+  const events = await listEventsForApi();
+  const validated = validateRegistrationCreate(
+    { ...body, kind: "student" },
+    events
+  );
+  if (!validated.ok) {
+    return {
+      ok: false,
+      error: { status: 400, body: { error: validated.error } },
+    };
+  }
+
+  if (validated.data.kind !== "student") {
+    return {
+      ok: false,
+      error: { status: 400, body: { error: "Invalid student registration" } },
+    };
+  }
+
+  const event = events.find((item) => item.id === validated.data.eventId);
+  if (!event) {
+    return {
+      ok: false,
+      error: { status: 400, body: { error: "Selected event was not found" } },
+    };
+  }
+
+  const requirePhoneOtp = options.requirePhoneVerification ?? false;
+  if (requirePhoneOtp) {
+    const token = options.phoneVerificationToken?.trim() ?? "";
+    const clientHint = options.clientHint ?? "";
+    const requestHeaders = options.request?.headers;
+
+    if (
+      clientHint === "public" ||
+      requestHeaders?.get("x-cu-client") === "public" ||
+      Boolean(token)
+    ) {
+      if (!token) {
+        return {
+          ok: false,
+          error: {
+            status: 400,
+            body: {
+              error:
+                "Please verify your mobile number with OTP before registering.",
+            },
+          },
+        };
+      }
+
+      const verification = consumePhoneVerification({
+        phone: validated.data.phone,
+        purpose: "student_registration",
+        verificationToken: token,
+        consume: true,
+      });
+      if (!verification.ok) {
+        return {
+          ok: false,
+          error: {
+            status: verification.status,
+            body: { error: verification.error },
+          },
+        };
+      }
+    }
+  }
+
+  const duplicateResult = await checkStudentRegistrationDuplicate({
+    eventId: validated.data.eventId,
+    email: validated.data.email,
+    phone: validated.data.phone,
+  });
+  if (duplicateResult.duplicate) {
+    return {
+      ok: false,
+      error: {
+        status: 409,
+        body: {
+          error: DUPLICATE_STUDENT_REGISTRATION_MESSAGE,
+          duplicate: true,
+        },
+      },
+    };
+  }
+
+  if (isPrismaRegistrationPersistence()) {
+    try {
+      const created = await createPrismaRegistration(validated.data, event);
+      scheduleStudentWelcomeEmail(created);
+      return { ok: true, registration: created };
+    } catch (error) {
+      if (isPrismaUniqueConstraintError(error)) {
+        return {
+          ok: false,
+          error: {
+            status: 409,
+            body: {
+              error: DUPLICATE_STUDENT_REGISTRATION_MESSAGE,
+              duplicate: true,
+            },
+          },
+        };
+      }
+      throw error;
+    }
+  }
+
+  const registrations = loadRawRegistrations();
+  const now = new Date().toISOString();
+  const created = buildRegistrationFromInput(
+    validated.data,
+    event,
+    registrations,
+    `reg-${generateId()}`,
+    now
+  );
+
+  saveRegistrations([created, ...registrations]);
+
+  const nextEvents = events.map((item) =>
+    item.id === event.id
+      ? {
+          ...item,
+          registrationCount: (item.registrationCount ?? 0) + 1,
+          updatedAt: now,
+        }
+      : item
+  );
+  saveEvents(nextEvents);
+
+  const resolved = resolveRegistration(created, nextEvents);
+  scheduleStudentWelcomeEmail(resolved);
+  return { ok: true, registration: resolved };
+}
+
 export async function createRegistrationForApi(
   body: Partial<CreateRegistrationInput> & {
     kind?: CreateRegistrationInput["kind"];
@@ -181,54 +330,12 @@ export async function createRegistrationForApi(
       request.headers.get("x-cu-client") === "public" ||
       Boolean(token);
 
-    if (requirePhoneOtp) {
-      if (!token) {
-        return {
-          ok: false,
-          error: {
-            status: 400,
-            body: {
-              error:
-                "Please verify your mobile number with OTP before registering.",
-            },
-          },
-        };
-      }
-
-      const verification = consumePhoneVerification({
-        phone: validated.data.phone,
-        purpose: "student_registration",
-        verificationToken: token,
-        consume: true,
-      });
-      if (!verification.ok) {
-        return {
-          ok: false,
-          error: {
-            status: verification.status,
-            body: { error: verification.error },
-          },
-        };
-      }
-    }
-
-    const duplicateResult = await checkStudentRegistrationDuplicate({
-      eventId: validated.data.eventId,
-      email: validated.data.email,
-      phone: validated.data.phone,
+    return createStudentRegistration(validated.data, {
+      requirePhoneVerification: requirePhoneOtp,
+      phoneVerificationToken: token,
+      request,
+      clientHint,
     });
-    if (duplicateResult.duplicate) {
-      return {
-        ok: false,
-        error: {
-          status: 409,
-          body: {
-            error: DUPLICATE_STUDENT_REGISTRATION_MESSAGE,
-            duplicate: true,
-          },
-        },
-      };
-    }
   }
 
   if (isPrismaRegistrationPersistence()) {

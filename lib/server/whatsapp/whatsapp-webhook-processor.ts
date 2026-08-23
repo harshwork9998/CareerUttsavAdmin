@@ -8,6 +8,7 @@ import {
   isSupportedConversationMessageType,
   normalizeWaId,
   processRegistrationConversationTurn,
+  type WhatsAppBotAction,
 } from "@/lib/server/whatsapp/registration-conversation";
 import { dispatchWhatsAppBotActions } from "@/lib/server/whatsapp/whatsapp-bot-dispatcher";
 import {
@@ -19,7 +20,9 @@ import {
   claimWhatsAppInboundMessage,
   markWhatsAppInboundMessageProcessed,
 } from "@/lib/server/whatsapp/whatsapp-inbound-message-store";
+import { completeWhatsAppRegistrationForConversation } from "@/lib/server/whatsapp/whatsapp-registration-completion";
 import { getWhatsAppSeminarOptions } from "@/lib/server/whatsapp/whatsapp-seminar-context";
+import { getRegistrationForApi } from "@/lib/server/registration-service";
 
 function toIncomingMessage(
   message: NormalizedWhatsAppMessage
@@ -30,6 +33,16 @@ function toIncomingMessage(
   };
 }
 
+async function resolveCompletedRegistrationNumber(
+  completedRegistrationId: string | null | undefined
+): Promise<string | null> {
+  if (!completedRegistrationId) {
+    return null;
+  }
+  const registration = await getRegistrationForApi(completedRegistrationId);
+  return registration?.registrationNumber ?? null;
+}
+
 function safeLogConversationProgress(input: {
   messageId: string;
   messageType: string;
@@ -37,6 +50,7 @@ function safeLogConversationProgress(input: {
   status: string;
   currentStep: string;
   duplicate?: boolean;
+  completionStatus?: string;
 }): void {
   console.info("[whatsapp-webhook] conversation", {
     messageId: input.messageId,
@@ -45,6 +59,7 @@ function safeLogConversationProgress(input: {
     status: input.status,
     currentStep: input.currentStep,
     duplicate: input.duplicate ?? false,
+    completionStatus: input.completionStatus,
   });
 }
 
@@ -85,27 +100,55 @@ async function processInboundUserMessage(
   await deleteExpiredWhatsAppConversation(waId);
   const existingConversation = await loadWhatsAppConversationForWaId(waId);
   const seminarOptions = await getWhatsAppSeminarOptions();
+  const completedRegistrationNumber = await resolveCompletedRegistrationNumber(
+    existingConversation?.completedRegistrationId
+  );
 
   const turn = processRegistrationConversationTurn({
     conversation: existingConversation,
     message: toIncomingMessage(message),
     seminarOptions,
     waId,
+    completedRegistrationNumber,
   });
 
-  const saved = await saveWhatsAppConversationState(turn.conversation, {
+  let saved = await saveWhatsAppConversationState(turn.conversation, {
     refreshExpiry: turn.refreshExpiry,
   });
 
-  safeLogConversationProgress({
-    messageId: message.messageId,
-    messageType: message.type,
-    waId,
-    status: saved.status,
-    currentStep: saved.currentStep,
-  });
+  const actions: WhatsAppBotAction[] = [...turn.actions];
 
-  dispatchWhatsAppBotActions(turn.actions);
+  if (
+    saved.status === "READY_TO_REGISTER" &&
+    saved.currentStep === "READY_TO_REGISTER" &&
+    !saved.completedRegistrationId
+  ) {
+    const completion = await completeWhatsAppRegistrationForConversation(waId);
+    actions.push(...completion.actions);
+    if (completion.conversation) {
+      saved = await saveWhatsAppConversationState(completion.conversation, {
+        refreshExpiry: false,
+      });
+    }
+    safeLogConversationProgress({
+      messageId: message.messageId,
+      messageType: message.type,
+      waId,
+      status: saved.status,
+      currentStep: saved.currentStep,
+      completionStatus: completion.status,
+    });
+  } else {
+    safeLogConversationProgress({
+      messageId: message.messageId,
+      messageType: message.type,
+      waId,
+      status: saved.status,
+      currentStep: saved.currentStep,
+    });
+  }
+
+  dispatchWhatsAppBotActions(actions);
   await markWhatsAppInboundMessageProcessed(message.messageId);
 }
 

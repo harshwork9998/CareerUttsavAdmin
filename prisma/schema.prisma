@@ -184,6 +184,7 @@ model Registration {
 
   event                Event                 @relation(fields: [eventId], references: [id], onDelete: Restrict)
   registrationSeminars RegistrationSeminar[]
+  whatsAppConversation WhatsAppRegistrationConversation?
 
   @@unique([eventId, emailNormalized])
   @@unique([eventId, phoneLast10])
@@ -444,9 +445,12 @@ model WhatsAppRegistrationConversation {
   college            String?
   city               String?
   selectedSeminarIds Json                       @default("[]")
+  completedRegistrationId String?               @unique
   createdAt          DateTime                   @default(now())
   updatedAt          DateTime                   @updatedAt
   expiresAt          DateTime
+
+  completedRegistration Registration? @relation(fields: [completedRegistrationId], references: [id], onDelete: SetNull)
 
   @@index([status])
   @@index([expiresAt])

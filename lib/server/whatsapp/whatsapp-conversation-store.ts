@@ -16,7 +16,7 @@ function isExpired(record: { expiresAt: Date; status: string }): boolean {
   return record.status === "ACTIVE" && record.expiresAt.getTime() <= Date.now();
 }
 
-export async function loadWhatsAppConversationForWaId(
+export async function loadWhatsAppConversationRecordByWaId(
   waId: string
 ): Promise<WhatsAppConversationState | null> {
   const record = await prisma.whatsAppRegistrationConversation.findUnique({
@@ -32,6 +32,12 @@ export async function loadWhatsAppConversationForWaId(
   }
 
   return mapPrismaConversationToState(record);
+}
+
+export async function loadWhatsAppConversationForWaId(
+  waId: string
+): Promise<WhatsAppConversationState | null> {
+  return loadWhatsAppConversationRecordByWaId(waId);
 }
 
 export async function saveWhatsAppConversationState(
@@ -56,6 +62,48 @@ export async function saveWhatsAppConversationState(
   });
 
   return mapPrismaConversationToState(saved);
+}
+
+export async function finalizeWhatsAppConversationRegistration(input: {
+  waId: string;
+  registrationId: string;
+}): Promise<WhatsAppConversationState | null> {
+  const updated = await prisma.whatsAppRegistrationConversation.updateMany({
+    where: {
+      waId: input.waId,
+      completedRegistrationId: null,
+      status: "READY_TO_REGISTER",
+    },
+    data: {
+      completedRegistrationId: input.registrationId,
+      status: "COMPLETED",
+      currentStep: "COMPLETED",
+    },
+  });
+
+  if (updated.count === 0) {
+    return null;
+  }
+
+  return loadWhatsAppConversationRecordByWaId(input.waId);
+}
+
+export async function cancelWhatsAppConversationForEmailDuplicate(
+  waId: string
+): Promise<WhatsAppConversationState | null> {
+  await prisma.whatsAppRegistrationConversation.updateMany({
+    where: {
+      waId,
+      completedRegistrationId: null,
+      status: "READY_TO_REGISTER",
+    },
+    data: {
+      status: "CANCELLED",
+      currentStep: "CANCELLED",
+    },
+  });
+
+  return loadWhatsAppConversationRecordByWaId(waId);
 }
 
 export async function deleteExpiredWhatsAppConversation(waId: string): Promise<void> {
