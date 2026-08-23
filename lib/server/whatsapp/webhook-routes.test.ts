@@ -1,10 +1,15 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/lib/server/whatsapp/whatsapp-webhook-processor", () => ({
+  processVerifiedWhatsAppWebhook: vi.fn(),
+}));
 
 import {
   GET as webhookGet,
   POST as webhookPost,
 } from "@/app/api/integrations/whatsapp/webhook/route";
 import { computeMetaWebhookSignature } from "@/lib/server/whatsapp/meta-webhook";
+import { processVerifiedWhatsAppWebhook } from "@/lib/server/whatsapp/whatsapp-webhook-processor";
 
 const TEST_VERIFY_TOKEN = "route-test-verify-token";
 const TEST_APP_SECRET = "route-test-meta-app-secret";
@@ -82,7 +87,9 @@ describe("whatsapp webhook route POST", () => {
   const originalAppSecret = process.env.META_APP_SECRET;
 
   beforeEach(() => {
+    vi.clearAllMocks();
     process.env.META_APP_SECRET = TEST_APP_SECRET;
+    vi.mocked(processVerifiedWhatsAppWebhook).mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -109,6 +116,7 @@ describe("whatsapp webhook route POST", () => {
       })
     );
     expect(response.status).toBe(200);
+    expect(processVerifiedWhatsAppWebhook).toHaveBeenCalledWith(rawBody);
   });
 
   it("rejects an incorrect signature", async () => {

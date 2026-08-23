@@ -1,9 +1,9 @@
 import {
   getMetaAppSecret,
   handleMetaWebhookVerification,
-  processVerifiedMetaWebhookPayload,
   verifyMetaWebhookSignature,
 } from "@/lib/server/whatsapp/meta-webhook";
+import { processVerifiedWhatsAppWebhook } from "@/lib/server/whatsapp/whatsapp-webhook-processor";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +35,6 @@ export async function POST(request: Request) {
     return new Response(null, { status: 403 });
   }
 
-  processVerifiedMetaWebhookPayload(rawBody);
+  await processVerifiedWhatsAppWebhook(rawBody);
   return new Response(null, { status: 200 });
 }

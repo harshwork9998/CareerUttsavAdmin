@@ -7,16 +7,12 @@ import {
   handleMetaWebhookVerification,
   maskWaId,
   parseMetaWebhookPayload,
-  processMetaWebhookPayload,
+  safeLogIncomingWhatsAppMessage,
   verifyMetaWebhookSignature,
 } from "@/lib/server/whatsapp/meta-webhook";
 
 const TEST_VERIFY_TOKEN = "test-verify-token-local-only";
 const TEST_APP_SECRET = "test-meta-app-secret-local-only";
-
-function signPayload(rawBody: string, secret = TEST_APP_SECRET): string {
-  return computeMetaWebhookSignature(rawBody, secret);
-}
 
 const textMessagePayload = {
   object: "whatsapp_business_account",
@@ -27,11 +23,6 @@ const textMessagePayload = {
         {
           value: {
             messaging_product: "whatsapp",
-            metadata: {
-              display_phone_number: "16505551111",
-              phone_number_id: "123456789",
-            },
-            contacts: [{ profile: { name: "Test User" }, wa_id: "16315551181" }],
             messages: [
               {
                 from: "16315551181",
@@ -57,10 +48,6 @@ const statusPayload = {
         {
           value: {
             messaging_product: "whatsapp",
-            metadata: {
-              display_phone_number: "16505551111",
-              phone_number_id: "123456789",
-            },
             statuses: [
               {
                 id: "wamid.HBgLMTYzMTU1NTExODEVAgARGBI5QTNDQjJBNDMwODlFMDFDRDJDAA==",
@@ -138,7 +125,7 @@ describe("meta webhook verification", () => {
 describe("meta webhook signature verification", () => {
   it("accepts a correctly signed payload", () => {
     const rawBody = JSON.stringify(textMessagePayload);
-    const signature = signPayload(rawBody);
+    const signature = computeMetaWebhookSignature(rawBody, TEST_APP_SECRET);
     expect(verifyMetaWebhookSignature(rawBody, signature, TEST_APP_SECRET)).toBe(
       true
     );
@@ -146,7 +133,7 @@ describe("meta webhook signature verification", () => {
 
   it("rejects an incorrect signature", () => {
     const rawBody = JSON.stringify(textMessagePayload);
-    const badSignature = signPayload(rawBody, "different-secret");
+    const badSignature = computeMetaWebhookSignature(rawBody, "different-secret");
     expect(
       verifyMetaWebhookSignature(rawBody, badSignature, TEST_APP_SECRET)
     ).toBe(false);
@@ -161,7 +148,7 @@ describe("meta webhook signature verification", () => {
 
   it("does not expose secrets in verification failures", () => {
     const rawBody = JSON.stringify(textMessagePayload);
-    const signature = signPayload(rawBody);
+    const signature = computeMetaWebhookSignature(rawBody, TEST_APP_SECRET);
     const result = verifyMetaWebhookSignature(
       rawBody,
       signature,
@@ -192,7 +179,6 @@ describe("meta webhook payload handling", () => {
     expect(payload).not.toBeNull();
     const messages = extractNormalizedWhatsAppMessages(payload!);
     expect(messages).toHaveLength(0);
-    expect(() => processMetaWebhookPayload(payload!)).not.toThrow();
   });
 
   it("handles unknown webhook shapes safely", () => {
@@ -201,7 +187,6 @@ describe("meta webhook payload handling", () => {
     );
     expect(payload).not.toBeNull();
     expect(extractNormalizedWhatsAppMessages(payload!)).toEqual([]);
-    expect(() => processMetaWebhookPayload(payload!)).not.toThrow();
   });
 
   it("masks sender identifiers for safe logging", () => {
@@ -209,11 +194,12 @@ describe("meta webhook payload handling", () => {
   });
 });
 
-describe("processMetaWebhookPayload logging", () => {
+describe("safeLogIncomingWhatsAppMessage", () => {
   it("logs only non-sensitive fields", () => {
     const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
     const payload = parseMetaWebhookPayload(JSON.stringify(textMessagePayload))!;
-    processMetaWebhookPayload(payload);
+    const message = extractNormalizedWhatsAppMessages(payload)[0]!;
+    safeLogIncomingWhatsAppMessage(message);
 
     expect(infoSpy).toHaveBeenCalledOnce();
     const logArgs = infoSpy.mock.calls[0]!;

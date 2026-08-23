@@ -217,20 +217,3 @@ export function safeLogIncomingWhatsAppMessage(
     hasInteractiveReply: Boolean(message.interactiveReplyId),
   });
 }
-
-export function processMetaWebhookPayload(payload: MetaWebhookPayload): void {
-  const messages = extractNormalizedWhatsAppMessages(payload);
-  for (const message of messages) {
-    safeLogIncomingWhatsAppMessage(message);
-  }
-}
-
-export function processVerifiedMetaWebhookPayload(rawBody: string): void {
-  const payload = parseMetaWebhookPayload(rawBody);
-  if (!payload) {
-    console.warn("[whatsapp-webhook] received payload that could not be parsed");
-    return;
-  }
-
-  processMetaWebhookPayload(payload);
-}

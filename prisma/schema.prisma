@@ -404,3 +404,63 @@ model AdminPasswordResetToken {
   @@index([expiresAt])
   @@map("admin_password_reset_tokens")
 }
+
+// ─── WhatsApp registration conversations (temporary workflow state) ───────────
+
+enum WhatsAppConversationStatus {
+  ACTIVE
+  READY_TO_REGISTER
+  COMPLETED
+  CANCELLED
+}
+
+enum WhatsAppConversationStep {
+  AWAITING_START
+  AWAITING_NAME
+  AWAITING_EMAIL
+  AWAITING_CLASS
+  AWAITING_GENDER
+  AWAITING_BOARD
+  AWAITING_STREAM
+  AWAITING_COLLEGE
+  AWAITING_CITY
+  AWAITING_SEMINARS
+  READY_TO_REGISTER
+  COMPLETED
+  CANCELLED
+}
+
+model WhatsAppRegistrationConversation {
+  id                 String                     @id @default(cuid())
+  waId               String                     @unique
+  status             WhatsAppConversationStatus @default(ACTIVE)
+  currentStep        WhatsAppConversationStep   @default(AWAITING_START)
+  studentName        String?
+  email              String?
+  classLabel         String?
+  gender             Gender?
+  board              String?
+  interestedStream   String?
+  college            String?
+  city               String?
+  selectedSeminarIds Json                       @default("[]")
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+  expiresAt          DateTime
+
+  @@index([status])
+  @@index([expiresAt])
+  @@map("whatsapp_registration_conversations")
+}
+
+model WhatsAppInboundMessage {
+  id          String    @id @default(cuid())
+  messageId   String    @unique
+  waId        String
+  messageType String
+  receivedAt  DateTime  @default(now())
+  processedAt DateTime?
+
+  @@index([waId])
+  @@map("whatsapp_inbound_messages")
+}
