@@ -19,6 +19,7 @@ const BOARD_PREFIX = "board:";
 const GENDER_PREFIX = "gender:";
 const STREAM_PREFIX = "stream:";
 const SEMINAR_PREFIX = "seminar:";
+const SEMINAR_PAGE_PREFIX = "seminar-page:";
 
 export function classInteractiveId(classLabel: string): string {
   return `${CLASS_PREFIX}${classLabel}`;
@@ -80,7 +81,18 @@ export function seminarInteractiveId(seminarId: string): string {
   return `${SEMINAR_PREFIX}${seminarId}`;
 }
 
+export function seminarPageInteractiveId(page: number): string {
+  return `${SEMINAR_PAGE_PREFIX}${page}`;
+}
+
+export function parseSeminarPageInteractiveId(id: string): number | null {
+  if (!id.startsWith(SEMINAR_PAGE_PREFIX)) return null;
+  const page = Number.parseInt(id.slice(SEMINAR_PAGE_PREFIX.length), 10);
+  return Number.isFinite(page) && page >= 0 ? page : null;
+}
+
 export function parseSeminarInteractiveId(id: string): string | null {
+  if (parseSeminarPageInteractiveId(id) !== null) return null;
   if (!id.startsWith(SEMINAR_PREFIX)) return null;
   const seminarId = id.slice(SEMINAR_PREFIX.length).trim();
   return seminarId.length > 0 ? seminarId : null;
@@ -97,6 +109,7 @@ export function isRegistrationInteractiveId(id: string): boolean {
     id.startsWith(BOARD_PREFIX) ||
     id.startsWith(GENDER_PREFIX) ||
     id.startsWith(STREAM_PREFIX) ||
-    id.startsWith(SEMINAR_PREFIX)
+    id.startsWith(SEMINAR_PREFIX) ||
+    id.startsWith(SEMINAR_PAGE_PREFIX)
   );
 }

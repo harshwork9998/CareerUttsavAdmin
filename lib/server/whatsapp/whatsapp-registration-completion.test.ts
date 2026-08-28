@@ -307,6 +307,23 @@ describe("resolveSeminarTitlesFromIds", () => {
       resolveSeminarTitlesFromIds(["sem-foreign"], seminarOptions).ok
     ).toBe(false);
   });
+
+  it("accepts more than three seminar ids for WhatsApp completion", () => {
+    const extendedSeminars = [
+      ...seminarOptions,
+      { id: "sem-003", title: "Startup Skills" },
+      { id: "sem-004", title: "Entrepreneurship" },
+    ];
+    expect(
+      resolveSeminarTitlesFromIds(
+        ["sem-001", "sem-002", "sem-003", "sem-004"],
+        extendedSeminars
+      )
+    ).toEqual({
+      ok: true,
+      titles: ["AI Careers", "Design Thinking", "Startup Skills", "Entrepreneurship"],
+    });
+  });
 });
 
 describe("duplicateAllowsRegistrationNumberReveal", () => {

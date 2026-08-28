@@ -1,5 +1,4 @@
 import {
-  MAX_SEMINAR_INTERESTS,
   REGISTRATION_BOARD_OPTIONS,
   REGISTRATION_CLASS_OPTIONS,
   REGISTRATION_STREAM_OPTIONS,
@@ -15,12 +14,17 @@ import {
   parseClassInteractiveId,
   parseGenderInteractiveId,
   parseSeminarInteractiveId,
+  parseSeminarPageInteractiveId,
   parseStreamInteractiveId,
   seminarInteractiveId,
+  seminarPageInteractiveId,
   streamInteractiveId,
 } from "@/lib/server/whatsapp/registration-interactive-ids";
 
 export const WHATSAPP_CONVERSATION_TTL_MS = 24 * 60 * 60 * 1000;
+export const WHATSAPP_SEMINAR_LIST_ROW_LIMIT = 10;
+export const WHATSAPP_SEMINAR_LIST_PAGE_SIZE = 8;
+export const WHATSAPP_SEMINAR_LIST_TITLE_LIMIT = 24;
 
 export type WhatsAppConversationStatus =
   | "ACTIVE"
@@ -174,16 +178,12 @@ function isCancelText(text: string): boolean {
 function welcomeActions(): WhatsAppBotAction[] {
   return [
     {
-      type: "TEXT",
+      type: "BUTTONS",
       body: `👋 Welcome to Career Uttsav!
 
 Career Uttsav is a career discovery platform for students after 10th & 12th, helping you explore the right courses, careers, institutions, and opportunities for your future.
 
 Let's get you registered for the event. It'll only take a minute.`,
-    },
-    {
-      type: "BUTTONS",
-      body: "Let's get you registered.",
       buttons: [
         {
           id: REGISTRATION_INTERACTIVE_IDS.START,
@@ -192,6 +192,54 @@ Let's get you registered for the event. It'll only take a minute.`,
       ],
     },
   ];
+}
+
+function nameStepActions(): WhatsAppBotAction[] {
+  return [
+    {
+      type: "TEXT",
+      body: `Before we begin, if you make a mistake while entering your details, just type *cancel*.
+
+We'll pause this registration and you can start afresh by sending *Hi*. Once your Registration ID and QR code are generated, the registration is complete and can't be cancelled from WhatsApp.
+
+*What is your full name?*`,
+    },
+  ];
+}
+
+function cancelledActions(): WhatsAppBotAction[] {
+  return [
+    {
+      type: "TEXT",
+      body: `Your registration has been paused.
+
+To start afresh, please send *Hi*.`,
+    },
+  ];
+}
+
+function completedCancelBlockedActions(): WhatsAppBotAction[] {
+  return [
+    {
+      type: "TEXT",
+      body: `Your registration is already complete. Your Registration ID and QR code have already been generated, so it can't be cancelled from WhatsApp.`,
+    },
+  ];
+}
+
+function beginNameStep(
+  conversation: WhatsAppConversationState,
+  seminarOptions: SeminarOption[]
+): ConversationTurnResult {
+  return {
+    conversation: {
+      ...conversation,
+      status: "ACTIVE",
+      currentStep: "AWAITING_NAME",
+    },
+    actions: nameStepActions(),
+    refreshExpiry: true,
+  };
 }
 
 function resumePromptActions(): WhatsAppBotAction[] {
@@ -277,55 +325,117 @@ function streamButtonActions(): WhatsAppBotAction[] {
   ];
 }
 
-function seminarSelectionActions(
+function formatSeminarListRowTitle(title: string, selected: boolean): string {
+  const prefixed = `${selected ? "✓ " : ""}${title}`;
+  if (prefixed.length <= WHATSAPP_SEMINAR_LIST_TITLE_LIMIT) {
+    return prefixed;
+  }
+  const allowance = WHATSAPP_SEMINAR_LIST_TITLE_LIMIT - 1;
+  return `${prefixed.slice(0, allowance)}…`;
+}
+
+export function buildSeminarListRows(
   seminarOptions: SeminarOption[],
-  selectedSeminarIds: string[]
-): WhatsAppBotAction[] {
-  const available = seminarOptions.filter(
-    (seminar) => !selectedSeminarIds.includes(seminar.id)
+  selectedSeminarIds: string[],
+  listPage = 0
+): WhatsAppBotListRow[] {
+  if (seminarOptions.length <= WHATSAPP_SEMINAR_LIST_ROW_LIMIT) {
+    return seminarOptions.map((seminar) => ({
+      id: seminarInteractiveId(seminar.id),
+      title: formatSeminarListRowTitle(
+        seminar.title,
+        selectedSeminarIds.includes(seminar.id)
+      ),
+    }));
+  }
+
+  const totalPages = Math.ceil(
+    seminarOptions.length / WHATSAPP_SEMINAR_LIST_PAGE_SIZE
+  );
+  const safePage = Math.min(Math.max(listPage, 0), totalPages - 1);
+  const start = safePage * WHATSAPP_SEMINAR_LIST_PAGE_SIZE;
+  const pageSeminars = seminarOptions.slice(
+    start,
+    start + WHATSAPP_SEMINAR_LIST_PAGE_SIZE
   );
 
-  const actions: WhatsAppBotAction[] = [];
+  const rows: WhatsAppBotListRow[] = pageSeminars.map((seminar) => ({
+    id: seminarInteractiveId(seminar.id),
+    title: formatSeminarListRowTitle(
+      seminar.title,
+      selectedSeminarIds.includes(seminar.id)
+    ),
+  }));
 
-  if (selectedSeminarIds.length === 0) {
-    actions.push({
-      type: "TEXT",
-      body: "Please select at least one seminar interest.",
+  if (safePage > 0) {
+    rows.push({
+      id: seminarPageInteractiveId(safePage - 1),
+      title: "← Previous",
     });
-  } else {
-    actions.push({
-      type: "TEXT",
-      body: `You have selected ${selectedSeminarIds.length} seminar${
-        selectedSeminarIds.length === 1 ? "" : "s"
-      }.`,
+  }
+  if (safePage < totalPages - 1) {
+    rows.push({
+      id: seminarPageInteractiveId(safePage + 1),
+      title: "More seminars →",
     });
   }
 
-  if (available.length > 0 && selectedSeminarIds.length < MAX_SEMINAR_INTERESTS) {
-    actions.push({
+  return rows.slice(0, WHATSAPP_SEMINAR_LIST_ROW_LIMIT);
+}
+
+function seminarSelectionBody(selectedSeminarIds: string[], seminarOptions: SeminarOption[]): string {
+  const intro = `Choose the seminars you're most interested in.
+
+We recommend selecting your top 3, but you may select more if you'd like.`;
+
+  if (selectedSeminarIds.length === 0) {
+    return intro;
+  }
+
+  const selectedLines = selectedSeminarIds
+    .map((seminarId) => {
+      const title = seminarOptions.find((seminar) => seminar.id === seminarId)?.title;
+      return title ? `✓ ${title}` : null;
+    })
+    .filter((line): line is string => Boolean(line));
+
+  return `${intro}
+
+Selected:
+${selectedLines.join("\n")}`;
+}
+
+function seminarSelectionActions(
+  seminarOptions: SeminarOption[],
+  selectedSeminarIds: string[],
+  listPage = 0
+): WhatsAppBotAction[] {
+  const actions: WhatsAppBotAction[] = [
+    {
       type: "LIST",
-      body: "Choose a seminar interest.",
+      body: seminarSelectionBody(selectedSeminarIds, seminarOptions),
       buttonText: "Select Seminar",
       sections: [
         {
           title: "Seminars",
-          rows: available.map((seminar) => ({
-            id: seminarInteractiveId(seminar.id),
-            title: seminar.title,
-          })),
+          rows: buildSeminarListRows(
+            seminarOptions,
+            selectedSeminarIds,
+            listPage
+          ),
         },
       ],
-    });
-  }
+    },
+  ];
 
   if (selectedSeminarIds.length > 0) {
     actions.push({
       type: "BUTTONS",
-      body: "When you are done selecting seminars, finish registration.",
+      body: "When you're done selecting seminars, tap below.",
       buttons: [
         {
           id: REGISTRATION_INTERACTIVE_IDS.FINISH,
-          title: "Finish Registration",
+          title: "Done Selecting",
         },
       ],
     });
@@ -362,7 +472,7 @@ function promptForStep(
     case "AWAITING_START":
       return welcomeActions();
     case "AWAITING_NAME":
-      return [{ type: "TEXT", body: "What is your full name?" }];
+      return [{ type: "TEXT", body: "*What is your full name?*" }];
     case "AWAITING_EMAIL":
       return [
         {
@@ -402,7 +512,7 @@ function promptForStep(
     case "COMPLETED":
       return alreadyRegisteredActions(completedRegistrationNumber);
     case "CANCELLED":
-      return welcomeActions();
+      return cancelledActions();
     default:
       return [];
   }
@@ -447,11 +557,26 @@ function handleGlobalControls(
     interactiveId === REGISTRATION_INTERACTIVE_IDS.CANCEL ||
     (text && isCancelText(text))
   ) {
-    return withStep(
-      { ...conversation, status: "CANCELLED" },
-      "CANCELLED",
-      seminarOptions
-    );
+    if (
+      conversation.status === "COMPLETED" &&
+      conversation.completedRegistrationId
+    ) {
+      return {
+        conversation,
+        actions: completedCancelBlockedActions(),
+        refreshExpiry: false,
+      };
+    }
+
+    return {
+      conversation: {
+        ...conversation,
+        status: "CANCELLED",
+        currentStep: "CANCELLED",
+      },
+      actions: cancelledActions(),
+      refreshExpiry: true,
+    };
   }
 
   if (interactiveId === REGISTRATION_INTERACTIVE_IDS.RESTART) {
@@ -494,7 +619,7 @@ function handleGlobalControls(
   if (conversation.status === "CANCELLED") {
     if (interactiveId === REGISTRATION_INTERACTIVE_IDS.START) {
       const reset = createInitialConversationState(conversation.waId);
-      return withStep(reset, "AWAITING_NAME", seminarOptions);
+      return beginNameStep(reset, seminarOptions);
     }
     if (text && isGreetingText(text)) {
       const reset = createInitialConversationState(conversation.waId);
@@ -585,7 +710,7 @@ export function processRegistrationConversationTurn(input: {
 
   if (conversation.currentStep === "AWAITING_START") {
     if (interactiveId === REGISTRATION_INTERACTIVE_IDS.START) {
-      return withStep(conversation, "AWAITING_NAME", input.seminarOptions);
+      return beginNameStep(conversation, input.seminarOptions);
     }
     if (text && isGreetingText(text)) {
       const reset = createInitialConversationState(conversation.waId);
@@ -792,6 +917,21 @@ export function processRegistrationConversationTurn(input: {
       );
     }
 
+    const listPage = interactiveId
+      ? parseSeminarPageInteractiveId(interactiveId)
+      : null;
+    if (listPage !== null) {
+      return {
+        conversation,
+        actions: seminarSelectionActions(
+          input.seminarOptions,
+          conversation.selectedSeminarIds,
+          listPage
+        ),
+        refreshExpiry: false,
+      };
+    }
+
     const seminarId = interactiveId
       ? parseSeminarInteractiveId(interactiveId)
       : null;
@@ -827,30 +967,19 @@ export function processRegistrationConversationTurn(input: {
     }
 
     if (conversation.selectedSeminarIds.includes(seminarId)) {
+      const updated = {
+        ...conversation,
+        selectedSeminarIds: conversation.selectedSeminarIds.filter(
+          (id) => id !== seminarId
+        ),
+      };
       return {
-        conversation,
+        conversation: updated,
         actions: seminarSelectionActions(
           input.seminarOptions,
-          conversation.selectedSeminarIds
+          updated.selectedSeminarIds
         ),
-        refreshExpiry: false,
-      };
-    }
-
-    if (conversation.selectedSeminarIds.length >= MAX_SEMINAR_INTERESTS) {
-      return {
-        conversation,
-        actions: [
-          {
-            type: "TEXT",
-            body: `You can select at most ${MAX_SEMINAR_INTERESTS} seminars.`,
-          },
-          ...seminarSelectionActions(
-            input.seminarOptions,
-            conversation.selectedSeminarIds
-          ),
-        ],
-        refreshExpiry: false,
+        refreshExpiry: true,
       };
     }
 

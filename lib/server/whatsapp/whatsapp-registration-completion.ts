@@ -6,7 +6,6 @@ import {
   normalizeRegistrationPhone,
 } from "@/lib/registration-duplicates";
 import { isStudentRegistration } from "@/lib/registration-kinds";
-import { MAX_SEMINAR_INTERESTS } from "@/lib/registration-validation";
 import type { CreateStudentRegistrationInput } from "@/lib/registration-validation";
 import {
   checkStudentRegistrationDuplicate,
@@ -98,9 +97,6 @@ export function resolveSeminarTitlesFromIds(
 ): { ok: true; titles: string[] } | { ok: false } {
   const uniqueIds = [...new Set(selectedSeminarIds.filter(Boolean))];
   if (uniqueIds.length === 0) {
-    return { ok: false };
-  }
-  if (uniqueIds.length > MAX_SEMINAR_INTERESTS) {
     return { ok: false };
   }
 
