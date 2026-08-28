@@ -74,12 +74,20 @@ function expectWelcomeActions(actions: ReturnType<typeof turn>["actions"]) {
 }
 
 function expectNameStepActions(actions: ReturnType<typeof turn>["actions"]) {
-  expect(actions).toHaveLength(1);
-  const message = actions[0];
-  expect(message?.type).toBe("TEXT");
-  if (message?.type !== "TEXT") return;
-  expect(message.body).toContain("*cancel*");
-  expect(message.body).toContain("*What is your full name?*");
+  expect(actions).toHaveLength(2);
+  const guidance = actions[0];
+  const namePrompt = actions[1];
+  expect(guidance?.type).toBe("TEXT");
+  expect(namePrompt?.type).toBe("TEXT");
+  if (guidance?.type !== "TEXT" || namePrompt?.type !== "TEXT") return;
+  expect(guidance.body).toBe(
+    `Before we begin, if you make a mistake while entering your details, just type *cancel*.
+
+We'll pause this registration and you can start afresh by sending *Hi*.`
+  );
+  expect(guidance.body).not.toContain("Registration ID");
+  expect(guidance.body).not.toContain("QR");
+  expect(namePrompt.body).toBe("*What is your full name?*");
 }
 
 function expectNoFullNamePrompt(actions: ReturnType<typeof turn>["actions"]) {
@@ -487,14 +495,15 @@ describe("whatsapp registration conversation engine", () => {
       initial.actions.some(
         (action) =>
           action.type === "LIST" &&
-          action.body.includes("We recommend selecting your top 3")
+          action.body.includes("Choose your seminar interests") &&
+          action.body.includes("Please select your *top 3 seminars* from the list below.")
       )
     ).toBe(true);
     expect(
       initial.actions.some(
         (action) =>
-          action.type === "TEXT" &&
-          action.body.includes("at most 3")
+          action.type === "LIST" &&
+          action.body.includes("may select more")
       )
     ).toBe(false);
 

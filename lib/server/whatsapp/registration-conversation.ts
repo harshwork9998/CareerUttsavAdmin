@@ -200,9 +200,11 @@ function nameStepActions(): WhatsAppBotAction[] {
       type: "TEXT",
       body: `Before we begin, if you make a mistake while entering your details, just type *cancel*.
 
-We'll pause this registration and you can start afresh by sending *Hi*. Once your Registration ID and QR code are generated, the registration is complete and can't be cancelled from WhatsApp.
-
-*What is your full name?*`,
+We'll pause this registration and you can start afresh by sending *Hi*.`,
+    },
+    {
+      type: "TEXT",
+      body: "*What is your full name?*",
     },
   ];
 }
@@ -384,9 +386,9 @@ export function buildSeminarListRows(
 }
 
 function seminarSelectionBody(selectedSeminarIds: string[], seminarOptions: SeminarOption[]): string {
-  const intro = `Choose the seminars you're most interested in.
+  const intro = `Choose your seminar interests.
 
-We recommend selecting your top 3, but you may select more if you'd like.`;
+Please select your *top 3 seminars* from the list below.`;
 
   if (selectedSeminarIds.length === 0) {
     return intro;
