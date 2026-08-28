@@ -43,6 +43,42 @@ function turn(
   });
 }
 
+function beginAtNameStep(conversation: WhatsAppConversationState | null = null) {
+  let state = turn(conversation, { text: "hi" }).conversation;
+  return turn(state, {
+    interactiveId: REGISTRATION_INTERACTIVE_IDS.START,
+  }).conversation;
+}
+
+function expectWelcomeActions(actions: ReturnType<typeof turn>["actions"]) {
+  expect(
+    actions.some(
+      (action) =>
+        action.type === "TEXT" &&
+        action.body.includes("Welcome to Career Uttsav")
+    )
+  ).toBe(true);
+  expect(
+    actions.some(
+      (action) =>
+        action.type === "BUTTONS" &&
+        action.buttons.some(
+          (button) => button.id === REGISTRATION_INTERACTIVE_IDS.START
+        )
+    )
+  ).toBe(true);
+}
+
+function expectNoFullNamePrompt(actions: ReturnType<typeof turn>["actions"]) {
+  expect(
+    actions.some(
+      (action) =>
+        action.type === "TEXT" &&
+        action.body.toLowerCase().includes("full name")
+    )
+  ).toBe(false);
+}
+
 describe("whatsapp registration conversation engine", () => {
   it("starts a new sender at AWAITING_START before registration begins", () => {
     const initial = createInitialConversationState("919876543210");
@@ -50,18 +86,33 @@ describe("whatsapp registration conversation engine", () => {
     expect(result.conversation.currentStep).toBe("AWAITING_START");
   });
 
-  it("moves a greeting into AWAITING_NAME for a brand-new sender", () => {
+  it("keeps a brand-new sender on AWAITING_START after Hi", () => {
     const result = turn(null, { text: "hi" });
-    expect(result.conversation.currentStep).toBe("AWAITING_NAME");
+    expect(result.conversation.currentStep).toBe("AWAITING_START");
     expect(result.conversation.status).toBe("ACTIVE");
+    expectWelcomeActions(result.actions);
+    expectNoFullNamePrompt(result.actions);
   });
 
-  it("moves from Start Registration to AWAITING_NAME", () => {
-    const initial = createInitialConversationState("919876543210");
-    const result = turn(initial, {
+  it("shows Welcome and Start Registration for plain start on a fresh conversation", () => {
+    const result = turn(null, { text: "start" });
+    expect(result.conversation.currentStep).toBe("AWAITING_START");
+    expectWelcomeActions(result.actions);
+    expectNoFullNamePrompt(result.actions);
+  });
+
+  it("advances to AWAITING_NAME only after registration:start", () => {
+    const started = turn(createInitialConversationState("919876543210"), {
       interactiveId: REGISTRATION_INTERACTIVE_IDS.START,
     });
-    expect(result.conversation.currentStep).toBe("AWAITING_NAME");
+    expect(started.conversation.currentStep).toBe("AWAITING_NAME");
+    expect(
+      started.actions.some(
+        (action) =>
+          action.type === "TEXT" &&
+          action.body === "What is your full name?"
+      )
+    ).toBe(true);
   });
 
   it("saves a valid name and advances to email", () => {
@@ -74,7 +125,7 @@ describe("whatsapp registration conversation engine", () => {
   });
 
   it("keeps invalid email on the email step", () => {
-    let conversation = turn(null, { text: "hi" }).conversation;
+    let conversation = beginAtNameStep();
     conversation = turn(conversation, { text: "Aarav Sharma" }).conversation;
     const result = turn(conversation, { text: "not-an-email" });
     expect(result.conversation.currentStep).toBe("AWAITING_EMAIL");
@@ -82,7 +133,7 @@ describe("whatsapp registration conversation engine", () => {
   });
 
   it("accepts a valid email and advances to class", () => {
-    let conversation = turn(null, { text: "hi" }).conversation;
+    let conversation = beginAtNameStep();
     conversation = turn(conversation, { text: "Aarav Sharma" }).conversation;
     const result = turn(conversation, { text: "aarav@example.com" });
     expect(result.conversation.email).toBe("aarav@example.com");
@@ -90,7 +141,7 @@ describe("whatsapp registration conversation engine", () => {
   });
 
   it("accepts a valid class selection", () => {
-    let conversation = turn(null, { text: "hi" }).conversation;
+    let conversation = beginAtNameStep();
     conversation = turn(conversation, { text: "Aarav Sharma" }).conversation;
     conversation = turn(conversation, { text: "aarav@example.com" }).conversation;
     const classLabel = REGISTRATION_CLASS_OPTIONS[0]!;
@@ -102,7 +153,7 @@ describe("whatsapp registration conversation engine", () => {
   });
 
   it("rejects an invalid class interactive id", () => {
-    let conversation = turn(null, { text: "hi" }).conversation;
+    let conversation = beginAtNameStep();
     conversation = turn(conversation, { text: "Aarav Sharma" }).conversation;
     conversation = turn(conversation, { text: "aarav@example.com" }).conversation;
     const result = turn(conversation, { interactiveId: "class:Invalid Class" });
@@ -112,7 +163,7 @@ describe("whatsapp registration conversation engine", () => {
 
   it("exposes only Male and Female gender options", () => {
     expect(WHATSAPP_GENDER_OPTIONS).toEqual(["Male", "Female"]);
-    let conversation = turn(null, { text: "hi" }).conversation;
+    let conversation = beginAtNameStep();
     conversation = turn(conversation, { text: "Aarav Sharma" }).conversation;
     conversation = turn(conversation, { text: "aarav@example.com" }).conversation;
     conversation = turn(conversation, {
@@ -124,7 +175,7 @@ describe("whatsapp registration conversation engine", () => {
   });
 
   it("uses supported board options", () => {
-    let conversation = turn(null, { text: "hi" }).conversation;
+    let conversation = beginAtNameStep();
     conversation = turn(conversation, { text: "Aarav Sharma" }).conversation;
     conversation = turn(conversation, { text: "aarav@example.com" }).conversation;
     conversation = turn(conversation, {
@@ -143,7 +194,7 @@ describe("whatsapp registration conversation engine", () => {
 
   it("accepts Science, Commerce, and Arts streams", () => {
     for (const stream of REGISTRATION_STREAM_OPTIONS) {
-      let conversation = turn(null, { text: "hi" }).conversation;
+      let conversation = beginAtNameStep();
       conversation = turn(conversation, { text: "Aarav Sharma" }).conversation;
       conversation = turn(conversation, { text: "aarav@example.com" }).conversation;
       conversation = turn(conversation, {
@@ -164,7 +215,7 @@ describe("whatsapp registration conversation engine", () => {
   });
 
   it("saves college and city", () => {
-    let conversation = turn(null, { text: "hi" }).conversation;
+    let conversation = beginAtNameStep();
     conversation = turn(conversation, { text: "Aarav Sharma" }).conversation;
     conversation = turn(conversation, { text: "aarav@example.com" }).conversation;
     conversation = turn(conversation, {
@@ -187,7 +238,7 @@ describe("whatsapp registration conversation engine", () => {
   });
 
   it("stores seminar selections without duplication", () => {
-    let conversation = turn(null, { text: "hi" }).conversation;
+    let conversation = beginAtNameStep();
     conversation = turn(conversation, { text: "Aarav Sharma" }).conversation;
     conversation = turn(conversation, { text: "aarav@example.com" }).conversation;
     conversation = turn(conversation, {
@@ -220,7 +271,7 @@ describe("whatsapp registration conversation engine", () => {
   });
 
   it("rejects finish without seminars", () => {
-    let conversation = turn(null, { text: "hi" }).conversation;
+    let conversation = beginAtNameStep();
     conversation = turn(conversation, { text: "Aarav Sharma" }).conversation;
     conversation = turn(conversation, { text: "aarav@example.com" }).conversation;
     conversation = turn(conversation, {
@@ -246,7 +297,7 @@ describe("whatsapp registration conversation engine", () => {
   });
 
   it("reaches READY_TO_REGISTER with at least one seminar", () => {
-    let conversation = turn(null, { text: "hi" }).conversation;
+    let conversation = beginAtNameStep();
     conversation = turn(conversation, { text: "Aarav Sharma" }).conversation;
     conversation = turn(conversation, { text: "aarav@example.com" }).conversation;
     conversation = turn(conversation, {
@@ -301,7 +352,7 @@ describe("whatsapp registration conversation engine", () => {
   });
 
   it("preserves progress when user says hi during an active flow", () => {
-    let conversation = turn(null, { text: "hi" }).conversation;
+    let conversation = beginAtNameStep();
     conversation = turn(conversation, { text: "Aarav Sharma" }).conversation;
     const result = turn(conversation, { text: "hello" });
     expect(result.conversation.studentName).toBe("Aarav Sharma");
@@ -316,7 +367,7 @@ describe("whatsapp registration conversation engine", () => {
   });
 
   it("restart clears incomplete answers", () => {
-    let conversation = turn(null, { text: "hi" }).conversation;
+    let conversation = beginAtNameStep();
     conversation = turn(conversation, { text: "Aarav Sharma" }).conversation;
     const restarted = turn(conversation, {
       interactiveId: REGISTRATION_INTERACTIVE_IDS.RESTART,
@@ -327,14 +378,14 @@ describe("whatsapp registration conversation engine", () => {
   });
 
   it("cancel marks the conversation cancelled", () => {
-    let conversation = turn(null, { text: "hi" }).conversation;
+    let conversation = beginAtNameStep();
     const result = turn(conversation, { text: "cancel" });
     expect(result.conversation.status).toBe("CANCELLED");
     expect(result.conversation.currentStep).toBe("CANCELLED");
   });
 
   it("does not silently restart COMPLETED conversations", () => {
-    let conversation = turn(null, { text: "hi" }).conversation;
+    let conversation = beginAtNameStep();
     conversation = turn(conversation, { text: "Aarav Sharma" }).conversation;
     conversation = turn(conversation, { text: "aarav@example.com" }).conversation;
     conversation = turn(conversation, {
@@ -391,6 +442,20 @@ describe("whatsapp registration conversation engine", () => {
       )
     ).toBe(true);
     expect(result.conversation.status).toBe("COMPLETED");
+  });
+
+  it("returns a cancelled conversation to AWAITING_START after Hi", () => {
+    const cancelled = {
+      ...createInitialConversationState("919876543210"),
+      status: "CANCELLED" as const,
+      currentStep: "CANCELLED" as const,
+      completedRegistrationId: null,
+    };
+    const result = turn(cancelled, { text: "hi" });
+    expect(result.conversation.currentStep).toBe("AWAITING_START");
+    expect(result.conversation.status).toBe("ACTIVE");
+    expectWelcomeActions(result.actions);
+    expectNoFullNamePrompt(result.actions);
   });
 
   it("allows a fresh registration after an email-duplicate cancellation", () => {

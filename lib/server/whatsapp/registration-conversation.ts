@@ -175,11 +175,15 @@ function welcomeActions(): WhatsAppBotAction[] {
   return [
     {
       type: "TEXT",
-      body: "Welcome to Career Uttsav.",
+      body: `👋 Welcome to Career Uttsav!
+
+Career Uttsav is a career discovery platform for students after 10th & 12th, helping you explore the right courses, careers, institutions, and opportunities for your future.
+
+Let's get you registered for the event. It'll only take a minute.`,
     },
     {
       type: "BUTTONS",
-      body: "Tap below to begin your student registration.",
+      body: "Let's get you registered.",
       buttons: [
         {
           id: REGISTRATION_INTERACTIVE_IDS.START,
@@ -358,7 +362,7 @@ function promptForStep(
     case "AWAITING_START":
       return welcomeActions();
     case "AWAITING_NAME":
-      return [{ type: "TEXT", body: "Please enter your full name." }];
+      return [{ type: "TEXT", body: "What is your full name?" }];
     case "AWAITING_EMAIL":
       return [
         {
@@ -488,14 +492,15 @@ function handleGlobalControls(
   }
 
   if (conversation.status === "CANCELLED") {
-    if (
-      interactiveId === REGISTRATION_INTERACTIVE_IDS.START ||
-      (text && isGreetingText(text))
-    ) {
-      const reset = resetConversationAnswers(conversation);
+    if (interactiveId === REGISTRATION_INTERACTIVE_IDS.START) {
+      const reset = createInitialConversationState(conversation.waId);
+      return withStep(reset, "AWAITING_NAME", seminarOptions);
+    }
+    if (text && isGreetingText(text)) {
+      const reset = createInitialConversationState(conversation.waId);
       return {
         conversation: reset,
-        actions: [{ type: "TEXT", body: "Please enter your full name." }],
+        actions: welcomeActions(),
         refreshExpiry: true,
       };
     }
@@ -579,11 +584,16 @@ export function processRegistrationConversationTurn(input: {
   }
 
   if (conversation.currentStep === "AWAITING_START") {
-    if (
-      interactiveId === REGISTRATION_INTERACTIVE_IDS.START ||
-      (text && isGreetingText(text))
-    ) {
+    if (interactiveId === REGISTRATION_INTERACTIVE_IDS.START) {
       return withStep(conversation, "AWAITING_NAME", input.seminarOptions);
+    }
+    if (text && isGreetingText(text)) {
+      const reset = createInitialConversationState(conversation.waId);
+      return {
+        conversation: reset,
+        actions: welcomeActions(),
+        refreshExpiry: true,
+      };
     }
     return {
       conversation,
