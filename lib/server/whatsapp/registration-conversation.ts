@@ -20,15 +20,11 @@ import {
   seminarPageInteractiveId,
   streamInteractiveId,
 } from "@/lib/server/whatsapp/registration-interactive-ids";
-import {
-  WHATSAPP_SEMINAR_LIST_TITLE_LIMIT,
-  formatSeminarListRow,
-} from "@/lib/server/whatsapp/seminar-list-display";
+import { formatNumberedSeminarListRow } from "@/lib/server/whatsapp/seminar-list-display";
 
 export const WHATSAPP_CONVERSATION_TTL_MS = 24 * 60 * 60 * 1000;
 export const WHATSAPP_SEMINAR_LIST_ROW_LIMIT = 10;
 export const WHATSAPP_SEMINAR_LIST_PAGE_SIZE = 8;
-export { WHATSAPP_SEMINAR_LIST_TITLE_LIMIT };
 
 export type WhatsAppConversationStatus =
   | "ACTIVE"
@@ -331,14 +327,32 @@ function streamButtonActions(): WhatsAppBotAction[] {
   ];
 }
 
+export function seminarListPageForSeminar(
+  seminarOptions: SeminarOption[],
+  seminarId: string
+): number {
+  if (seminarOptions.length <= WHATSAPP_SEMINAR_LIST_ROW_LIMIT) {
+    return 0;
+  }
+
+  const index = seminarOptions.findIndex((seminar) => seminar.id === seminarId);
+  if (index < 0) {
+    return 0;
+  }
+
+  return Math.floor(index / WHATSAPP_SEMINAR_LIST_PAGE_SIZE);
+}
+
 function toSeminarListRow(
   seminar: SeminarOption,
+  globalIndex: number,
   selectedSeminarIds: string[]
 ): WhatsAppBotListRow {
-  const { title, description } = formatSeminarListRow(
-    seminar.title,
-    selectedSeminarIds.includes(seminar.id)
-  );
+  const { title, description } = formatNumberedSeminarListRow({
+    displayNumber: globalIndex + 1,
+    fullTitle: seminar.title,
+    selected: selectedSeminarIds.includes(seminar.id),
+  });
 
   return {
     id: seminarInteractiveId(seminar.id),
@@ -353,8 +367,8 @@ export function buildSeminarListRows(
   listPage = 0
 ): WhatsAppBotListRow[] {
   if (seminarOptions.length <= WHATSAPP_SEMINAR_LIST_ROW_LIMIT) {
-    return seminarOptions.map((seminar) =>
-      toSeminarListRow(seminar, selectedSeminarIds)
+    return seminarOptions.map((seminar, index) =>
+      toSeminarListRow(seminar, index, selectedSeminarIds)
     );
   }
 
@@ -368,8 +382,8 @@ export function buildSeminarListRows(
     start + WHATSAPP_SEMINAR_LIST_PAGE_SIZE
   );
 
-  const rows: WhatsAppBotListRow[] = pageSeminars.map((seminar) =>
-    toSeminarListRow(seminar, selectedSeminarIds)
+  const rows: WhatsAppBotListRow[] = pageSeminars.map((seminar, pageIndex) =>
+    toSeminarListRow(seminar, start + pageIndex, selectedSeminarIds)
   );
 
   if (safePage > 0) {
@@ -972,19 +986,20 @@ export function processRegistrationConversationTurn(input: {
     }
 
     if (conversation.selectedSeminarIds.includes(seminarId)) {
-      const updated = {
-        ...conversation,
-        selectedSeminarIds: conversation.selectedSeminarIds.filter(
-          (id) => id !== seminarId
-        ),
-      };
       return {
-        conversation: updated,
-        actions: seminarSelectionActions(
-          input.seminarOptions,
-          updated.selectedSeminarIds
-        ),
-        refreshExpiry: true,
+        conversation,
+        actions: [
+          {
+            type: "TEXT",
+            body: "You have already selected this seminar. Please choose another.",
+          },
+          ...seminarSelectionActions(
+            input.seminarOptions,
+            conversation.selectedSeminarIds,
+            seminarListPageForSeminar(input.seminarOptions, seminarId)
+          ),
+        ],
+        refreshExpiry: false,
       };
     }
 

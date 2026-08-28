@@ -33,15 +33,29 @@ vi.mock("@/lib/server/whatsapp/whatsapp-seminar-context", () => ({
   getWhatsAppSeminarOptions: (...args: unknown[]) => getSeminarsMock(...args),
 }));
 
+vi.mock("@/lib/server/event-service", () => ({
+  getEventForApi: vi.fn(),
+}));
+
 vi.mock("@/lib/email", () => ({
   generateRegistrationQrPngBase64: (...args: unknown[]) => generateQrMock(...args),
 }));
 
+import { mockEvents } from "@/lib/mock-data/events";
+import { getEventForApi } from "@/lib/server/event-service";
+import { getRegistrationSeminarOptions } from "@/lib/server/registration-seminar-options";
 import {
   completeWhatsAppRegistrationForConversation,
   duplicateAllowsRegistrationNumberReveal,
   resolveSeminarTitlesFromIds,
 } from "@/lib/server/whatsapp/whatsapp-registration-completion";
+
+const getEventForApiMock = vi.mocked(getEventForApi);
+
+async function catalogOptionsForFourSeminarEvent() {
+  getEventForApiMock.mockResolvedValue(mockEvents[0]!);
+  return getRegistrationSeminarOptions();
+}
 
 const readyConversation: WhatsAppConversationState = {
   waId: "919876543210",
@@ -298,6 +312,105 @@ describe("whatsapp registration completion", () => {
   });
 });
 
+describe("whatsapp registration completion with catalog seminar ids", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    loadConversationMock.mockResolvedValue(readyConversation);
+    checkDuplicateMock.mockResolvedValue({
+      duplicate: false,
+      message: null,
+      registration: null,
+    });
+    createStudentRegistrationMock.mockResolvedValue({
+      ok: true,
+      registration: createdRegistration,
+    });
+    finalizeMock.mockResolvedValue(mockHealedConversation("reg-001"));
+    generateQrMock.mockResolvedValue("qr-base64");
+    getRegistrationMock.mockResolvedValue(createdRegistration);
+    getSeminarsMock.mockImplementation(() => catalogOptionsForFourSeminarEvent());
+  });
+
+  it("completes registration when only cat-{slug} catalogue ids are selected", async () => {
+    const catalogOptions = await catalogOptionsForFourSeminarEvent();
+    const boardingSchool = catalogOptions.find(
+      (option) => option.title === "How to Choose the right Boarding School?"
+    );
+
+    expect(boardingSchool?.id.startsWith("cat-")).toBe(true);
+    expect(mockEvents[0]?.seminars).toHaveLength(4);
+
+    loadConversationMock.mockResolvedValue({
+      ...readyConversation,
+      selectedSeminarIds: [boardingSchool!.id],
+    });
+
+    const result = await completeWhatsAppRegistrationForConversation("919876543210");
+
+    expect(result.status).toBe("SUCCESS");
+    expect(createStudentRegistrationMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "student",
+        eventId: CURRENT_EVENT_ID,
+        seminarInterests: ["How to Choose the right Boarding School?"],
+      }),
+      { requirePhoneVerification: false }
+    );
+    expect(finalizeMock).toHaveBeenCalledWith({
+      waId: "919876543210",
+      registrationId: "reg-001",
+    });
+  });
+
+  it("completes registration with a mix of event seminar ids and cat-{slug} ids", async () => {
+    const catalogOptions = await catalogOptionsForFourSeminarEvent();
+    const realEventSeminar = catalogOptions.find(
+      (option) => option.title === "Real Careers with Artificial Intelligence"
+    );
+    const catalogueOnly = catalogOptions.find(
+      (option) => option.title === "Cracking the codes to ace competitive exams"
+    );
+
+    expect(realEventSeminar?.id).toBe("sem-001-b");
+    expect(catalogueOnly?.id.startsWith("cat-")).toBe(true);
+
+    loadConversationMock.mockResolvedValue({
+      ...readyConversation,
+      selectedSeminarIds: [realEventSeminar!.id, catalogueOnly!.id],
+    });
+
+    const result = await completeWhatsAppRegistrationForConversation("919876543210");
+
+    expect(result.status).toBe("SUCCESS");
+    expect(createStudentRegistrationMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        seminarInterests: [
+          "Real Careers with Artificial Intelligence",
+          "Cracking the codes to ace competitive exams",
+        ],
+      }),
+      { requirePhoneVerification: false }
+    );
+  });
+
+  it("does not reject valid cat-{slug} ids as invalid seminars", async () => {
+    const catalogOptions = await catalogOptionsForFourSeminarEvent();
+    const catalogueOnly = catalogOptions.find(
+      (option) => option.title === "Offbeat Careers"
+    )!;
+
+    loadConversationMock.mockResolvedValue({
+      ...readyConversation,
+      selectedSeminarIds: [catalogueOnly.id],
+    });
+
+    const result = await completeWhatsAppRegistrationForConversation("919876543210");
+
+    expect(result.status).not.toBe("INVALID_SEMINARS");
+    expect(result.status).toBe("SUCCESS");
+  });
+});
+
 describe("resolveSeminarTitlesFromIds", () => {
   it("maps seminar ids to titles and rejects foreign ids", () => {
     expect(
@@ -322,6 +435,41 @@ describe("resolveSeminarTitlesFromIds", () => {
     ).toEqual({
       ok: true,
       titles: ["AI Careers", "Design Thinking", "Startup Skills", "Entrepreneurship"],
+    });
+  });
+
+  it("resolves cat-{slug} catalogue ids through the seminar options map", async () => {
+    const catalogOptions = await catalogOptionsForFourSeminarEvent();
+    const catalogueOnly = catalogOptions.find(
+      (option) => option.title === "How to Choose the right Boarding School?"
+    )!;
+
+    expect(resolveSeminarTitlesFromIds([catalogueOnly.id], catalogOptions)).toEqual({
+      ok: true,
+      titles: ["How to Choose the right Boarding School?"],
+    });
+  });
+
+  it("resolves a mixed list of event ids and cat-{slug} ids", async () => {
+    const catalogOptions = await catalogOptionsForFourSeminarEvent();
+    const realEventSeminar = catalogOptions.find(
+      (option) => option.id === "sem-001-b"
+    )!;
+    const catalogueOnly = catalogOptions.find(
+      (option) => option.title === "New-age Engineering Careers"
+    )!;
+
+    expect(
+      resolveSeminarTitlesFromIds(
+        [realEventSeminar.id, catalogueOnly.id],
+        catalogOptions
+      )
+    ).toEqual({
+      ok: true,
+      titles: [
+        "Real Careers with Artificial Intelligence",
+        "New-age Engineering Careers",
+      ],
     });
   });
 });

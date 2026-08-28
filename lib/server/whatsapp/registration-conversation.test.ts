@@ -25,8 +25,8 @@ import {
 } from "@/lib/server/whatsapp/registration-conversation";
 import {
   WHATSAPP_SEMINAR_LIST_DESCRIPTION_LIMIT,
-  WHATSAPP_SEMINAR_LIST_TITLE_LIMIT,
 } from "@/lib/server/whatsapp/seminar-list-display";
+import { CAREER_UTTSAV_SEMINARS } from "@/features/dashboard/seminars";
 
 const seminarOptions: SeminarOption[] = [
   { id: "sem-001", title: "AI Careers" },
@@ -297,7 +297,7 @@ describe("whatsapp registration conversation engine", () => {
     expect(result.conversation.currentStep).toBe("AWAITING_SEMINARS");
   });
 
-  it("accumulates seminar selections and toggles duplicates off", () => {
+  it("keeps duplicate seminar selections and prompts the user to choose another", () => {
     let conversation = beginAtNameStep();
     conversation = turn(conversation, { text: "Aarav Sharma" }).conversation;
     conversation = turn(conversation, { text: "aarav@example.com" }).conversation;
@@ -319,18 +319,30 @@ describe("whatsapp registration conversation engine", () => {
     conversation = turn(conversation, {
       interactiveId: seminarInteractiveId("sem-001"),
     }).conversation;
-    const toggledOff = turn(conversation, {
+    const duplicate = turn(conversation, {
       interactiveId: seminarInteractiveId("sem-001"),
     });
-    expect(toggledOff.conversation.selectedSeminarIds).toEqual([]);
+    expect(duplicate.conversation.selectedSeminarIds).toEqual(["sem-001"]);
+    expect(duplicate.conversation.currentStep).toBe("AWAITING_SEMINARS");
+    expect(
+      duplicate.actions.some(
+        (action) =>
+          action.type === "TEXT" &&
+          action.body ===
+            "You have already selected this seminar. Please choose another."
+      )
+    ).toBe(true);
+    expect(duplicate.actions.some((action) => action.type === "LIST")).toBe(
+      true
+    );
 
-    conversation = turn(toggledOff.conversation, {
-      interactiveId: seminarInteractiveId("sem-001"),
-    }).conversation;
-    const second = turn(conversation, {
+    const second = turn(duplicate.conversation, {
       interactiveId: seminarInteractiveId("sem-002"),
     });
-    expect(second.conversation.selectedSeminarIds).toEqual(["sem-001", "sem-002"]);
+    expect(second.conversation.selectedSeminarIds).toEqual([
+      "sem-001",
+      "sem-002",
+    ]);
   });
 
   it("rejects finish without seminars", () => {
@@ -558,11 +570,27 @@ describe("whatsapp registration conversation engine", () => {
     conversation = turn(conversation, {
       interactiveId: seminarInteractiveId("sem-003"),
     }).conversation;
-    expect(conversation.selectedSeminarIds).toEqual(["sem-001", "sem-002"]);
-
-    conversation = turn(conversation, {
+    const duplicate = turn(conversation, {
       interactiveId: seminarInteractiveId("sem-003"),
-    }).conversation;
+    });
+    expect(duplicate.conversation.selectedSeminarIds).toEqual([
+      "sem-001",
+      "sem-002",
+      "sem-003",
+    ]);
+    expect(duplicate.conversation.currentStep).toBe("AWAITING_SEMINARS");
+    expect(
+      duplicate.actions.some(
+        (action) =>
+          action.type === "TEXT" &&
+          action.body ===
+            "You have already selected this seminar. Please choose another."
+      )
+    ).toBe(true);
+    expect(duplicate.actions.some((action) => action.type === "LIST")).toBe(
+      true
+    );
+
     const finished = turn(conversation, {
       interactiveId: REGISTRATION_INTERACTIVE_IDS.FINISH,
     });
@@ -660,7 +688,7 @@ describe("whatsapp registration conversation engine", () => {
     );
   });
 
-  it("uses short row titles and full titles in descriptions", () => {
+  it("uses numbered row titles and full titles in descriptions", () => {
     const rows = buildSeminarListRows(
       [
         {
@@ -671,18 +699,17 @@ describe("whatsapp registration conversation engine", () => {
       []
     );
 
-    expect(rows[0]?.title.length).toBeLessThanOrEqual(
-      WHATSAPP_SEMINAR_LIST_TITLE_LIMIT
-    );
+    expect(rows[0]?.title).toBe("Seminar 1");
     expect(rows[0]?.description).toBe(
       "Real Careers with Artificial Intelligence"
     );
     expect(rows[0]?.description?.length).toBeLessThanOrEqual(
       WHATSAPP_SEMINAR_LIST_DESCRIPTION_LIMIT
     );
+    expect(rows[0]?.id).toBe(seminarInteractiveId("sem-ai"));
   });
 
-  it("keeps selected seminar row titles within the WhatsApp limit", () => {
+  it("marks selected seminars in the description without changing the numbered title", () => {
     const rows = buildSeminarListRows(
       [
         {
@@ -693,13 +720,40 @@ describe("whatsapp registration conversation engine", () => {
       ["sem-ai"]
     );
 
-    expect(rows[0]?.title.startsWith("✓ ")).toBe(true);
-    expect(rows[0]?.title.length).toBeLessThanOrEqual(
-      WHATSAPP_SEMINAR_LIST_TITLE_LIMIT
-    );
+    expect(rows[0]?.title).toBe("Seminar 1");
     expect(rows[0]?.description).toBe(
-      "Real Careers with Artificial Intelligence"
+      "✓ Selected · Real Careers with Artificial Intelligence"
     );
+  });
+
+  it("keeps global numbering across paginated pages for 20 seminars", () => {
+    const twentySeminars: SeminarOption[] = CAREER_UTTSAV_SEMINARS.map(
+      (title, index) => ({
+        id: `sem-${String(index + 1).padStart(3, "0")}`,
+        title,
+      })
+    );
+
+    const pageZeroRows = buildSeminarListRows(twentySeminars, [], 0);
+    const pageOneRows = buildSeminarListRows(twentySeminars, [], 1);
+    const pageTwoRows = buildSeminarListRows(twentySeminars, [], 2);
+
+    expect(pageZeroRows[0]?.title).toBe("Seminar 1");
+    expect(pageZeroRows[7]?.title).toBe("Seminar 8");
+    expect(pageOneRows[0]?.title).toBe("Seminar 9");
+    expect(pageOneRows[7]?.title).toBe("Seminar 16");
+    expect(pageTwoRows[0]?.title).toBe("Seminar 17");
+    expect(pageTwoRows[3]?.title).toBe("Seminar 20");
+
+    const reachableIds = new Set<string>();
+    for (let page = 0; page < 3; page += 1) {
+      for (const row of buildSeminarListRows(twentySeminars, [], page)) {
+        if (row.id.startsWith("seminar:")) {
+          reachableIds.add(row.id);
+        }
+      }
+    }
+    expect(reachableIds.size).toBe(20);
   });
 
   it("accumulates seminar selections across paginated pages", () => {
