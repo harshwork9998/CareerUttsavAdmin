@@ -20,11 +20,15 @@ import {
   seminarPageInteractiveId,
   streamInteractiveId,
 } from "@/lib/server/whatsapp/registration-interactive-ids";
+import {
+  WHATSAPP_SEMINAR_LIST_TITLE_LIMIT,
+  formatSeminarListRow,
+} from "@/lib/server/whatsapp/seminar-list-display";
 
 export const WHATSAPP_CONVERSATION_TTL_MS = 24 * 60 * 60 * 1000;
 export const WHATSAPP_SEMINAR_LIST_ROW_LIMIT = 10;
 export const WHATSAPP_SEMINAR_LIST_PAGE_SIZE = 8;
-export const WHATSAPP_SEMINAR_LIST_TITLE_LIMIT = 24;
+export { WHATSAPP_SEMINAR_LIST_TITLE_LIMIT };
 
 export type WhatsAppConversationStatus =
   | "ACTIVE"
@@ -327,13 +331,20 @@ function streamButtonActions(): WhatsAppBotAction[] {
   ];
 }
 
-function formatSeminarListRowTitle(title: string, selected: boolean): string {
-  const prefixed = `${selected ? "✓ " : ""}${title}`;
-  if (prefixed.length <= WHATSAPP_SEMINAR_LIST_TITLE_LIMIT) {
-    return prefixed;
-  }
-  const allowance = WHATSAPP_SEMINAR_LIST_TITLE_LIMIT - 1;
-  return `${prefixed.slice(0, allowance)}…`;
+function toSeminarListRow(
+  seminar: SeminarOption,
+  selectedSeminarIds: string[]
+): WhatsAppBotListRow {
+  const { title, description } = formatSeminarListRow(
+    seminar.title,
+    selectedSeminarIds.includes(seminar.id)
+  );
+
+  return {
+    id: seminarInteractiveId(seminar.id),
+    title,
+    description,
+  };
 }
 
 export function buildSeminarListRows(
@@ -342,13 +353,9 @@ export function buildSeminarListRows(
   listPage = 0
 ): WhatsAppBotListRow[] {
   if (seminarOptions.length <= WHATSAPP_SEMINAR_LIST_ROW_LIMIT) {
-    return seminarOptions.map((seminar) => ({
-      id: seminarInteractiveId(seminar.id),
-      title: formatSeminarListRowTitle(
-        seminar.title,
-        selectedSeminarIds.includes(seminar.id)
-      ),
-    }));
+    return seminarOptions.map((seminar) =>
+      toSeminarListRow(seminar, selectedSeminarIds)
+    );
   }
 
   const totalPages = Math.ceil(
@@ -361,13 +368,9 @@ export function buildSeminarListRows(
     start + WHATSAPP_SEMINAR_LIST_PAGE_SIZE
   );
 
-  const rows: WhatsAppBotListRow[] = pageSeminars.map((seminar) => ({
-    id: seminarInteractiveId(seminar.id),
-    title: formatSeminarListRowTitle(
-      seminar.title,
-      selectedSeminarIds.includes(seminar.id)
-    ),
-  }));
+  const rows: WhatsAppBotListRow[] = pageSeminars.map((seminar) =>
+    toSeminarListRow(seminar, selectedSeminarIds)
+  );
 
   if (safePage > 0) {
     rows.push({

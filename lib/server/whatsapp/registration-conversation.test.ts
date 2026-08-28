@@ -23,12 +23,45 @@ import {
   type SeminarOption,
   type WhatsAppConversationState,
 } from "@/lib/server/whatsapp/registration-conversation";
+import {
+  WHATSAPP_SEMINAR_LIST_DESCRIPTION_LIMIT,
+  WHATSAPP_SEMINAR_LIST_TITLE_LIMIT,
+} from "@/lib/server/whatsapp/seminar-list-display";
 
 const seminarOptions: SeminarOption[] = [
   { id: "sem-001", title: "AI Careers" },
   { id: "sem-002", title: "Design Thinking" },
   { id: "sem-003", title: "Startup Skills" },
 ];
+
+function buildSeminarOptions(count: number): SeminarOption[] {
+  return Array.from({ length: count }, (_, index) => ({
+    id: `sem-${String(index + 1).padStart(3, "0")}`,
+    title: `Seminar ${index + 1}`,
+  }));
+}
+
+function advanceToSeminarsStep(options: SeminarOption[] = seminarOptions) {
+  let conversation = beginAtNameStep();
+  conversation = turn(conversation, { text: "Aarav Sharma" }).conversation;
+  conversation = turn(conversation, { text: "aarav@example.com" }).conversation;
+  conversation = turn(conversation, {
+    interactiveId: classInteractiveId(REGISTRATION_CLASS_OPTIONS[0]!),
+  }).conversation;
+  conversation = turn(conversation, {
+    interactiveId: genderInteractiveId("Male"),
+  }).conversation;
+  conversation = turn(conversation, {
+    interactiveId: boardInteractiveId(REGISTRATION_BOARD_OPTIONS[0]!),
+  }).conversation;
+  conversation = turn(conversation, {
+    interactiveId: streamInteractiveId("Science"),
+  }).conversation;
+  conversation = turn(conversation, { text: "National Public School" }).conversation;
+  conversation = turn(conversation, { text: "Bangalore" }).conversation;
+  return turn(conversation, { text: "show seminars" }, "919876543210", null, options)
+    .conversation;
+}
 
 function turn(
   conversation: WhatsAppConversationState | null,
@@ -587,10 +620,7 @@ describe("whatsapp registration conversation engine", () => {
   });
 
   it("paginates seminar lists when more than 10 live seminars exist", () => {
-    const manySeminars: SeminarOption[] = Array.from({ length: 12 }, (_, index) => ({
-      id: `sem-${String(index + 1).padStart(3, "0")}`,
-      title: `Seminar ${index + 1}`,
-    }));
+    const manySeminars = buildSeminarOptions(12);
 
     const pageZeroRows = buildSeminarListRows(manySeminars, [], 0);
     expect(pageZeroRows).toHaveLength(9);
@@ -601,6 +631,116 @@ describe("whatsapp registration conversation engine", () => {
     expect(
       pageOneRows.some((row) => row.id === seminarInteractiveId("sem-009"))
     ).toBe(true);
+  });
+
+  it("exposes every configured seminar across paginated list pages", () => {
+    const manySeminars = buildSeminarOptions(12);
+    const reachableIds = new Set<string>();
+
+    for (let page = 0; page < 2; page += 1) {
+      for (const row of buildSeminarListRows(manySeminars, [], page)) {
+        if (row.id.startsWith("seminar:") && !row.id.startsWith("seminar-page:")) {
+          reachableIds.add(row.id);
+        }
+      }
+    }
+
+    expect(reachableIds.size).toBe(12);
+    expect([...reachableIds].sort()).toEqual(
+      manySeminars.map((seminar) => seminarInteractiveId(seminar.id)).sort()
+    );
+  });
+
+  it("does not arbitrarily limit seminar list rows to 4", () => {
+    const eightSeminars = buildSeminarOptions(8);
+    const rows = buildSeminarListRows(eightSeminars, []);
+    expect(rows).toHaveLength(8);
+    expect(rows.map((row) => row.id)).toEqual(
+      eightSeminars.map((seminar) => seminarInteractiveId(seminar.id))
+    );
+  });
+
+  it("uses short row titles and full titles in descriptions", () => {
+    const rows = buildSeminarListRows(
+      [
+        {
+          id: "sem-ai",
+          title: "Real Careers with Artificial Intelligence",
+        },
+      ],
+      []
+    );
+
+    expect(rows[0]?.title.length).toBeLessThanOrEqual(
+      WHATSAPP_SEMINAR_LIST_TITLE_LIMIT
+    );
+    expect(rows[0]?.description).toBe(
+      "Real Careers with Artificial Intelligence"
+    );
+    expect(rows[0]?.description?.length).toBeLessThanOrEqual(
+      WHATSAPP_SEMINAR_LIST_DESCRIPTION_LIMIT
+    );
+  });
+
+  it("keeps selected seminar row titles within the WhatsApp limit", () => {
+    const rows = buildSeminarListRows(
+      [
+        {
+          id: "sem-ai",
+          title: "Real Careers with Artificial Intelligence",
+        },
+      ],
+      ["sem-ai"]
+    );
+
+    expect(rows[0]?.title.startsWith("✓ ")).toBe(true);
+    expect(rows[0]?.title.length).toBeLessThanOrEqual(
+      WHATSAPP_SEMINAR_LIST_TITLE_LIMIT
+    );
+    expect(rows[0]?.description).toBe(
+      "Real Careers with Artificial Intelligence"
+    );
+  });
+
+  it("accumulates seminar selections across paginated pages", () => {
+    const manySeminars = buildSeminarOptions(12);
+    let conversation = advanceToSeminarsStep(manySeminars);
+
+    conversation = turn(
+      conversation,
+      { interactiveId: seminarInteractiveId("sem-001") },
+      "919876543210",
+      null,
+      manySeminars
+    ).conversation;
+    conversation = turn(
+      conversation,
+      { interactiveId: seminarPageInteractiveId(1) },
+      "919876543210",
+      null,
+      manySeminars
+    ).conversation;
+    conversation = turn(
+      conversation,
+      { interactiveId: seminarInteractiveId("sem-009") },
+      "919876543210",
+      null,
+      manySeminars
+    ).conversation;
+
+    const finished = turn(
+      conversation,
+      { interactiveId: REGISTRATION_INTERACTIVE_IDS.FINISH },
+      "919876543210",
+      null,
+      manySeminars
+    );
+
+    expect(finished.conversation.selectedSeminarIds).toEqual([
+      "sem-001",
+      "sem-009",
+    ]);
+    expect(finished.conversation.currentStep).toBe("READY_TO_REGISTER");
   });
 
   it("cancel marks the conversation cancelled", () => {
