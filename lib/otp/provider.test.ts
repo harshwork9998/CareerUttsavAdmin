@@ -58,6 +58,38 @@ describe("resolveOtpProvider", () => {
     expect(ok).toEqual({ ok: true, provider: "msg91" });
   });
 
+  it("requires phone verification secret in production for msg91", () => {
+    expect(
+      resolveOtpProvider({
+        NODE_ENV: "production",
+        MSG91_AUTH_KEY: "key",
+        MSG91_TEMPLATE_ID: "tmpl",
+      })
+    ).toMatchObject({
+      ok: false,
+      status: 503,
+      error: expect.stringContaining("PHONE_VERIFICATION_TOKEN_SECRET"),
+    });
+
+    expect(
+      resolveOtpProvider({
+        NODE_ENV: "production",
+        MSG91_AUTH_KEY: "key",
+        MSG91_TEMPLATE_ID: "tmpl",
+        PHONE_VERIFICATION_TOKEN_SECRET: "production-secret",
+      })
+    ).toEqual({ ok: true, provider: "msg91" });
+
+    expect(
+      resolveOtpProvider({
+        NODE_ENV: "production",
+        MSG91_AUTH_KEY: "key",
+        MSG91_TEMPLATE_ID: "tmpl",
+        OTP_HASH_SECRET: "legacy-production-secret",
+      })
+    ).toEqual({ ok: true, provider: "msg91" });
+  });
+
   it("allows mock only outside production unless ALLOW_MOCK_OTP=true", () => {
     expect(
       resolveOtpProvider({

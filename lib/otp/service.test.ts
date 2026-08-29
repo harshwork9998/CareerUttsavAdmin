@@ -68,6 +68,19 @@ describe("OTP service (mock provider)", () => {
     expect(result).toMatchObject({ ok: false, status: 503 });
   });
 
+  it("returns 503 when phone verification secret is missing in production", async () => {
+    vi.stubEnv("OTP_PROVIDER", "msg91");
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("MSG91_AUTH_KEY", "test-auth-key");
+    vi.stubEnv("MSG91_TEMPLATE_ID", "test-template");
+    vi.stubEnv("PHONE_VERIFICATION_TOKEN_SECRET", "");
+    const result = await sendOtp({
+      phone: PHONE,
+      purpose: "student_registration",
+    });
+    expect(result).toMatchObject({ ok: false, status: 503 });
+  });
+
   it("blocks mock provider in production", async () => {
     vi.stubEnv("OTP_PROVIDER", "mock");
     vi.stubEnv("NODE_ENV", "production");

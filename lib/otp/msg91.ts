@@ -5,6 +5,7 @@
  */
 
 import { toMsg91Mobile } from "@/lib/otp/phone";
+import { OTP_CONFIG } from "@/lib/otp/types";
 
 const MSG91_BASE = "https://control.msg91.com/api/v5/otp";
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -189,18 +190,23 @@ export async function msg91SendOtp(input: {
     return { ok: false, kind: "config", error: config.error };
   }
 
+  const url = new URL(MSG91_BASE);
+  url.searchParams.set("template_id", config.templateId);
+  url.searchParams.set("mobile", toMsg91Mobile(input.phone10));
+  url.searchParams.set("authkey", config.authKey);
+  url.searchParams.set("otp_length", String(OTP_CONFIG.codeLength));
+  url.searchParams.set(
+    "otp_expiry",
+    String(Math.floor(OTP_CONFIG.ttlMs / 60_000))
+  );
+
   return fetchMsg91(
-    MSG91_BASE,
+    url.toString(),
     {
       method: "POST",
       headers: {
-        authkey: config.authKey,
-        "Content-Type": "application/json",
+        accept: "application/json",
       },
-      body: JSON.stringify({
-        mobile: toMsg91Mobile(input.phone10),
-        template_id: config.templateId,
-      }),
     },
     "send"
   );
@@ -225,6 +231,7 @@ export async function msg91VerifyOtp(input: {
       method: "GET",
       headers: {
         authkey: config.authKey,
+        accept: "application/json",
       },
     },
     "verify"
@@ -241,15 +248,16 @@ export async function msg91RetryOtp(input: {
   }
 
   const url = new URL(`${MSG91_BASE}/retry`);
-  url.searchParams.set("mobile", toMsg91Mobile(input.phone10));
+  url.searchParams.set("authkey", config.authKey);
   url.searchParams.set("retrytype", input.retrytype ?? "text");
+  url.searchParams.set("mobile", toMsg91Mobile(input.phone10));
 
   return fetchMsg91(
     url.toString(),
     {
       method: "GET",
       headers: {
-        authkey: config.authKey,
+        accept: "application/json",
       },
     },
     "retry"

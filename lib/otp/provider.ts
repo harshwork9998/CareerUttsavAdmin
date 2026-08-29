@@ -33,6 +33,28 @@ export function readOtpProviderName(
   return "msg91";
 }
 
+const DEV_PHONE_VERIFICATION_SECRET =
+  "career-uttsav-phone-verification-dev-secret";
+
+export function readPhoneVerificationTokenSecret(env: {
+  PHONE_VERIFICATION_TOKEN_SECRET?: string;
+  OTP_HASH_SECRET?: string;
+}): string {
+  return (
+    env.PHONE_VERIFICATION_TOKEN_SECRET?.trim() ??
+    env.OTP_HASH_SECRET?.trim() ??
+    DEV_PHONE_VERIFICATION_SECRET
+  );
+}
+
+function isPhoneVerificationSecretConfigured(env: {
+  PHONE_VERIFICATION_TOKEN_SECRET?: string;
+  OTP_HASH_SECRET?: string;
+}): boolean {
+  const secret = readPhoneVerificationTokenSecret(env);
+  return Boolean(secret) && secret !== DEV_PHONE_VERIFICATION_SECRET;
+}
+
 /**
  * Resolve the active OTP provider.
  * Mock requires OTP_PROVIDER=mock. In production NODE_ENV it also needs
@@ -46,6 +68,8 @@ export function resolveOtpProvider(env: {
   VERCEL_ENV?: string;
   MSG91_AUTH_KEY?: string;
   MSG91_TEMPLATE_ID?: string;
+  PHONE_VERIFICATION_TOKEN_SECRET?: string;
+  OTP_HASH_SECRET?: string;
 } = process.env): ResolveOtpProviderResult {
   const provider = readOtpProviderName(env.OTP_PROVIDER);
   const production = isProductionEnv(env.NODE_ENV, env.VERCEL_ENV);
@@ -70,6 +94,21 @@ export function resolveOtpProvider(env: {
       status: 503,
       error:
         "MSG91 is not configured. Set MSG91_AUTH_KEY and MSG91_TEMPLATE_ID.",
+    };
+  }
+
+  if (
+    production &&
+    !isPhoneVerificationSecretConfigured({
+      PHONE_VERIFICATION_TOKEN_SECRET: env.PHONE_VERIFICATION_TOKEN_SECRET,
+      OTP_HASH_SECRET: env.OTP_HASH_SECRET,
+    })
+  ) {
+    return {
+      ok: false,
+      status: 503,
+      error:
+        "Phone verification is not configured. Set PHONE_VERIFICATION_TOKEN_SECRET on the server.",
     };
   }
 

@@ -25,7 +25,7 @@ npm run dev
 | `PHONE_VERIFICATION_TOKEN_SECRET` | Recommended | Hashes opaque `verificationToken` values after OTP verify (not MSG91 OTPs) |
 | `OTP_PROVIDER` | Optional | `msg91` (default) or `mock` (local only) |
 | `MSG91_AUTH_KEY` | When `msg91` | MSG91 auth key — **server only, never expose to the browser** |
-| `MSG91_TEMPLATE_ID` | When `msg91` | Approved MSG91 OTP template id |
+| `MSG91_TEMPLATE_ID` | When `msg91` | MSG91 OTP Template ID from the MSG91 OTP section (not the DLT Template ID) |
 
 Legacy `OTP_HASH_SECRET` is still accepted as a fallback for token hashing. Remove Twilio variables (`TWILIO_*`, `SMS_PROVIDER`) if present — they are unused.
 
@@ -88,7 +88,7 @@ Phone may be sent as `9876543210`, `919876543210`, or `+91 98765 43210`. Invalid
 
 1. Create / log in to [MSG91](https://control.msg91.com/).
 2. Copy **Auth Key** → `MSG91_AUTH_KEY`.
-3. Create an **OTP template**, get it DLT-approved if required for India, copy **Template ID** → `MSG91_TEMPLATE_ID`.
+3. Create an **OTP template** in the MSG91 OTP section and copy its **OTP Template ID** → `MSG91_TEMPLATE_ID`. (This is separate from the DLT Template ID.)
 4. Ensure the template supports Send / Verify / Retry OTP APIs.
 5. Test with a real Indian mobile after switching `OTP_PROVIDER=msg91`.
 
