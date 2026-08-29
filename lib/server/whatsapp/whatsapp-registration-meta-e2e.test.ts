@@ -24,7 +24,7 @@ import { dispatchWhatsAppBotActions } from "@/lib/server/whatsapp/whatsapp-bot-d
 import { setMetaClientFetchForTests } from "@/lib/server/whatsapp/meta-client";
 
 const createStudentRegistrationMock = vi.fn();
-const checkDuplicateMock = vi.fn();
+const resolveDuplicateMock = vi.fn();
 const finalizeMock = vi.fn();
 const loadConversationMock = vi.fn();
 const getSeminarsMock = vi.fn();
@@ -33,8 +33,8 @@ const generateQrMock = vi.fn();
 vi.mock("@/lib/server/registration-service", () => ({
   createStudentRegistration: (...args: unknown[]) =>
     createStudentRegistrationMock(...args),
-  checkStudentRegistrationDuplicate: (...args: unknown[]) =>
-    checkDuplicateMock(...args),
+  resolveStudentRegistrationDuplicate: (...args: unknown[]) =>
+    resolveDuplicateMock(...args),
   getRegistrationForApi: vi.fn(),
 }));
 
@@ -123,7 +123,10 @@ describe("whatsapp registration meta e2e (mocked)", () => {
     process.env.WHATSAPP_GRAPH_API_VERSION = "v22.0";
 
     getSeminarsMock.mockResolvedValue(seminarOptions);
-    checkDuplicateMock.mockResolvedValue({ duplicate: false });
+    resolveDuplicateMock.mockResolvedValue({
+      resolution: { outcome: "none" },
+      registration: null,
+    });
     createStudentRegistrationMock.mockResolvedValue({
       ok: true,
       registration: createdRegistration,
@@ -217,12 +220,24 @@ describe("whatsapp registration meta e2e (mocked)", () => {
     expect(completion.status).toBe("SUCCESS");
     expect(completion.registrationNumber).toBe(REGISTRATION_NUMBER);
     expect(
-      completion.actions[0].type === "TEXT" &&
-        completion.actions[0].body.includes(REGISTRATION_NUMBER)
+      completion.actions.some(
+        (action) =>
+          action.type === "TEXT" &&
+          action.body.includes("3 of 3 selected")
+      )
     ).toBe(true);
     expect(
-      completion.actions[1].type === "MEDIA" &&
-        completion.actions[1].contentBase64 === QR_BASE64
+      completion.actions.some(
+        (action) =>
+          action.type === "TEXT" &&
+          action.body.includes(REGISTRATION_NUMBER)
+      )
+    ).toBe(true);
+    expect(
+      completion.actions.some(
+        (action) =>
+          action.type === "MEDIA" && action.contentBase64 === QR_BASE64
+      )
     ).toBe(true);
     expect(completion.conversation?.status).toBe("COMPLETED");
     expect(completion.conversation?.completedRegistrationId).toBe("reg-001");
@@ -276,7 +291,10 @@ describe("whatsapp registration completion delivery failures (mocked)", () => {
     };
 
     getSeminarsMock.mockResolvedValue(seminarOptions);
-    checkDuplicateMock.mockResolvedValue({ duplicate: false });
+    resolveDuplicateMock.mockResolvedValue({
+      resolution: { outcome: "none" },
+      registration: null,
+    });
     createStudentRegistrationMock.mockResolvedValue({
       ok: true,
       registration: createdRegistration,
@@ -306,7 +324,10 @@ describe("whatsapp registration completion delivery failures (mocked)", () => {
 
   it("does not create another registration when QR upload fails", async () => {
     getSeminarsMock.mockResolvedValue(seminarOptions);
-    checkDuplicateMock.mockResolvedValue({ duplicate: false });
+    resolveDuplicateMock.mockResolvedValue({
+      resolution: { outcome: "none" },
+      registration: null,
+    });
     createStudentRegistrationMock.mockResolvedValue({
       ok: true,
       registration: createdRegistration,
@@ -361,7 +382,8 @@ describe("whatsapp registration completion delivery failures (mocked)", () => {
 
     expect(createStudentRegistrationMock).toHaveBeenCalledOnce();
     expect(summary.results[0].success).toBe(true);
-    expect(summary.results[1].success).toBe(false);
+    expect(summary.results[1].success).toBe(true);
+    expect(summary.results[2].success).toBe(false);
   });
 
   it("keeps a completed conversation completed after delivery failure", async () => {

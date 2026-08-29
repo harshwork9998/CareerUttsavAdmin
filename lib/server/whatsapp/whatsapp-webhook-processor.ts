@@ -9,10 +9,10 @@ import {
 import {
   isSupportedConversationMessageType,
   normalizeWaId,
-  processRegistrationConversationTurn,
   type WhatsAppBotAction,
 } from "@/lib/server/whatsapp/registration-conversation";
 import { dispatchWhatsAppBotActions } from "@/lib/server/whatsapp/whatsapp-bot-dispatcher";
+import { processWhatsAppRegistrationConversationTurnAsync } from "@/lib/server/whatsapp/whatsapp-registration-duplicate-flow";
 import {
   deleteExpiredWhatsAppConversation,
   loadWhatsAppConversationForWaId,
@@ -106,7 +106,7 @@ async function processInboundUserMessage(
     existingConversation?.completedRegistrationId
   );
 
-  const turn = processRegistrationConversationTurn({
+  const turn = await processWhatsAppRegistrationConversationTurnAsync({
     conversation: existingConversation,
     message: toIncomingMessage(message),
     seminarOptions,

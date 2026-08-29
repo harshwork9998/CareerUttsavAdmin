@@ -4,7 +4,11 @@ import { consumePhoneVerification } from "@/lib/otp";
 import { isStudentRegistration } from "@/lib/registration-kinds";
 import {
   DUPLICATE_STUDENT_REGISTRATION_MESSAGE,
+  findStudentRegistrationByEmail,
+  findStudentRegistrationByPhone,
   findStudentRegistrationDuplicate,
+  resolveStudentRegistrationDuplicateResolution,
+  type StudentRegistrationDuplicateResolution,
 } from "@/lib/registration-duplicates";
 import {
   buildRegistrationFromInput,
@@ -18,6 +22,8 @@ import { isPrismaRegistrationPersistence } from "@/lib/server/registration-persi
 import {
   createPrismaRegistration,
   deletePrismaRegistration,
+  findPrismaStudentByEmail,
+  findPrismaStudentByPhone,
   findPrismaStudentDuplicate,
   getPrismaRegistration,
   isPrismaUniqueConstraintError,
@@ -52,6 +58,105 @@ export type RegistrationDuplicateCheckResult = {
     phone: string;
   } | null;
 };
+
+export type StudentRegistrationDuplicateResolutionResult = {
+  resolution: StudentRegistrationDuplicateResolution;
+  registration: RegistrationDuplicateCheckResult["registration"];
+};
+
+function toDuplicateRegistrationPayload(
+  registration: StudentRegistration
+): RegistrationDuplicateCheckResult["registration"] {
+  return duplicatePayload(registration);
+}
+
+export async function resolveStudentRegistrationDuplicate(input: {
+  eventId?: string;
+  email?: string;
+  phone?: string;
+  excludeId?: string;
+}): Promise<StudentRegistrationDuplicateResolutionResult> {
+  if (isPrismaRegistrationPersistence()) {
+    const phone = input.phone?.trim() ?? "";
+    const email = input.email?.trim() ?? "";
+    const phoneMatch =
+      phone.length > 0 ? await findPrismaStudentByPhone(input) : null;
+    const emailMatch =
+      email.length > 0 ? await findPrismaStudentByEmail(input) : null;
+    const phoneStudent =
+      phoneMatch && isStudentRegistration(phoneMatch) ? phoneMatch : null;
+    const emailStudent =
+      emailMatch && isStudentRegistration(emailMatch) ? emailMatch : null;
+    const resolution = resolveStudentRegistrationDuplicateResolution(
+      phoneStudent,
+      emailStudent
+    );
+    const registration = duplicateResolutionToRegistrationPayload(resolution);
+    return { resolution, registration };
+  }
+
+  const phoneMatch = findStudentRegistrationByPhone(loadRawRegistrations(), input);
+  const emailMatch = input.email?.trim()
+    ? findStudentRegistrationByEmail(loadRawRegistrations(), input)
+    : null;
+  const resolution = resolveStudentRegistrationDuplicateResolution(
+    phoneMatch,
+    emailMatch
+  );
+  const registration = duplicateResolutionToRegistrationPayload(resolution);
+  return { resolution, registration };
+}
+
+function duplicateResolutionToRegistrationPayload(
+  resolution: StudentRegistrationDuplicateResolution
+): RegistrationDuplicateCheckResult["registration"] {
+  switch (resolution.outcome) {
+    case "phone":
+    case "email":
+    case "both":
+      return toDuplicateRegistrationPayload(resolution.registration);
+    default:
+      return null;
+  }
+}
+
+export async function checkStudentRegistrationDuplicate(input: {
+  eventId?: string;
+  email?: string;
+  phone?: string;
+}): Promise<RegistrationDuplicateCheckResult> {
+  if (!input.email?.trim() && !input.phone?.trim()) {
+    return {
+      duplicate: false,
+      message: null,
+      registration: null,
+    };
+  }
+
+  if (isPrismaRegistrationPersistence()) {
+    const duplicate = await findPrismaStudentDuplicate(input);
+    return {
+      duplicate: Boolean(duplicate),
+      message: duplicate ? DUPLICATE_STUDENT_REGISTRATION_MESSAGE : null,
+      registration:
+        duplicate && isStudentRegistration(duplicate)
+          ? duplicatePayload(duplicate)
+          : null,
+    };
+  }
+
+  const duplicate = findStudentRegistrationDuplicate(loadRawRegistrations(), {
+    ...(input.eventId ? { eventId: input.eventId } : {}),
+    ...(input.email ? { email: input.email } : {}),
+    ...(input.phone ? { phone: input.phone } : {}),
+  });
+
+  return {
+    duplicate: Boolean(duplicate),
+    message: duplicate ? DUPLICATE_STUDENT_REGISTRATION_MESSAGE : null,
+    registration: duplicate ? duplicatePayload(duplicate) : null,
+  };
+}
 
 function duplicatePayload(
   duplicate: StudentRegistration
@@ -110,44 +215,6 @@ export async function getRegistrationForApi(
   const registration = loadRawRegistrations().find((entry) => entry.id === id);
   if (!registration) return null;
   return resolveRegistration(registration, await listEventsForApi());
-}
-
-export async function checkStudentRegistrationDuplicate(input: {
-  eventId?: string;
-  email?: string;
-  phone?: string;
-}): Promise<RegistrationDuplicateCheckResult> {
-  if (!input.email?.trim() && !input.phone?.trim()) {
-    return {
-      duplicate: false,
-      message: null,
-      registration: null,
-    };
-  }
-
-  if (isPrismaRegistrationPersistence()) {
-    const duplicate = await findPrismaStudentDuplicate(input);
-    return {
-      duplicate: Boolean(duplicate),
-      message: duplicate ? DUPLICATE_STUDENT_REGISTRATION_MESSAGE : null,
-      registration:
-        duplicate && isStudentRegistration(duplicate)
-          ? duplicatePayload(duplicate)
-          : null,
-    };
-  }
-
-  const duplicate = findStudentRegistrationDuplicate(loadRawRegistrations(), {
-    ...(input.eventId ? { eventId: input.eventId } : {}),
-    ...(input.email ? { email: input.email } : {}),
-    ...(input.phone ? { phone: input.phone } : {}),
-  });
-
-  return {
-    duplicate: Boolean(duplicate),
-    message: duplicate ? DUPLICATE_STUDENT_REGISTRATION_MESSAGE : null,
-    registration: duplicate ? duplicatePayload(duplicate) : null,
-  };
 }
 
 export type StudentRegistrationCreateOptions = {

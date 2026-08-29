@@ -8,9 +8,9 @@ import {
 import { isStudentRegistration } from "@/lib/registration-kinds";
 import type { CreateStudentRegistrationInput } from "@/lib/registration-validation";
 import {
-  checkStudentRegistrationDuplicate,
   createStudentRegistration,
   getRegistrationForApi,
+  resolveStudentRegistrationDuplicate,
 } from "@/lib/server/registration-service";
 import { maskWaId } from "@/lib/server/whatsapp/meta-webhook";
 import {
@@ -22,11 +22,14 @@ import {
   buildWhatsAppAlreadyRegisteredActions,
   buildWhatsAppCompletionFailureActions,
   buildWhatsAppEmailDuplicatePrivacyActions,
+  buildWhatsAppRegistrationConflictActions,
   buildWhatsAppRegistrationSuccessActions,
+  buildWhatsAppSameMobileAlreadyRegisteredActions,
 } from "@/lib/server/whatsapp/whatsapp-registration-bot-actions";
 import {
   cancelWhatsAppConversationForEmailDuplicate,
   finalizeWhatsAppConversationRegistration,
+  linkWhatsAppConversationToRegistration,
   loadWhatsAppConversationRecordByWaId,
 } from "@/lib/server/whatsapp/whatsapp-conversation-store";
 import { getWhatsAppSeminarOptions } from "@/lib/server/whatsapp/whatsapp-seminar-context";
@@ -39,6 +42,7 @@ export type WhatsAppRegistrationCompletionStatus =
   | "INVALID_PHONE"
   | "INVALID_CONVERSATION"
   | "INVALID_SEMINARS"
+  | "CONFLICT"
   | "FAILED";
 
 export type WhatsAppRegistrationCompletionResult = {
@@ -126,6 +130,18 @@ export function duplicateAllowsRegistrationNumberReveal(
   );
 }
 
+async function buildVerifiedAlreadyRegisteredActions(
+  registrationNumber?: string
+): Promise<WhatsAppBotAction[]> {
+  const qrPngBase64 = registrationNumber
+    ? await generateRegistrationQrPngBase64(registrationNumber)
+    : undefined;
+  return buildWhatsAppAlreadyRegisteredActions({
+    registrationNumber,
+    qrPngBase64,
+  });
+}
+
 async function buildAlreadyCompletedResult(
   registrationId: string
 ): Promise<WhatsAppRegistrationCompletionResult> {
@@ -136,9 +152,7 @@ async function buildAlreadyCompletedResult(
     registrationId,
     registrationNumber,
     revealRegistrationNumber: true,
-    actions: buildWhatsAppAlreadyRegisteredActions({
-      registrationNumber,
-    }),
+    actions: await buildVerifiedAlreadyRegisteredActions(registrationNumber),
   };
 }
 
@@ -149,12 +163,20 @@ type DuplicateRegistrationRef = {
 
 async function healConversationWithExistingRegistration(
   waId: string,
-  registration: DuplicateRegistrationRef
+  registration: DuplicateRegistrationRef,
+  options: {
+    variant?: "standard" | "same_mobile_different_email";
+  } = {}
 ): Promise<WhatsAppRegistrationCompletionResult> {
-  const finalized = await finalizeWhatsAppConversationRegistration({
-    waId,
-    registrationId: registration.id,
-  });
+  const finalized =
+    (await finalizeWhatsAppConversationRegistration({
+      waId,
+      registrationId: registration.id,
+    })) ??
+    (await linkWhatsAppConversationToRegistration({
+      waId,
+      registrationId: registration.id,
+    }));
   const conversation =
     finalized ?? (await loadWhatsAppConversationRecordByWaId(waId)) ?? undefined;
 
@@ -168,14 +190,23 @@ async function healConversationWithExistingRegistration(
     registrationId: registration.id,
   });
 
+  const qrPngBase64 = await generateRegistrationQrPngBase64(
+    registration.registrationNumber
+  );
+  const builder =
+    options.variant === "same_mobile_different_email"
+      ? buildWhatsAppSameMobileAlreadyRegisteredActions
+      : buildWhatsAppAlreadyRegisteredActions;
+
   return {
     status: healed ? "ALREADY_COMPLETED" : "ALREADY_REGISTERED",
     registrationId: registration.id,
     registrationNumber: registration.registrationNumber,
     revealRegistrationNumber: true,
     conversation,
-    actions: buildWhatsAppAlreadyRegisteredActions({
+    actions: builder({
       registrationNumber: registration.registrationNumber,
+      qrPngBase64,
     }),
   };
 }
@@ -204,20 +235,76 @@ async function handleEmailOnlyDuplicateCancellation(
   };
 }
 
-async function handleDuplicateRegistration(
+async function handleRegistrationConflict(
+  waId: string,
+  record: WhatsAppConversationState
+): Promise<WhatsAppRegistrationCompletionResult> {
+  const cancelled = await cancelWhatsAppConversationForEmailDuplicate(waId);
+  const conversation =
+    cancelled ??
+    ({
+      ...record,
+      status: "CANCELLED",
+      currentStep: "CANCELLED",
+      completedRegistrationId: null,
+    } satisfies WhatsAppConversationState);
+
+  safeLogCompletion({ waId, status: "CONFLICT" });
+
+  return {
+    status: "CONFLICT",
+    revealRegistrationNumber: false,
+    conversation,
+    actions: buildWhatsAppRegistrationConflictActions(),
+  };
+}
+
+async function handleResolvedDuplicateRegistration(
   waId: string,
   record: WhatsAppConversationState,
-  duplicate: DuplicateRegistrationRef,
   inputPhone: string,
-  duplicateRegistration: Registration
+  resolution: Awaited<
+    ReturnType<typeof resolveStudentRegistrationDuplicate>
+  >["resolution"]
 ): Promise<WhatsAppRegistrationCompletionResult> {
-  if (
-    duplicateAllowsRegistrationNumberReveal(duplicateRegistration, inputPhone)
-  ) {
-    return healConversationWithExistingRegistration(waId, duplicate);
+  if (resolution.outcome === "conflict") {
+    return handleRegistrationConflict(waId, record);
   }
 
-  return handleEmailOnlyDuplicateCancellation(waId, record);
+  if (resolution.outcome === "email") {
+    return handleEmailOnlyDuplicateCancellation(waId, record);
+  }
+
+  if (resolution.outcome === "phone" || resolution.outcome === "both") {
+    const registration = resolution.registration;
+    if (
+      !duplicateAllowsRegistrationNumberReveal(registration, inputPhone)
+    ) {
+      return handleEmailOnlyDuplicateCancellation(waId, record);
+    }
+
+    return healConversationWithExistingRegistration(
+      waId,
+      {
+        id: registration.id,
+        registrationNumber: registration.registrationNumber,
+      },
+      {
+        variant:
+          resolution.outcome === "both"
+            ? "standard"
+            : "same_mobile_different_email",
+      }
+    );
+  }
+
+  return {
+    status: "FAILED",
+    conversation: record,
+    actions: buildWhatsAppCompletionFailureActions(
+      "We could not complete your registration right now. Please try again shortly."
+    ),
+  };
 }
 
 function buildStudentRegistrationInput(
@@ -315,21 +402,17 @@ export async function completeWhatsAppRegistrationForConversation(
     };
   }
 
-  const duplicateCheck = await checkStudentRegistrationDuplicate({
+  const duplicateResolution = await resolveStudentRegistrationDuplicate({
     eventId: CURRENT_EVENT_ID,
     email: record.email,
     phone: phoneResult.mobile,
   });
-  if (duplicateCheck.duplicate && duplicateCheck.registration) {
-    return handleDuplicateRegistration(
+  if (duplicateResolution.resolution.outcome !== "none") {
+    return handleResolvedDuplicateRegistration(
       waId,
       record,
-      {
-        id: duplicateCheck.registration.id,
-        registrationNumber: duplicateCheck.registration.registrationNumber,
-      },
       phoneResult.mobile,
-      duplicateCheck.registration as Registration
+      duplicateResolution.resolution
     );
   }
 
@@ -347,22 +430,17 @@ export async function completeWhatsAppRegistrationForConversation(
       createResult.error.status === 409 &&
       createResult.error.body.duplicate === true
     ) {
-      const refreshedDuplicate = await checkStudentRegistrationDuplicate({
+      const refreshedDuplicate = await resolveStudentRegistrationDuplicate({
         eventId: CURRENT_EVENT_ID,
         email: record.email,
         phone: phoneResult.mobile,
       });
-      if (refreshedDuplicate.registration) {
-        return handleDuplicateRegistration(
+      if (refreshedDuplicate.resolution.outcome !== "none") {
+        return handleResolvedDuplicateRegistration(
           waId,
           record,
-          {
-            id: refreshedDuplicate.registration.id,
-            registrationNumber:
-              refreshedDuplicate.registration.registrationNumber,
-          },
           phoneResult.mobile,
-          refreshedDuplicate.registration as Registration
+          refreshedDuplicate.resolution
         );
       }
     }

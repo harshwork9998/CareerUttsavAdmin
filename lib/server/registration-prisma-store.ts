@@ -1,8 +1,11 @@
 import { Prisma } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/server/prisma";
+import { isStudentRegistration } from "@/lib/registration-kinds";
 import {
+  duplicateResolutionToRegistration,
   normalizeRegistrationEmail,
   normalizeRegistrationPhone,
+  resolveStudentRegistrationDuplicateResolution,
 } from "@/lib/registration-duplicates";
 import { normalizeSeminarInterests } from "@/lib/registration-validation";
 import type { CreateRegistrationInput } from "@/lib/registration-validation";
@@ -176,13 +179,66 @@ export async function getPrismaRegistration(
   return record ? mapPrismaRegistrationToApi(record) : null;
 }
 
+function prismaStudentBaseWhere(input: {
+  eventId?: string;
+  excludeId?: string;
+}): Prisma.RegistrationWhereInput {
+  const eventId = input.eventId?.trim() ?? "";
+  return {
+    kind: "student",
+    ...(eventId ? { eventId } : {}),
+    ...(input.excludeId ? { NOT: { id: input.excludeId } } : {}),
+  };
+}
+
+export async function findPrismaStudentByPhone(input: {
+  eventId?: string;
+  phone?: string;
+  excludeId?: string;
+}): Promise<Registration | null> {
+  const phone = normalizeRegistrationPhone(input.phone);
+  if (phone.length < 10) {
+    return null;
+  }
+
+  const record = await prisma.registration.findFirst({
+    where: {
+      ...prismaStudentBaseWhere(input),
+      phoneLast10: phone,
+    },
+    include: registrationInclude,
+  });
+
+  return record ? mapPrismaRegistrationToApi(record) : null;
+}
+
+export async function findPrismaStudentByEmail(input: {
+  eventId?: string;
+  email?: string;
+  excludeId?: string;
+}): Promise<Registration | null> {
+  const email = normalizeRegistrationEmail(input.email);
+  if (!email) {
+    return null;
+  }
+
+  const record = await prisma.registration.findFirst({
+    where: {
+      ...prismaStudentBaseWhere(input),
+      emailNormalized: email,
+    },
+    include: registrationInclude,
+  });
+
+  return record ? mapPrismaRegistrationToApi(record) : null;
+}
+
 export async function findPrismaStudentDuplicate(input: {
   eventId?: string;
   email?: string;
   phone?: string;
   excludeId?: string;
 }): Promise<Registration | null> {
-  const eventId = input.eventId?.trim() ?? "";
   const email = normalizeRegistrationEmail(input.email);
   const phone = normalizeRegistrationPhone(input.phone);
 
@@ -190,25 +246,25 @@ export async function findPrismaStudentDuplicate(input: {
     return null;
   }
 
-  const or: Prisma.RegistrationWhereInput[] = [];
-  if (email.length > 0) {
-    or.push({ emailNormalized: email });
-  }
-  if (phone.length >= 10) {
-    or.push({ phoneLast10: phone });
+  const phoneMatch =
+    phone.length >= 10 ? await findPrismaStudentByPhone(input) : null;
+  const emailMatch = email ? await findPrismaStudentByEmail(input) : null;
+
+  const phoneStudent =
+    phoneMatch && isStudentRegistration(phoneMatch) ? phoneMatch : null;
+  const emailStudent =
+    emailMatch && isStudentRegistration(emailMatch) ? emailMatch : null;
+
+  const resolution = resolveStudentRegistrationDuplicateResolution(
+    phoneStudent,
+    emailStudent
+  );
+
+  if (resolution.outcome === "conflict" && phoneStudent) {
+    return phoneStudent;
   }
 
-  const record = await prisma.registration.findFirst({
-    where: {
-      kind: "student",
-      ...(eventId ? { eventId } : {}),
-      ...(input.excludeId ? { NOT: { id: input.excludeId } } : {}),
-      OR: or,
-    },
-    include: registrationInclude,
-  });
-
-  return record ? mapPrismaRegistrationToApi(record) : null;
+  return duplicateResolutionToRegistration(resolution);
 }
 
 export async function createPrismaRegistration(

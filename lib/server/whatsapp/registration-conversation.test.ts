@@ -428,7 +428,7 @@ describe("whatsapp registration conversation engine", () => {
           action.type === "TEXT" &&
           action.body.includes("3 of 3 selected")
       )
-    ).toBe(true);
+    ).toBe(false);
     expectNoDoneSelecting(result.actions);
     expect(
       result.actions.some((action) => action.type === "LIST")
@@ -621,15 +621,13 @@ describe("whatsapp registration conversation engine", () => {
       "sem-003",
     ]);
     expect(third.conversation.currentStep).toBe("READY_TO_REGISTER");
+    expect(third.actions.some((action) => action.type === "LIST")).toBe(false);
     expect(
       third.actions.some(
         (action) =>
-          action.type === "TEXT" &&
-          action.body.includes("3 of 3 selected") &&
-          action.body.includes("Your seminar preferences are saved.")
+          action.type === "TEXT" && action.body.includes("3 of 3 selected")
       )
-    ).toBe(true);
-    expect(third.actions.some((action) => action.type === "LIST")).toBe(false);
+    ).toBe(false);
   });
 
   it("keeps seminar:finish available for stale Done Selecting messages", () => {
@@ -802,7 +800,7 @@ describe("whatsapp registration conversation engine", () => {
           action.type === "TEXT" &&
           action.body.includes("3 of 3 selected")
       )
-    ).toBe(true);
+    ).toBe(false);
     expect(finished.actions.some((action) => action.type === "LIST")).toBe(false);
   });
 

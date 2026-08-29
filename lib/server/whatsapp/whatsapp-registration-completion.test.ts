@@ -4,9 +4,10 @@ import { CURRENT_EVENT_ID } from "@/lib/current-events";
 import type { WhatsAppConversationState } from "@/lib/server/whatsapp/registration-conversation";
 
 const createStudentRegistrationMock = vi.fn();
-const checkDuplicateMock = vi.fn();
+const resolveDuplicateMock = vi.fn();
 const getRegistrationMock = vi.fn();
 const finalizeMock = vi.fn();
+const linkMock = vi.fn();
 const cancelMock = vi.fn();
 const loadConversationMock = vi.fn();
 const getSeminarsMock = vi.fn();
@@ -15,8 +16,8 @@ const generateQrMock = vi.fn();
 vi.mock("@/lib/server/registration-service", () => ({
   createStudentRegistration: (...args: unknown[]) =>
     createStudentRegistrationMock(...args),
-  checkStudentRegistrationDuplicate: (...args: unknown[]) =>
-    checkDuplicateMock(...args),
+  resolveStudentRegistrationDuplicate: (...args: unknown[]) =>
+    resolveDuplicateMock(...args),
   getRegistrationForApi: (...args: unknown[]) => getRegistrationMock(...args),
 }));
 
@@ -25,6 +26,8 @@ vi.mock("@/lib/server/whatsapp/whatsapp-conversation-store", () => ({
     loadConversationMock(...args),
   finalizeWhatsAppConversationRegistration: (...args: unknown[]) =>
     finalizeMock(...args),
+  linkWhatsAppConversationToRegistration: (...args: unknown[]) =>
+    linkMock(...args),
   cancelWhatsAppConversationForEmailDuplicate: (...args: unknown[]) =>
     cancelMock(...args),
 }));
@@ -141,16 +144,19 @@ function mockHealedConversation(registrationId: string) {
   };
 }
 
+function mockNoDuplicateResolution() {
+  return {
+    resolution: { outcome: "none" as const },
+    registration: null,
+  };
+}
+
 describe("whatsapp registration completion", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     loadConversationMock.mockResolvedValue(readyConversation);
     getSeminarsMock.mockResolvedValue(seminarOptions);
-    checkDuplicateMock.mockResolvedValue({
-      duplicate: false,
-      message: null,
-      registration: null,
-    });
+    resolveDuplicateMock.mockResolvedValue(mockNoDuplicateResolution());
     createStudentRegistrationMock.mockResolvedValue({
       ok: true,
       registration: createdRegistration,
@@ -177,11 +183,31 @@ describe("whatsapp registration completion", () => {
     });
   });
 
+  it("includes seminar completion message only for successful registrations", async () => {
+    const result = await completeWhatsAppRegistrationForConversation("919876543210");
+
+    expect(
+      result.actions.some(
+        (action) =>
+          action.type === "TEXT" &&
+          action.body.includes("3 of 3 selected")
+      )
+    ).toBe(true);
+  });
+
   it("heals same-mobile duplicate into COMPLETED with completedRegistrationId", async () => {
-    checkDuplicateMock.mockResolvedValue({
-      duplicate: true,
-      message: "duplicate",
-      registration: existingSameMobileRegistration,
+    resolveDuplicateMock.mockResolvedValue({
+      resolution: {
+        outcome: "both",
+        registration: existingSameMobileRegistration,
+      },
+      registration: {
+        id: existingSameMobileRegistration.id,
+        registrationNumber: existingSameMobileRegistration.registrationNumber,
+        studentName: existingSameMobileRegistration.studentName,
+        email: existingSameMobileRegistration.email,
+        phone: existingSameMobileRegistration.phone,
+      },
     });
     finalizeMock.mockResolvedValue(mockHealedConversation("reg-existing"));
 
@@ -199,16 +225,17 @@ describe("whatsapp registration completion", () => {
   });
 
   it("recovers when registration was committed but finalize previously failed", async () => {
-    checkDuplicateMock
+    resolveDuplicateMock
+      .mockResolvedValueOnce(mockNoDuplicateResolution())
       .mockResolvedValueOnce({
-        duplicate: false,
-        message: null,
-        registration: null,
-      })
-      .mockResolvedValueOnce({
-        duplicate: true,
-        message: "duplicate",
-        registration: createdRegistration,
+        resolution: { outcome: "both", registration: createdRegistration },
+        registration: {
+          id: createdRegistration.id,
+          registrationNumber: createdRegistration.registrationNumber,
+          studentName: createdRegistration.studentName,
+          email: createdRegistration.email,
+          phone: createdRegistration.phone,
+        },
       });
     createStudentRegistrationMock.mockResolvedValue({
       ok: false,
@@ -227,10 +254,18 @@ describe("whatsapp registration completion", () => {
   });
 
   it("links Website/Admin registration with same WhatsApp mobile safely", async () => {
-    checkDuplicateMock.mockResolvedValue({
-      duplicate: true,
-      message: "duplicate",
-      registration: existingSameMobileRegistration,
+    resolveDuplicateMock.mockResolvedValue({
+      resolution: {
+        outcome: "both",
+        registration: existingSameMobileRegistration,
+      },
+      registration: {
+        id: existingSameMobileRegistration.id,
+        registrationNumber: existingSameMobileRegistration.registrationNumber,
+        studentName: existingSameMobileRegistration.studentName,
+        email: existingSameMobileRegistration.email,
+        phone: existingSameMobileRegistration.phone,
+      },
     });
     finalizeMock.mockResolvedValue(mockHealedConversation("reg-existing"));
 
@@ -241,11 +276,46 @@ describe("whatsapp registration completion", () => {
     expect(createStudentRegistrationMock).not.toHaveBeenCalled();
   });
 
+  it("handles registration conflicts without revealing either registration", async () => {
+    resolveDuplicateMock.mockResolvedValue({
+      resolution: { outcome: "conflict" },
+      registration: null,
+    });
+
+    const result = await completeWhatsAppRegistrationForConversation("919876543210");
+
+    expect(result.status).toBe("CONFLICT");
+    expect(cancelMock).toHaveBeenCalledWith("919876543210");
+    expect(
+      result.actions.some(
+        (action) =>
+          action.type === "TEXT" &&
+          action.body.includes("linked to different existing registrations")
+      )
+    ).toBe(true);
+    expect(
+      result.actions.some(
+        (action) =>
+          action.type === "TEXT" &&
+          action.body.includes("3 of 3 selected")
+      )
+    ).toBe(false);
+    expect(createStudentRegistrationMock).not.toHaveBeenCalled();
+  });
+
   it("cancels email-only duplicate without exposing registration number", async () => {
-    checkDuplicateMock.mockResolvedValue({
-      duplicate: true,
-      message: "duplicate",
-      registration: existingEmailOnlyRegistration,
+    resolveDuplicateMock.mockResolvedValue({
+      resolution: {
+        outcome: "email",
+        registration: existingEmailOnlyRegistration,
+      },
+      registration: {
+        id: existingEmailOnlyRegistration.id,
+        registrationNumber: existingEmailOnlyRegistration.registrationNumber,
+        studentName: existingEmailOnlyRegistration.studentName,
+        email: existingEmailOnlyRegistration.email,
+        phone: existingEmailOnlyRegistration.phone,
+      },
     });
 
     const result = await completeWhatsAppRegistrationForConversation("919876543210");
@@ -260,9 +330,16 @@ describe("whatsapp registration completion", () => {
       result.actions.some(
         (action) =>
           action.type === "TEXT" &&
-          action.body.includes("privacy")
+          action.body.includes("send *Hi*")
       )
     ).toBe(true);
+    expect(
+      result.actions.some(
+        (action) =>
+          action.type === "TEXT" &&
+          action.body.includes("3 of 3 selected")
+      )
+    ).toBe(false);
     expect(
       result.actions.some(
         (action) =>
@@ -316,11 +393,7 @@ describe("whatsapp registration completion with catalog seminar ids", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     loadConversationMock.mockResolvedValue(readyConversation);
-    checkDuplicateMock.mockResolvedValue({
-      duplicate: false,
-      message: null,
-      registration: null,
-    });
+    resolveDuplicateMock.mockResolvedValue(mockNoDuplicateResolution());
     createStudentRegistrationMock.mockResolvedValue({
       ok: true,
       registration: createdRegistration,

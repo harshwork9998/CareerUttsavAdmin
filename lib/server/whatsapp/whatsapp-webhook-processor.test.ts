@@ -34,16 +34,10 @@ vi.mock("@/lib/server/whatsapp/whatsapp-bot-dispatcher", () => ({
   dispatchWhatsAppBotActions: (...args: unknown[]) => dispatchMock(...args),
 }));
 
-vi.mock("@/lib/server/whatsapp/registration-conversation", async () => {
-  const actual = await vi.importActual<
-    typeof import("@/lib/server/whatsapp/registration-conversation")
-  >("@/lib/server/whatsapp/registration-conversation");
-  return {
-    ...actual,
-    processRegistrationConversationTurn: (...args: unknown[]) =>
-      processTurnMock(...args),
-  };
-});
+vi.mock("@/lib/server/whatsapp/whatsapp-registration-duplicate-flow", () => ({
+  processWhatsAppRegistrationConversationTurnAsync: (...args: unknown[]) =>
+    processTurnMock(...args),
+}));
 
 vi.mock("@/lib/server/registration-service", () => ({
   getRegistrationForApi: vi.fn(),
@@ -110,7 +104,7 @@ describe("whatsapp webhook processor", () => {
     deleteExpiredMock.mockResolvedValue(undefined);
     getSeminarsMock.mockResolvedValue([{ id: "sem-001", title: "AI Careers" }]);
     vi.mocked(getRegistrationForApi).mockResolvedValue(null);
-    processTurnMock.mockReturnValue({
+    processTurnMock.mockResolvedValue({
       conversation: {
         ...baseConversation,
         status: "READY_TO_REGISTER",
@@ -217,7 +211,7 @@ describe("whatsapp webhook processor", () => {
   });
 
   it("processes a text message through the conversation engine", async () => {
-    processTurnMock.mockReturnValue({
+    processTurnMock.mockResolvedValue({
       conversation: baseConversation,
       actions: [{ type: "TEXT", body: "Please enter your email address." }],
       refreshExpiry: true,

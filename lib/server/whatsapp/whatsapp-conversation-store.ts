@@ -64,10 +64,35 @@ export async function saveWhatsAppConversationState(
   return mapPrismaConversationToState(saved);
 }
 
+export async function linkWhatsAppConversationToRegistration(input: {
+  waId: string;
+  registrationId: string;
+}): Promise<WhatsAppConversationState | null> {
+  await prisma.whatsAppRegistrationConversation.updateMany({
+    where: {
+      waId: input.waId,
+      completedRegistrationId: null,
+      status: { not: "COMPLETED" },
+    },
+    data: {
+      completedRegistrationId: input.registrationId,
+      status: "COMPLETED",
+      currentStep: "COMPLETED",
+    },
+  });
+
+  return loadWhatsAppConversationRecordByWaId(input.waId);
+}
+
 export async function finalizeWhatsAppConversationRegistration(input: {
   waId: string;
   registrationId: string;
 }): Promise<WhatsAppConversationState | null> {
+  const linked = await linkWhatsAppConversationToRegistration(input);
+  if (linked) {
+    return linked;
+  }
+
   const updated = await prisma.whatsAppRegistrationConversation.updateMany({
     where: {
       waId: input.waId,
@@ -95,7 +120,7 @@ export async function cancelWhatsAppConversationForEmailDuplicate(
     where: {
       waId,
       completedRegistrationId: null,
-      status: "READY_TO_REGISTER",
+      status: { not: "COMPLETED" },
     },
     data: {
       status: "CANCELLED",

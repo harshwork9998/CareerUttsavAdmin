@@ -461,15 +461,6 @@ function seminarSelectionProgressActions(
   ];
 }
 
-function seminarSelectionCompleteActions(): WhatsAppBotAction[] {
-  return [
-    {
-      type: "TEXT",
-      body: "✅ *3 of 3 selected*\n\nYour seminar preferences are saved.",
-    },
-  ];
-}
-
 function seminarSelectionActions(
   seminarOptions: SeminarOption[],
   selectedSeminarIds: string[],
@@ -1033,7 +1024,7 @@ export function processRegistrationConversationTurn(input: {
           status: "READY_TO_REGISTER",
           currentStep: "READY_TO_REGISTER",
         },
-        actions: seminarSelectionCompleteActions(),
+        actions: [],
         refreshExpiry: true,
       };
     }
