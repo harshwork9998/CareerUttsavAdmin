@@ -6,6 +6,7 @@ import { mapPrismaConversationToState } from "@/lib/server/whatsapp/whatsapp-con
 const findUniqueMock = vi.fn();
 const upsertMock = vi.fn();
 const deleteMock = vi.fn();
+const updateManyMock = vi.fn();
 
 vi.mock("@/lib/server/prisma", () => ({
   prisma: {
@@ -13,6 +14,7 @@ vi.mock("@/lib/server/prisma", () => ({
       findUnique: (...args: unknown[]) => findUniqueMock(...args),
       upsert: (...args: unknown[]) => upsertMock(...args),
       delete: (...args: unknown[]) => deleteMock(...args),
+      updateMany: (...args: unknown[]) => updateManyMock(...args),
     },
   },
 }));
@@ -20,6 +22,7 @@ vi.mock("@/lib/server/prisma", () => ({
 import {
   deleteExpiredWhatsAppConversation,
   loadWhatsAppConversationForWaId,
+  resetWhatsAppConversationsForDeletedRegistration,
 } from "@/lib/server/whatsapp/whatsapp-conversation-store";
 
 describe("whatsapp conversation store expiry", () => {
@@ -99,5 +102,24 @@ describe("whatsapp conversation store expiry", () => {
       expiresAt: new Date(Date.now() + WHATSAPP_CONVERSATION_TTL_MS),
     });
     expect("parentPhone" in state).toBe(false);
+  });
+
+  it("clears linked WhatsApp conversations when a registration is deleted", async () => {
+    updateManyMock.mockResolvedValue({ count: 1 });
+
+    const count = await resetWhatsAppConversationsForDeletedRegistration("reg-001");
+
+    expect(count).toBe(1);
+    expect(updateManyMock).toHaveBeenCalledWith({
+      where: { completedRegistrationId: "reg-001" },
+      data: expect.objectContaining({
+        status: "CANCELLED",
+        currentStep: "CANCELLED",
+        completedRegistrationId: null,
+        studentName: null,
+        email: null,
+        selectedSeminarIds: [],
+      }),
+    });
   });
 });

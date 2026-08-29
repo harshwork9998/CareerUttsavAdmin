@@ -21,6 +21,10 @@ import {
   buildWhatsAppRegistrationConflictActions,
   buildWhatsAppSameMobileAlreadyRegisteredActions,
 } from "@/lib/server/whatsapp/whatsapp-registration-bot-actions";
+import {
+  reconcileCompletedWhatsAppConversation,
+  resolveCompletedRegistrationNumberForConversation,
+} from "@/lib/server/whatsapp/whatsapp-completed-conversation-reconcile";
 
 type AlreadyRegisteredVariant = "standard" | "same_mobile_different_email";
 
@@ -162,15 +166,19 @@ export async function processWhatsAppRegistrationConversationTurnAsync(input: {
   let conversation =
     input.conversation ?? createInitialConversationState(normalizedWaId);
 
+  conversation = await reconcileCompletedWhatsAppConversation(conversation);
+
   if (
     conversation.status === "COMPLETED" &&
     isGreetingOrStartMessage(input.message)
   ) {
+    const registrationNumber =
+      await resolveCompletedRegistrationNumberForConversation(conversation);
     return {
       conversation,
       actions: await buildCompletedUserGreetingActions({
         completedRegistrationId: conversation.completedRegistrationId,
-        completedRegistrationNumber: input.completedRegistrationNumber,
+        completedRegistrationNumber: registrationNumber,
       }),
       refreshExpiry: false,
     };
@@ -252,5 +260,8 @@ export async function processWhatsAppRegistrationConversationTurnAsync(input: {
     }
   }
 
-  return processRegistrationConversationTurn(input);
+  return processRegistrationConversationTurn({
+    ...input,
+    conversation,
+  });
 }

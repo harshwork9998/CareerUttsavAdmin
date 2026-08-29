@@ -55,6 +55,7 @@ vi.mock("@/lib/email", () => ({
 }));
 
 import { completeWhatsAppRegistrationForConversation } from "@/lib/server/whatsapp/whatsapp-registration-completion";
+import { getRegistrationForApi } from "@/lib/server/registration-service";
 
 const WA_ID = "919876543210";
 const QR_BASE64 = Buffer.from("same-qr-png-bytes").toString("base64");
@@ -127,6 +128,7 @@ describe("whatsapp registration meta e2e (mocked)", () => {
       resolution: { outcome: "none" },
       registration: null,
     });
+    vi.mocked(getRegistrationForApi).mockResolvedValue(createdRegistration);
     createStudentRegistrationMock.mockResolvedValue({
       ok: true,
       registration: createdRegistration,
@@ -259,6 +261,7 @@ describe("whatsapp registration completion delivery failures (mocked)", () => {
     process.env.WHATSAPP_ACCESS_TOKEN = "test-access-token-local-only";
     process.env.WHATSAPP_PHONE_NUMBER_ID = "123456789012345";
     process.env.WHATSAPP_GRAPH_API_VERSION = "v22.0";
+    vi.mocked(getRegistrationForApi).mockResolvedValue(createdRegistration);
   });
 
   afterEach(() => {
@@ -295,6 +298,7 @@ describe("whatsapp registration completion delivery failures (mocked)", () => {
       resolution: { outcome: "none" },
       registration: null,
     });
+    vi.mocked(getRegistrationForApi).mockResolvedValue(createdRegistration);
     createStudentRegistrationMock.mockResolvedValue({
       ok: true,
       registration: createdRegistration,
@@ -328,6 +332,7 @@ describe("whatsapp registration completion delivery failures (mocked)", () => {
       resolution: { outcome: "none" },
       registration: null,
     });
+    vi.mocked(getRegistrationForApi).mockResolvedValue(createdRegistration);
     createStudentRegistrationMock.mockResolvedValue({
       ok: true,
       registration: createdRegistration,

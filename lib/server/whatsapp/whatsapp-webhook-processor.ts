@@ -23,8 +23,8 @@ import {
   markWhatsAppInboundMessageProcessed,
 } from "@/lib/server/whatsapp/whatsapp-inbound-message-store";
 import { completeWhatsAppRegistrationForConversation } from "@/lib/server/whatsapp/whatsapp-registration-completion";
+import { resolveCompletedRegistrationNumberForConversation } from "@/lib/server/whatsapp/whatsapp-completed-conversation-reconcile";
 import { getWhatsAppSeminarOptions } from "@/lib/server/whatsapp/whatsapp-seminar-context";
-import { getRegistrationForApi } from "@/lib/server/registration-service";
 
 function toIncomingMessage(
   message: NormalizedWhatsAppMessage
@@ -36,13 +36,11 @@ function toIncomingMessage(
 }
 
 async function resolveCompletedRegistrationNumber(
-  completedRegistrationId: string | null | undefined
+  conversation: Awaited<
+    ReturnType<typeof loadWhatsAppConversationForWaId>
+  >
 ): Promise<string | null> {
-  if (!completedRegistrationId) {
-    return null;
-  }
-  const registration = await getRegistrationForApi(completedRegistrationId);
-  return registration?.registrationNumber ?? null;
+  return resolveCompletedRegistrationNumberForConversation(conversation);
 }
 
 function safeLogConversationProgress(input: {
@@ -103,7 +101,7 @@ async function processInboundUserMessage(
   const existingConversation = await loadWhatsAppConversationForWaId(waId);
   const seminarOptions = await getWhatsAppSeminarOptions();
   const completedRegistrationNumber = await resolveCompletedRegistrationNumber(
-    existingConversation?.completedRegistrationId
+    existingConversation
   );
 
   const turn = await processWhatsAppRegistrationConversationTurnAsync({

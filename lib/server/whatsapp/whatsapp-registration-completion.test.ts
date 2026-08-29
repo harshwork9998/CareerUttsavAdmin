@@ -32,6 +32,13 @@ vi.mock("@/lib/server/whatsapp/whatsapp-conversation-store", () => ({
     cancelMock(...args),
 }));
 
+const reconcileMock = vi.fn();
+
+vi.mock("@/lib/server/whatsapp/whatsapp-completed-conversation-reconcile", () => ({
+  reconcileCompletedWhatsAppConversation: (...args: unknown[]) =>
+    reconcileMock(...args),
+}));
+
 vi.mock("@/lib/server/whatsapp/whatsapp-seminar-context", () => ({
   getWhatsAppSeminarOptions: (...args: unknown[]) => getSeminarsMock(...args),
 }));
@@ -170,6 +177,7 @@ describe("whatsapp registration completion", () => {
     });
     generateQrMock.mockResolvedValue("qr-base64");
     getRegistrationMock.mockResolvedValue(createdRegistration);
+    reconcileMock.mockImplementation(async (conversation) => conversation);
   });
 
   it("creates one student registration for a READY_TO_REGISTER conversation", async () => {
@@ -369,12 +377,40 @@ describe("whatsapp registration completion", () => {
       currentStep: "COMPLETED",
       completedRegistrationId: "reg-001",
     });
+    getRegistrationMock.mockResolvedValue(createdRegistration);
 
     const result = await completeWhatsAppRegistrationForConversation("919876543210");
     expect(result.status).toBe("ALREADY_COMPLETED");
     expect(createStudentRegistrationMock).not.toHaveBeenCalled();
     expect(finalizeMock).not.toHaveBeenCalled();
     expect(result.registrationNumber).toBe("CU-BLR-2026-00042");
+  });
+
+  it("does not treat a deleted registration as already completed", async () => {
+    loadConversationMock.mockResolvedValue({
+      ...readyConversation,
+      status: "COMPLETED",
+      currentStep: "COMPLETED",
+      completedRegistrationId: "reg-deleted",
+    });
+    getRegistrationMock.mockResolvedValue(null);
+    reconcileMock.mockResolvedValue({
+      ...readyConversation,
+      status: "ACTIVE",
+      currentStep: "AWAITING_START",
+      completedRegistrationId: null,
+    });
+
+    const result = await completeWhatsAppRegistrationForConversation("919876543210");
+
+    expect(result.status).not.toBe("ALREADY_COMPLETED");
+    expect(
+      result.actions.some(
+        (action) =>
+          action.type === "TEXT" &&
+          action.body.includes("already registered")
+      )
+    ).toBe(false);
   });
 
   it("leaves conversation recoverable when registration creation fails", async () => {

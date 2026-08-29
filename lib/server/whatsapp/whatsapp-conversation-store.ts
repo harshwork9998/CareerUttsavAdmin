@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/server/prisma";
+import type { Prisma } from "@/lib/generated/prisma/client";
 import {
   WHATSAPP_CONVERSATION_TTL_MS,
   type WhatsAppConversationState,
@@ -62,6 +63,32 @@ export async function saveWhatsAppConversationState(
   });
 
   return mapPrismaConversationToState(saved);
+}
+
+const clearedWhatsAppConversationForDeletedRegistration = {
+  status: "CANCELLED" as const,
+  currentStep: "CANCELLED" as const,
+  completedRegistrationId: null,
+  studentName: null,
+  email: null,
+  classLabel: null,
+  gender: null,
+  board: null,
+  interestedStream: null,
+  college: null,
+  city: null,
+  selectedSeminarIds: [] as string[],
+};
+
+export async function resetWhatsAppConversationsForDeletedRegistration(
+  registrationId: string,
+  tx: Prisma.TransactionClient = prisma
+): Promise<number> {
+  const result = await tx.whatsAppRegistrationConversation.updateMany({
+    where: { completedRegistrationId: registrationId },
+    data: clearedWhatsAppConversationForDeletedRegistration,
+  });
+  return result.count;
 }
 
 export async function linkWhatsAppConversationToRegistration(input: {

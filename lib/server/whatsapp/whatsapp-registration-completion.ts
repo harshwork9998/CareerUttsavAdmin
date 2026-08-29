@@ -32,6 +32,7 @@ import {
   linkWhatsAppConversationToRegistration,
   loadWhatsAppConversationRecordByWaId,
 } from "@/lib/server/whatsapp/whatsapp-conversation-store";
+import { reconcileCompletedWhatsAppConversation } from "@/lib/server/whatsapp/whatsapp-completed-conversation-reconcile";
 import { getWhatsAppSeminarOptions } from "@/lib/server/whatsapp/whatsapp-seminar-context";
 import type { Registration } from "@/types";
 
@@ -340,7 +341,7 @@ function buildStudentRegistrationInput(
 export async function completeWhatsAppRegistrationForConversation(
   waId: string
 ): Promise<WhatsAppRegistrationCompletionResult> {
-  const record = await loadWhatsAppConversationRecordByWaId(waId);
+  let record = await loadWhatsAppConversationRecordByWaId(waId);
   if (!record) {
     safeLogCompletion({ waId, status: "INVALID_CONVERSATION" });
     return {
@@ -352,15 +353,36 @@ export async function completeWhatsAppRegistrationForConversation(
   }
 
   if (record.completedRegistrationId) {
-    const result = await buildAlreadyCompletedResult(
-      record.completedRegistrationId
-    );
-    safeLogCompletion({
-      waId,
-      status: "ALREADY_COMPLETED",
-      registrationId: record.completedRegistrationId,
-    });
-    return { ...result, conversation: record };
+    const registration = await getRegistrationForApi(record.completedRegistrationId);
+    if (registration) {
+      const result = await buildAlreadyCompletedResult(
+        record.completedRegistrationId
+      );
+      safeLogCompletion({
+        waId,
+        status: "ALREADY_COMPLETED",
+        registrationId: record.completedRegistrationId,
+      });
+      return { ...result, conversation: record };
+    }
+
+    record = await reconcileCompletedWhatsAppConversation(record);
+    if (record.completedRegistrationId) {
+      const healedRegistration = await getRegistrationForApi(
+        record.completedRegistrationId
+      );
+      if (healedRegistration) {
+        const result = await buildAlreadyCompletedResult(
+          record.completedRegistrationId
+        );
+        safeLogCompletion({
+          waId,
+          status: "ALREADY_COMPLETED",
+          registrationId: record.completedRegistrationId,
+        });
+        return { ...result, conversation: record };
+      }
+    }
   }
 
   if (!isReadyConversation(record)) {

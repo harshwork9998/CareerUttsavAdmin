@@ -22,6 +22,7 @@ import {
   type PrismaRegistrationRecord,
 } from "@/lib/server/registration-prisma-map";
 import { generateId } from "@/lib/utils";
+import { resetWhatsAppConversationsForDeletedRegistration } from "@/lib/server/whatsapp/whatsapp-conversation-store";
 import type {
   Event,
   PartnerRegistrationEntry,
@@ -521,6 +522,7 @@ export async function deletePrismaRegistration(
 
   const now = new Date();
   await prisma.$transaction(async (tx) => {
+    await resetWhatsAppConversationsForDeletedRegistration(id, tx);
     await tx.registration.delete({ where: { id } });
     const event = await tx.event.findUnique({
       where: { id: existing.eventId },

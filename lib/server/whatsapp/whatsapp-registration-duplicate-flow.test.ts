@@ -11,6 +11,8 @@ import {
 
 const resolveDuplicateMock = vi.fn();
 const generateQrMock = vi.fn();
+const reconcileMock = vi.fn();
+const resolveCompletedNumberMock = vi.fn();
 
 vi.mock("@/lib/server/registration-service", () => ({
   resolveStudentRegistrationDuplicate: (...args: unknown[]) =>
@@ -19,6 +21,13 @@ vi.mock("@/lib/server/registration-service", () => ({
 
 vi.mock("@/lib/email", () => ({
   generateRegistrationQrPngBase64: (...args: unknown[]) => generateQrMock(...args),
+}));
+
+vi.mock("@/lib/server/whatsapp/whatsapp-completed-conversation-reconcile", () => ({
+  reconcileCompletedWhatsAppConversation: (...args: unknown[]) =>
+    reconcileMock(...args),
+  resolveCompletedRegistrationNumberForConversation: (...args: unknown[]) =>
+    resolveCompletedNumberMock(...args),
 }));
 
 import { processWhatsAppRegistrationConversationTurnAsync } from "@/lib/server/whatsapp/whatsapp-registration-duplicate-flow";
@@ -73,6 +82,8 @@ describe("whatsapp registration duplicate flow", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     generateQrMock.mockResolvedValue("qr-base64");
+    reconcileMock.mockImplementation(async (conversation) => conversation);
+    resolveCompletedNumberMock.mockResolvedValue("CU-BLR-2026-00001");
     resolveDuplicateMock.mockResolvedValue({
       resolution: { outcome: "none" },
       registration: null,
@@ -246,6 +257,68 @@ describe("whatsapp registration duplicate flow", () => {
       result.actions.some((action) => action.type === "MEDIA")
     ).toBe(true);
     expect(resolveDuplicateMock).not.toHaveBeenCalled();
+  });
+
+  it("shows fresh welcome after admin deletion resets a stale completed conversation", async () => {
+    const staleCompleted = {
+      ...createInitialConversationState("919876543210"),
+      status: "COMPLETED" as const,
+      currentStep: "COMPLETED" as const,
+      completedRegistrationId: null,
+      studentName: "Old Name",
+      email: "old@example.com",
+    };
+    const freshConversation = createInitialConversationState("919876543210");
+    reconcileMock.mockResolvedValueOnce(freshConversation);
+    resolveCompletedNumberMock.mockResolvedValueOnce(null);
+
+    const result = await processWhatsAppRegistrationConversationTurnAsync({
+      conversation: staleCompleted,
+      message: { text: "hi" },
+      seminarOptions,
+      waId: "919876543210",
+    });
+
+    expect(reconcileMock).toHaveBeenCalledWith(staleCompleted);
+    expect(result.conversation.currentStep).toBe("AWAITING_START");
+    expect(
+      result.actions.some(
+        (action) =>
+          action.type === "BUTTONS" &&
+          action.body.includes("Welcome to Career Uttsav")
+      )
+    ).toBe(true);
+    expect(
+      result.actions.some(
+        (action) =>
+          action.type === "TEXT" &&
+          action.body.includes("already registered")
+      )
+    ).toBe(false);
+    expect(result.actions.some((action) => action.type === "MEDIA")).toBe(false);
+  });
+
+  it("does not resend QR after a stale completed conversation is reset", async () => {
+    const staleCompleted = {
+      ...createInitialConversationState("919876543210"),
+      status: "COMPLETED" as const,
+      currentStep: "COMPLETED" as const,
+      completedRegistrationId: "reg-deleted",
+    };
+    reconcileMock.mockResolvedValueOnce(
+      createInitialConversationState("919876543210")
+    );
+    resolveCompletedNumberMock.mockResolvedValueOnce(null);
+
+    const result = await processWhatsAppRegistrationConversationTurnAsync({
+      conversation: staleCompleted,
+      message: { text: "hello" },
+      seminarOptions,
+      waId: "919876543210",
+    });
+
+    expect(generateQrMock).not.toHaveBeenCalled();
+    expect(result.actions.some((action) => action.type === "MEDIA")).toBe(false);
   });
 
   it("continues a valid new registration after email when no duplicate exists", async () => {

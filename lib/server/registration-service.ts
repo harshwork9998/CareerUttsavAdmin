@@ -35,6 +35,7 @@ import {
   loadRegistrations,
   saveRegistrations,
 } from "@/lib/server/registrations-persistence";
+import { resetWhatsAppConversationsForDeletedRegistration } from "@/lib/server/whatsapp/whatsapp-conversation-store";
 import { generateId } from "@/lib/utils";
 import type { Registration, StudentRegistration } from "@/types";
 
@@ -505,6 +506,8 @@ export async function deleteRegistrationForApi(
   if (!removed) return null;
 
   saveRegistrations(registrations.filter((entry) => entry.id !== id));
+
+  await resetWhatsAppConversationsForDeletedRegistration(id);
 
   const events = loadEvents();
   const eventId = removed.eventId;
