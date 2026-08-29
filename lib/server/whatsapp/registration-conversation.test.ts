@@ -63,6 +63,47 @@ function advanceToSeminarsStep(options: SeminarOption[] = seminarOptions) {
     .conversation;
 }
 
+function expectNoDoneSelecting(actions: ReturnType<typeof turn>["actions"]) {
+  expect(
+    actions.some(
+      (action) =>
+        action.type === "BUTTONS" &&
+        action.buttons.some(
+          (button) => button.id === REGISTRATION_INTERACTIVE_IDS.FINISH
+        )
+    )
+  ).toBe(false);
+}
+
+function selectSeminar(
+  conversation: WhatsAppConversationState,
+  seminarId: string,
+  options: SeminarOption[] = seminarOptions
+) {
+  return turn(
+    conversation,
+    { interactiveId: seminarInteractiveId(seminarId) },
+    "919876543210",
+    null,
+    options
+  );
+}
+
+function completeThreeSeminarSelections(
+  conversation: WhatsAppConversationState,
+  seminarIds: string[] = ["sem-001", "sem-002", "sem-003"],
+  options: SeminarOption[] = seminarOptions
+) {
+  let state = conversation;
+  let lastResult = selectSeminar(state, seminarIds[0]!, options);
+  state = lastResult.conversation;
+  for (const seminarId of seminarIds.slice(1)) {
+    lastResult = selectSeminar(state, seminarId, options);
+    state = lastResult.conversation;
+  }
+  return lastResult;
+}
+
 function turn(
   conversation: WhatsAppConversationState | null,
   message: { text?: string; interactiveId?: string },
@@ -371,32 +412,27 @@ describe("whatsapp registration conversation engine", () => {
     expect(result.conversation.status).toBe("ACTIVE");
   });
 
-  it("reaches READY_TO_REGISTER with at least one seminar", () => {
-    let conversation = beginAtNameStep();
-    conversation = turn(conversation, { text: "Aarav Sharma" }).conversation;
-    conversation = turn(conversation, { text: "aarav@example.com" }).conversation;
-    conversation = turn(conversation, {
-      interactiveId: classInteractiveId(REGISTRATION_CLASS_OPTIONS[0]!),
-    }).conversation;
-    conversation = turn(conversation, {
-      interactiveId: genderInteractiveId("Male"),
-    }).conversation;
-    conversation = turn(conversation, {
-      interactiveId: boardInteractiveId(REGISTRATION_BOARD_OPTIONS[0]!),
-    }).conversation;
-    conversation = turn(conversation, {
-      interactiveId: streamInteractiveId("Science"),
-    }).conversation;
-    conversation = turn(conversation, { text: "National Public School" }).conversation;
-    conversation = turn(conversation, { text: "Bangalore" }).conversation;
-    conversation = turn(conversation, {
-      interactiveId: seminarInteractiveId("sem-001"),
-    }).conversation;
-    const result = turn(conversation, {
-      interactiveId: REGISTRATION_INTERACTIVE_IDS.FINISH,
-    });
+  it("reaches READY_TO_REGISTER after the third seminar selection", () => {
+    let conversation = advanceToSeminarsStep();
+    const result = completeThreeSeminarSelections(conversation);
     expect(result.conversation.status).toBe("READY_TO_REGISTER");
     expect(result.conversation.currentStep).toBe("READY_TO_REGISTER");
+    expect(result.conversation.selectedSeminarIds).toEqual([
+      "sem-001",
+      "sem-002",
+      "sem-003",
+    ]);
+    expect(
+      result.actions.some(
+        (action) =>
+          action.type === "TEXT" &&
+          action.body.includes("3 of 3 selected")
+      )
+    ).toBe(true);
+    expectNoDoneSelecting(result.actions);
+    expect(
+      result.actions.some((action) => action.type === "LIST")
+    ).toBe(false);
     expect(
       result.actions.some((action) =>
         action.type === "TEXT" && action.body.toLowerCase().includes("review")
@@ -516,24 +552,8 @@ describe("whatsapp registration conversation engine", () => {
     ).toBe(true);
   });
 
-  it("recommends top 3 seminars without enforcing a maximum", () => {
-    let conversation = beginAtNameStep();
-    conversation = turn(conversation, { text: "Aarav Sharma" }).conversation;
-    conversation = turn(conversation, { text: "aarav@example.com" }).conversation;
-    conversation = turn(conversation, {
-      interactiveId: classInteractiveId(REGISTRATION_CLASS_OPTIONS[0]!),
-    }).conversation;
-    conversation = turn(conversation, {
-      interactiveId: genderInteractiveId("Male"),
-    }).conversation;
-    conversation = turn(conversation, {
-      interactiveId: boardInteractiveId(REGISTRATION_BOARD_OPTIONS[0]!),
-    }).conversation;
-    conversation = turn(conversation, {
-      interactiveId: streamInteractiveId("Science"),
-    }).conversation;
-    conversation = turn(conversation, { text: "National Public School" }).conversation;
-    conversation = turn(conversation, { text: "Bangalore" }).conversation;
+  it("recommends top 3 seminars and guides the user through three selections", () => {
+    let conversation = advanceToSeminarsStep();
 
     const initial = turn(conversation, { text: "show seminars" });
     expect(
@@ -544,39 +564,42 @@ describe("whatsapp registration conversation engine", () => {
           action.body.includes("Please select your *top 3 seminars* from the list below.")
       )
     ).toBe(true);
+    expectNoDoneSelecting(initial.actions);
+
+    const first = selectSeminar(conversation, "sem-001");
+    conversation = first.conversation;
+    expect(conversation.selectedSeminarIds).toEqual(["sem-001"]);
+    expect(conversation.currentStep).toBe("AWAITING_SEMINARS");
     expect(
-      initial.actions.some(
+      first.actions.some(
         (action) =>
-          action.type === "LIST" &&
-          action.body.includes("may select more")
+          action.type === "TEXT" &&
+          action.body.includes("1 of 3 selected") &&
+          action.body.includes("AI Careers") &&
+          action.body.includes("2 more seminars")
       )
-    ).toBe(false);
+    ).toBe(true);
+    expect(first.actions.some((action) => action.type === "LIST")).toBe(true);
+    expectNoDoneSelecting(first.actions);
 
-    conversation = turn(conversation, {
-      interactiveId: seminarInteractiveId("sem-001"),
-    }).conversation;
-    conversation = turn(conversation, {
-      interactiveId: seminarInteractiveId("sem-002"),
-    }).conversation;
-    conversation = turn(conversation, {
-      interactiveId: seminarInteractiveId("sem-003"),
-    }).conversation;
-    expect(conversation.selectedSeminarIds).toEqual([
-      "sem-001",
-      "sem-002",
-      "sem-003",
-    ]);
+    const second = selectSeminar(conversation, "sem-002");
+    conversation = second.conversation;
+    expect(conversation.selectedSeminarIds).toEqual(["sem-001", "sem-002"]);
+    expect(
+      second.actions.some(
+        (action) =>
+          action.type === "TEXT" &&
+          action.body.includes("2 of 3 selected") &&
+          action.body.includes("Design Thinking") &&
+          action.body.includes("1 more seminar")
+      )
+    ).toBe(true);
+    expect(second.actions.some((action) => action.type === "LIST")).toBe(true);
 
-    conversation = turn(conversation, {
-      interactiveId: seminarInteractiveId("sem-003"),
-    }).conversation;
-    const duplicate = turn(conversation, {
-      interactiveId: seminarInteractiveId("sem-003"),
-    });
+    const duplicate = selectSeminar(conversation, "sem-002");
     expect(duplicate.conversation.selectedSeminarIds).toEqual([
       "sem-001",
       "sem-002",
-      "sem-003",
     ]);
     expect(duplicate.conversation.currentStep).toBe("AWAITING_SEMINARS");
     expect(
@@ -591,45 +614,32 @@ describe("whatsapp registration conversation engine", () => {
       true
     );
 
-    const finished = turn(conversation, {
-      interactiveId: REGISTRATION_INTERACTIVE_IDS.FINISH,
-    });
-    expect(finished.conversation.currentStep).toBe("READY_TO_REGISTER");
-    expect(finished.conversation.selectedSeminarIds).toHaveLength(3);
+    const third = selectSeminar(conversation, "sem-003");
+    expect(third.conversation.selectedSeminarIds).toEqual([
+      "sem-001",
+      "sem-002",
+      "sem-003",
+    ]);
+    expect(third.conversation.currentStep).toBe("READY_TO_REGISTER");
+    expect(
+      third.actions.some(
+        (action) =>
+          action.type === "TEXT" &&
+          action.body.includes("3 of 3 selected") &&
+          action.body.includes("Your seminar preferences are saved.")
+      )
+    ).toBe(true);
+    expect(third.actions.some((action) => action.type === "LIST")).toBe(false);
   });
 
-  it("allows selecting more than three seminars", () => {
+  it("keeps seminar:finish available for stale Done Selecting messages", () => {
     const extendedSeminars = [
       ...seminarOptions,
       { id: "sem-004", title: "Entrepreneurship" },
     ];
-    let conversation = beginAtNameStep();
-    conversation = turn(conversation, { text: "Aarav Sharma" }).conversation;
-    conversation = turn(conversation, { text: "aarav@example.com" }).conversation;
-    conversation = turn(conversation, {
-      interactiveId: classInteractiveId(REGISTRATION_CLASS_OPTIONS[0]!),
-    }).conversation;
-    conversation = turn(conversation, {
-      interactiveId: genderInteractiveId("Male"),
-    }).conversation;
-    conversation = turn(conversation, {
-      interactiveId: boardInteractiveId(REGISTRATION_BOARD_OPTIONS[0]!),
-    }).conversation;
-    conversation = turn(conversation, {
-      interactiveId: streamInteractiveId("Science"),
-    }).conversation;
-    conversation = turn(conversation, { text: "National Public School" }).conversation;
-    conversation = turn(conversation, { text: "Bangalore" }).conversation;
-
-    for (const seminarId of ["sem-001", "sem-002", "sem-003", "sem-004"]) {
-      conversation = turn(
-        conversation,
-        { interactiveId: seminarInteractiveId(seminarId) },
-        "919876543210",
-        null,
-        extendedSeminars
-      ).conversation;
-    }
+    let conversation = advanceToSeminarsStep(extendedSeminars);
+    conversation = selectSeminar(conversation, "sem-001", extendedSeminars).conversation;
+    conversation = selectSeminar(conversation, "sem-002", extendedSeminars).conversation;
 
     const finished = turn(
       conversation,
@@ -641,8 +651,6 @@ describe("whatsapp registration conversation engine", () => {
     expect(finished.conversation.selectedSeminarIds).toEqual([
       "sem-001",
       "sem-002",
-      "sem-003",
-      "sem-004",
     ]);
     expect(finished.conversation.currentStep).toBe("READY_TO_REGISTER");
   });
@@ -756,45 +764,68 @@ describe("whatsapp registration conversation engine", () => {
     expect(reachableIds.size).toBe(20);
   });
 
-  it("accumulates seminar selections across paginated pages", () => {
-    const manySeminars = buildSeminarOptions(12);
-    let conversation = advanceToSeminarsStep(manySeminars);
+  it("auto-completes after the third cross-page seminar selection", () => {
+    const twentySeminars: SeminarOption[] = Array.from({ length: 20 }, (_, index) => ({
+      id: `sem-${String(index + 1).padStart(3, "0")}`,
+      title: `Seminar ${index + 1}`,
+    }));
+    let conversation = advanceToSeminarsStep(twentySeminars);
 
-    conversation = turn(
-      conversation,
-      { interactiveId: seminarInteractiveId("sem-001") },
-      "919876543210",
-      null,
-      manySeminars
-    ).conversation;
+    conversation = selectSeminar(conversation, "sem-002", twentySeminars).conversation;
     conversation = turn(
       conversation,
       { interactiveId: seminarPageInteractiveId(1) },
       "919876543210",
       null,
-      manySeminars
+      twentySeminars
     ).conversation;
+    conversation = selectSeminar(conversation, "sem-011", twentySeminars).conversation;
     conversation = turn(
       conversation,
-      { interactiveId: seminarInteractiveId("sem-009") },
+      { interactiveId: seminarPageInteractiveId(2) },
       "919876543210",
       null,
-      manySeminars
+      twentySeminars
     ).conversation;
 
-    const finished = turn(
-      conversation,
-      { interactiveId: REGISTRATION_INTERACTIVE_IDS.FINISH },
-      "919876543210",
-      null,
-      manySeminars
-    );
+    const finished = selectSeminar(conversation, "sem-019", twentySeminars);
 
     expect(finished.conversation.selectedSeminarIds).toEqual([
-      "sem-001",
-      "sem-009",
+      "sem-002",
+      "sem-011",
+      "sem-019",
     ]);
     expect(finished.conversation.currentStep).toBe("READY_TO_REGISTER");
+    expect(
+      finished.actions.some(
+        (action) =>
+          action.type === "TEXT" &&
+          action.body.includes("3 of 3 selected")
+      )
+    ).toBe(true);
+    expect(finished.actions.some((action) => action.type === "LIST")).toBe(false);
+  });
+
+  it("cancel after one seminar selection pauses the journey", () => {
+    let conversation = advanceToSeminarsStep();
+    conversation = selectSeminar(conversation, "sem-001").conversation;
+    const result = turn(conversation, { text: "cancel" });
+    expect(result.conversation.status).toBe("CANCELLED");
+    expect(result.conversation.selectedSeminarIds).toEqual(["sem-001"]);
+    expectCancelledActions(result.actions);
+  });
+
+  it("cancel after two seminar selections pauses the journey", () => {
+    let conversation = advanceToSeminarsStep();
+    conversation = selectSeminar(conversation, "sem-001").conversation;
+    conversation = selectSeminar(conversation, "sem-002").conversation;
+    const result = turn(conversation, { text: "cancel" });
+    expect(result.conversation.status).toBe("CANCELLED");
+    expect(result.conversation.selectedSeminarIds).toEqual([
+      "sem-001",
+      "sem-002",
+    ]);
+    expectCancelledActions(result.actions);
   });
 
   it("cancel marks the conversation cancelled", () => {
@@ -823,9 +854,8 @@ describe("whatsapp registration conversation engine", () => {
     }).conversation;
     conversation = turn(conversation, { text: "National Public School" }).conversation;
     conversation = turn(conversation, { text: "Bangalore" }).conversation;
-    conversation = turn(conversation, {
-      interactiveId: seminarInteractiveId("sem-001"),
-    }).conversation;
+    conversation = selectSeminar(conversation, "sem-001").conversation;
+    conversation = selectSeminar(conversation, "sem-002").conversation;
     conversation = turn(conversation, {
       interactiveId: REGISTRATION_INTERACTIVE_IDS.FINISH,
     }).conversation;

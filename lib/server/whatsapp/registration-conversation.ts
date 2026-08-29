@@ -25,6 +25,7 @@ import { formatNumberedSeminarListRow } from "@/lib/server/whatsapp/seminar-list
 export const WHATSAPP_CONVERSATION_TTL_MS = 24 * 60 * 60 * 1000;
 export const WHATSAPP_SEMINAR_LIST_ROW_LIMIT = 10;
 export const WHATSAPP_SEMINAR_LIST_PAGE_SIZE = 8;
+export const WHATSAPP_SEMINAR_SELECTION_TARGET = 3;
 
 export type WhatsAppConversationStatus =
   | "ACTIVE"
@@ -402,37 +403,28 @@ export function buildSeminarListRows(
   return rows.slice(0, WHATSAPP_SEMINAR_LIST_ROW_LIMIT);
 }
 
-function seminarSelectionBody(selectedSeminarIds: string[], seminarOptions: SeminarOption[]): string {
-  const intro = `Choose your seminar interests.
+function seminarSelectionIntroBody(): string {
+  return `Choose your seminar interests.
 
 Please select your *top 3 seminars* from the list below.`;
-
-  if (selectedSeminarIds.length === 0) {
-    return intro;
-  }
-
-  const selectedLines = selectedSeminarIds
-    .map((seminarId) => {
-      const title = seminarOptions.find((seminar) => seminar.id === seminarId)?.title;
-      return title ? `✓ ${title}` : null;
-    })
-    .filter((line): line is string => Boolean(line));
-
-  return `${intro}
-
-Selected:
-${selectedLines.join("\n")}`;
 }
 
-function seminarSelectionActions(
+function seminarTitleForOption(
+  seminarOptions: SeminarOption[],
+  seminarId: string
+): string {
+  return seminarOptions.find((seminar) => seminar.id === seminarId)?.title ?? "";
+}
+
+function seminarListActions(
   seminarOptions: SeminarOption[],
   selectedSeminarIds: string[],
   listPage = 0
 ): WhatsAppBotAction[] {
-  const actions: WhatsAppBotAction[] = [
+  return [
     {
       type: "LIST",
-      body: seminarSelectionBody(selectedSeminarIds, seminarOptions),
+      body: seminarSelectionIntroBody(),
       buttonText: "Select Seminar",
       sections: [
         {
@@ -446,21 +438,44 @@ function seminarSelectionActions(
       ],
     },
   ];
+}
 
-  if (selectedSeminarIds.length > 0) {
-    actions.push({
-      type: "BUTTONS",
-      body: "When you're done selecting seminars, tap below.",
-      buttons: [
-        {
-          id: REGISTRATION_INTERACTIVE_IDS.FINISH,
-          title: "Done Selecting",
-        },
-      ],
-    });
-  }
+function seminarSelectionProgressActions(
+  count: 1 | 2,
+  latestSeminarTitle: string,
+  seminarOptions: SeminarOption[],
+  selectedSeminarIds: string[],
+  listPage: number
+): WhatsAppBotAction[] {
+  const remainingPrompt =
+    count === 1
+      ? "Please choose *2 more seminars*."
+      : "Please choose *1 more seminar*.";
 
-  return actions;
+  return [
+    {
+      type: "TEXT",
+      body: `✅ *${count} of 3 selected*\n${latestSeminarTitle}\n\n${remainingPrompt}`,
+    },
+    ...seminarListActions(seminarOptions, selectedSeminarIds, listPage),
+  ];
+}
+
+function seminarSelectionCompleteActions(): WhatsAppBotAction[] {
+  return [
+    {
+      type: "TEXT",
+      body: "✅ *3 of 3 selected*\n\nYour seminar preferences are saved.",
+    },
+  ];
+}
+
+function seminarSelectionActions(
+  seminarOptions: SeminarOption[],
+  selectedSeminarIds: string[],
+  listPage = 0
+): WhatsAppBotAction[] {
+  return seminarListActions(seminarOptions, selectedSeminarIds, listPage);
 }
 
 function alreadyRegisteredActions(
@@ -1007,11 +1022,44 @@ export function processRegistrationConversationTurn(input: {
       ...conversation,
       selectedSeminarIds: [...conversation.selectedSeminarIds, seminarId],
     };
+    const selectionCount = updated.selectedSeminarIds.length;
+    const seminarTitle = seminarTitleForOption(input.seminarOptions, seminarId);
+    const seminarPage = seminarListPageForSeminar(input.seminarOptions, seminarId);
+
+    if (selectionCount >= WHATSAPP_SEMINAR_SELECTION_TARGET) {
+      return {
+        conversation: {
+          ...updated,
+          status: "READY_TO_REGISTER",
+          currentStep: "READY_TO_REGISTER",
+        },
+        actions: seminarSelectionCompleteActions(),
+        refreshExpiry: true,
+      };
+    }
+
+    if (selectionCount === 1) {
+      return {
+        conversation: updated,
+        actions: seminarSelectionProgressActions(
+          1,
+          seminarTitle,
+          input.seminarOptions,
+          updated.selectedSeminarIds,
+          seminarPage
+        ),
+        refreshExpiry: true,
+      };
+    }
+
     return {
       conversation: updated,
-      actions: seminarSelectionActions(
+      actions: seminarSelectionProgressActions(
+        2,
+        seminarTitle,
         input.seminarOptions,
-        updated.selectedSeminarIds
+        updated.selectedSeminarIds,
+        seminarPage
       ),
       refreshExpiry: true,
     };

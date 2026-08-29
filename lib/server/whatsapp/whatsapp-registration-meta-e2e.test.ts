@@ -63,6 +63,7 @@ const REGISTRATION_NUMBER = "CU-BLR-2026-00042";
 const seminarOptions: SeminarOption[] = [
   { id: "sem-001", title: "AI Careers" },
   { id: "sem-002", title: "Design Thinking" },
+  { id: "sem-003", title: "Startup Skills" },
 ];
 
 function mockJsonResponse(status: number, body: unknown): Response {
@@ -185,7 +186,8 @@ describe("whatsapp registration meta e2e (mocked)", () => {
       { text: "National Public School" },
       { text: "Bangalore" },
       { interactiveId: seminarInteractiveId("sem-001") },
-      { interactiveId: REGISTRATION_INTERACTIVE_IDS.FINISH },
+      { interactiveId: seminarInteractiveId("sem-002") },
+      { interactiveId: seminarInteractiveId("sem-003") },
     ];
 
     for (const message of steps) {
