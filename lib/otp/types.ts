@@ -33,7 +33,7 @@ export const OTP_PURPOSES: OtpPurpose[] = [
 ];
 
 export const OTP_CONFIG = {
-  codeLength: 6,
+  codeLength: 4,
   /** OTP validity window (local tracking; MSG91 also enforces expiry). */
   ttlMs: 5 * 60 * 1000,
   /** Max wrong verify attempts per active challenge. */
@@ -52,4 +52,4 @@ export const OTP_CONFIG = {
  * Fixed OTP for OTP_PROVIDER=mock only (local development).
  * Never used when MSG91 is active. Never allowed in production.
  */
-export const MOCK_OTP_CODE = "123456";
+export const MOCK_OTP_CODE = "1234";

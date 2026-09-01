@@ -135,7 +135,7 @@ describe("OTP service (mock provider)", () => {
     const bad = await verifyOtp({
       phone: PHONE,
       purpose: "student_registration",
-      code: "000000",
+      code: "0000",
     });
     expect(bad).toMatchObject({ ok: false, status: 400 });
 
@@ -157,7 +157,7 @@ describe("OTP service (mock provider)", () => {
       const result = await verifyOtp({
         phone: PHONE,
         purpose: "student_registration",
-        code: "000000",
+        code: "0000",
       });
       expect(result.ok).toBe(false);
     }
@@ -181,7 +181,7 @@ describe("OTP service (mock provider)", () => {
       await verifyOtp({
         phone: PHONE,
         purpose: "student_registration",
-        code: "000000",
+        code: "0000",
       });
     }
 
@@ -336,14 +336,14 @@ describe("OTP service (MSG91 fetch)", () => {
     const fail = await verifyOtp({
       phone: PHONE,
       purpose: "student_registration",
-      code: "111111",
+      code: "1111",
     });
     expect(fail.ok).toBe(false);
 
     const pass = await verifyOtp({
       phone: PHONE,
       purpose: "student_registration",
-      code: "222222",
+      code: "2222",
     });
     expect(pass.ok).toBe(true);
   });
@@ -370,7 +370,7 @@ describe("OTP service (MSG91 fetch)", () => {
     const result = await verifyOtp({
       phone: PHONE,
       purpose: "student_registration",
-      code: "111111",
+      code: "1111",
     });
     expect(result).toMatchObject({
       ok: false,
@@ -448,14 +448,14 @@ describe("OTP service (MSG91 fetch)", () => {
       await verifyOtp({
         phone: PHONE,
         purpose: "student_registration",
-        code: "111111",
+        code: "1111",
       });
     }
 
     const locked = await verifyOtp({
       phone: PHONE,
       purpose: "student_registration",
-      code: "222222",
+      code: "2222",
     });
     expect(locked).toMatchObject({ ok: false, status: 429 });
 
@@ -484,7 +484,7 @@ describe("OTP service (MSG91 fetch)", () => {
     const stillLocked = await verifyOtp({
       phone: PHONE,
       purpose: "student_registration",
-      code: "222222",
+      code: "2222",
     });
     expect(stillLocked).toMatchObject({ ok: false, status: 429 });
   });

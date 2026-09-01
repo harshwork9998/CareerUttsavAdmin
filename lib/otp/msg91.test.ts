@@ -61,7 +61,7 @@ describe("MSG91 outbound requests", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { msg91VerifyOtp } = await import("@/lib/otp/msg91");
-    await msg91VerifyOtp({ phone10: PHONE_10, otp: "123456" });
+    await msg91VerifyOtp({ phone10: PHONE_10, otp: "1234" });
 
     expect(fetchMock).toHaveBeenCalledOnce();
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -72,7 +72,7 @@ describe("MSG91 outbound requests", () => {
     );
     const parsed = new URL(url);
     expect(parsed.searchParams.get("mobile")).toBe("919876543210");
-    expect(parsed.searchParams.get("otp")).toBe("123456");
+    expect(parsed.searchParams.get("otp")).toBe("1234");
     expect(parsed.searchParams.get("authkey")).toBeNull();
     expect(init.headers).toMatchObject({
       authkey: AUTH_KEY,

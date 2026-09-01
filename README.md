@@ -38,7 +38,7 @@ OTP_PROVIDER=mock
 ```
 
 - Mock is **refused in production** (`NODE_ENV=production` / `VERCEL_ENV=production`).
-- Fixed OTP for mock only: **`123456`**
+- Fixed OTP for mock only: **`1234`**
 - Send responses may include `debugCode` in mock mode only.
 
 ### Production MSG91
@@ -79,7 +79,7 @@ curl -X POST http://localhost:3002/api/send-otp \
 ```bash
 curl -X POST http://localhost:3002/api/verify-otp \
   -H "Content-Type: application/json" \
-  -d "{\"phone\":\"9876543210\",\"purpose\":\"student_registration\",\"code\":\"123456\"}"
+  -d "{\"phone\":\"9876543210\",\"purpose\":\"student_registration\",\"code\":\"1234\"}"
 ```
 
 Phone may be sent as `9876543210`, `919876543210`, or `+91 98765 43210`. Invalid numbers are rejected.
