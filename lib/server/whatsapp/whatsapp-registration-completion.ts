@@ -444,7 +444,7 @@ export async function completeWhatsAppRegistrationForConversation(
       phoneResult.mobile,
       seminarResolution.titles
     ),
-    { requirePhoneVerification: false }
+    { trustedInternalRegistration: true }
   );
 
   if (!createResult.ok) {

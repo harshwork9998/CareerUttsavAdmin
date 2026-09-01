@@ -321,8 +321,19 @@ describe("P0-01 API authorization", () => {
       expect(patchRegistrationForApi).not.toHaveBeenCalled();
     });
 
-    it("POST /api/registrations remains reachable without session", async () => {
+    it("POST /api/registrations without Admin session passes isAdminRequest false", async () => {
       noSession();
+      vi.mocked(createRegistrationForApi).mockResolvedValue({
+        ok: false,
+        error: {
+          status: 400,
+          body: {
+            error:
+              "Please verify your mobile number with OTP before registering.",
+          },
+        },
+      });
+
       const response = await registrationsPost(
         new Request("http://localhost/api/registrations", {
           method: "POST",
@@ -336,8 +347,12 @@ describe("P0-01 API authorization", () => {
           }),
         })
       );
-      expect(response.status).not.toBe(401);
-      expect(createRegistrationForApi).toHaveBeenCalled();
+      expect(response.status).toBe(400);
+      expect(createRegistrationForApi).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.any(Request),
+        { isAdminRequest: false }
+      );
     });
 
     it("GET /api/registrations/check remains reachable without session", async () => {

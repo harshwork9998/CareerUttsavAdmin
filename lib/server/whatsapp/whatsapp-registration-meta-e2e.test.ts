@@ -216,7 +216,7 @@ describe("whatsapp registration meta e2e (mocked)", () => {
     ).toBe(false);
     expect(createStudentRegistrationMock).toHaveBeenCalledOnce();
     expect(createStudentRegistrationMock.mock.calls[0]?.[1]).toEqual({
-      requirePhoneVerification: false,
+      trustedInternalRegistration: true,
     });
     expect(generateQrMock).toHaveBeenCalledWith(REGISTRATION_NUMBER);
     expect(completion.status).toBe("SUCCESS");

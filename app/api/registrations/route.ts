@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 
-import { requireAdminUser } from "@/lib/server/admin-auth";
+import {
+  getAuthenticatedAdminUser,
+  requireAdminUser,
+} from "@/lib/server/admin-auth";
 import {
   createRegistrationForApi,
   listRegistrationsForApi,
@@ -28,7 +31,10 @@ export async function POST(request: Request) {
     client?: string;
   };
 
-  const result = await createRegistrationForApi(body, request);
+  const adminUser = await getAuthenticatedAdminUser();
+  const result = await createRegistrationForApi(body, request, {
+    isAdminRequest: Boolean(adminUser),
+  });
   if (!result.ok) {
     return NextResponse.json(result.error.body, {
       status: result.error.status,

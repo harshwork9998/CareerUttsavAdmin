@@ -219,10 +219,11 @@ export async function getRegistrationForApi(
 }
 
 export type StudentRegistrationCreateOptions = {
-  requirePhoneVerification?: boolean;
+  /** Valid Admin session on POST /api/registrations — never from client body. */
+  isAdminRequest?: boolean;
+  /** Trusted server-side callers (e.g. WhatsApp completion) — never from HTTP. */
+  trustedInternalRegistration?: boolean;
   phoneVerificationToken?: string;
-  request?: Request;
-  clientHint?: string;
 };
 
 export async function createStudentRegistration(
@@ -256,45 +257,38 @@ export async function createStudentRegistration(
     };
   }
 
-  const requirePhoneOtp = options.requirePhoneVerification ?? false;
-  if (requirePhoneOtp) {
+  const bypassPhoneVerification =
+    options.isAdminRequest || options.trustedInternalRegistration;
+
+  if (!bypassPhoneVerification) {
     const token = options.phoneVerificationToken?.trim() ?? "";
-    const clientHint = options.clientHint ?? "";
-    const requestHeaders = options.request?.headers;
-
-    if (
-      clientHint === "public" ||
-      requestHeaders?.get("x-cu-client") === "public" ||
-      Boolean(token)
-    ) {
-      if (!token) {
-        return {
-          ok: false,
-          error: {
-            status: 400,
-            body: {
-              error:
-                "Please verify your mobile number with OTP before registering.",
-            },
+    if (!token) {
+      return {
+        ok: false,
+        error: {
+          status: 400,
+          body: {
+            error:
+              "Please verify your mobile number with OTP before registering.",
           },
-        };
-      }
+        },
+      };
+    }
 
-      const verification = consumePhoneVerification({
-        phone: validated.data.phone,
-        purpose: "student_registration",
-        verificationToken: token,
-        consume: true,
-      });
-      if (!verification.ok) {
-        return {
-          ok: false,
-          error: {
-            status: verification.status,
-            body: { error: verification.error },
-          },
-        };
-      }
+    const verification = consumePhoneVerification({
+      phone: validated.data.phone,
+      purpose: "student_registration",
+      verificationToken: token,
+      consume: true,
+    });
+    if (!verification.ok) {
+      return {
+        ok: false,
+        error: {
+          status: verification.status,
+          body: { error: verification.error },
+        },
+      };
     }
   }
 
@@ -371,7 +365,8 @@ export async function createRegistrationForApi(
     kind?: CreateRegistrationInput["kind"];
     client?: string;
   },
-  request: Request
+  request: Request,
+  options: { isAdminRequest?: boolean } = {}
 ): Promise<RegistrationCreateResult> {
   const events = await listEventsForApi();
   const validated = validateRegistrationCreate(body, events);
@@ -392,17 +387,10 @@ export async function createRegistrationForApi(
 
   if (validated.data.kind === "student") {
     const token = validated.data.phoneVerificationToken?.trim() ?? "";
-    const clientHint = typeof body.client === "string" ? body.client : "";
-    const requirePhoneOtp =
-      clientHint === "public" ||
-      request.headers.get("x-cu-client") === "public" ||
-      Boolean(token);
 
     return createStudentRegistration(validated.data, {
-      requirePhoneVerification: requirePhoneOtp,
+      isAdminRequest: options.isAdminRequest,
       phoneVerificationToken: token,
-      request,
-      clientHint,
     });
   }
 

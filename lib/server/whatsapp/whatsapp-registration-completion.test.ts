@@ -463,7 +463,7 @@ describe("whatsapp registration completion with catalog seminar ids", () => {
         eventId: CURRENT_EVENT_ID,
         seminarInterests: ["How to Choose the right Boarding School?"],
       }),
-      { requirePhoneVerification: false }
+      { trustedInternalRegistration: true }
     );
     expect(finalizeMock).toHaveBeenCalledWith({
       waId: "919876543210",
@@ -498,7 +498,7 @@ describe("whatsapp registration completion with catalog seminar ids", () => {
           "Cracking the codes to ace competitive exams",
         ],
       }),
-      { requirePhoneVerification: false }
+      { trustedInternalRegistration: true }
     );
   });
 
