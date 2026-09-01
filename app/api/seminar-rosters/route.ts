@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { requireAdminUser } from "@/lib/server/admin-auth";
 import {
   listSeminarRostersForApi,
   upsertSeminarRosterForApi,
@@ -9,10 +10,16 @@ import type { SeminarSessionRoster } from "@/types";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const auth = await requireAdminUser();
+  if (auth instanceof NextResponse) return auth;
+
   return NextResponse.json(await listSeminarRostersForApi());
 }
 
 export async function POST(request: Request) {
+  const auth = await requireAdminUser();
+  if (auth instanceof NextResponse) return auth;
+
   const roster = (await request.json()) as SeminarSessionRoster;
 
   if (!roster.eventId || !roster.seminarId) {

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { requireAdminUser } from "@/lib/server/admin-auth";
 import {
   deleteSpocForApi,
   getSpocByIdForApi,
@@ -12,6 +13,9 @@ export const dynamic = "force-dynamic";
 type RouteContext = { params: Promise<{ id: string }> };
 
 export async function GET(_request: Request, context: RouteContext) {
+  const auth = await requireAdminUser();
+  if (auth instanceof NextResponse) return auth;
+
   const { id } = await context.params;
   const spoc = await getSpocByIdForApi(id);
   if (!spoc) {
@@ -21,6 +25,9 @@ export async function GET(_request: Request, context: RouteContext) {
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
+  const auth = await requireAdminUser();
+  if (auth instanceof NextResponse) return auth;
+
   const { id } = await context.params;
   const body = (await request.json()) as Partial<Spoc>;
   const result = await updateSpocForApi(id, body);
@@ -31,6 +38,9 @@ export async function PATCH(request: Request, context: RouteContext) {
 }
 
 export async function DELETE(_request: Request, context: RouteContext) {
+  const auth = await requireAdminUser();
+  if (auth instanceof NextResponse) return auth;
+
   const { id } = await context.params;
   const result = await deleteSpocForApi(id);
   if (!result.ok) {

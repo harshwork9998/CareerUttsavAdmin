@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { requireAdminUser } from "@/lib/server/admin-auth";
 import { DUPLICATE_STUDENT_REGISTRATION_MESSAGE } from "@/lib/registration-duplicates";
 import {
   deleteRegistrationForApi,
@@ -13,6 +14,9 @@ export const dynamic = "force-dynamic";
 type RouteContext = { params: Promise<{ id: string }> };
 
 export async function GET(_request: Request, context: RouteContext) {
+  const auth = await requireAdminUser();
+  if (auth instanceof NextResponse) return auth;
+
   const { id } = await context.params;
   const registration = await getRegistrationForApi(id);
   if (!registration) {
@@ -22,6 +26,9 @@ export async function GET(_request: Request, context: RouteContext) {
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
+  const auth = await requireAdminUser();
+  if (auth instanceof NextResponse) return auth;
+
   const { id } = await context.params;
   const patch = (await request.json()) as Partial<Registration>;
 
@@ -46,6 +53,9 @@ export async function PATCH(request: Request, context: RouteContext) {
 }
 
 export async function DELETE(_request: Request, context: RouteContext) {
+  const auth = await requireAdminUser();
+  if (auth instanceof NextResponse) return auth;
+
   const { id } = await context.params;
   const result = await deleteRegistrationForApi(id);
   if (!result) {

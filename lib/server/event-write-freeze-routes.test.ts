@@ -1,5 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ROLE_ID_BY_NAME } from "@/constants";
+import type { User } from "@/types";
+
+const activeSuperuser: User = {
+  id: "usr-super",
+  name: "Super Admin",
+  email: "super@careeruttsav.in",
+  role: "superuser",
+  roleId: ROLE_ID_BY_NAME.superuser,
+  status: "Active",
+  createdAt: "2024-01-15T10:00:00.000Z",
+  updatedAt: "2024-01-15T10:00:00.000Z",
+};
+
 vi.mock("@/lib/server/event-service", () => ({
   listEventsForApi: vi.fn(async () => []),
   getEventForApi: vi.fn(async () => null),
@@ -9,6 +23,15 @@ vi.mock("@/lib/server/event-write-service", () => ({
   createEventForApi: vi.fn(),
   patchEventForApi: vi.fn(),
   deleteEventForApi: vi.fn(),
+}));
+
+vi.mock("@/lib/server/admin-user-service", () => ({
+  findAdminUserById: vi.fn(),
+  getAdminUserAuthVersion: vi.fn(),
+}));
+
+vi.mock("next/headers", () => ({
+  cookies: vi.fn(),
 }));
 
 import { POST } from "@/app/api/events/route";
@@ -22,6 +45,15 @@ import {
   deleteEventForApi,
   patchEventForApi,
 } from "@/lib/server/event-write-service";
+import {
+  findAdminUserById,
+  getAdminUserAuthVersion,
+} from "@/lib/server/admin-user-service";
+import { cookies } from "next/headers";
+import {
+  ADMIN_SESSION_COOKIE,
+  createAdminSessionToken,
+} from "@/lib/server/admin-session";
 
 const sampleEvent = {
   id: "evt-new",
@@ -54,9 +86,21 @@ const sampleEvent = {
 describe("event write freeze routes", () => {
   const originalRegistration = process.env.REGISTRATION_PERSISTENCE;
   const originalEventWrite = process.env.EVENT_WRITE_PERSISTENCE;
+  const originalAdminSecret = process.env.ADMIN_SESSION_SECRET;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env.ADMIN_SESSION_SECRET = "test-admin-session-secret-value";
+    vi.mocked(getAdminUserAuthVersion).mockResolvedValue(0);
+    vi.mocked(findAdminUserById).mockResolvedValue(activeSuperuser);
+    const token = createAdminSessionToken({
+      userId: activeSuperuser.id,
+      authVersion: 0,
+    });
+    vi.mocked(cookies).mockResolvedValue({
+      get: (name: string) =>
+        name === ADMIN_SESSION_COOKIE ? { name, value: token } : undefined,
+    } as Awaited<ReturnType<typeof cookies>>);
     vi.mocked(createEventForApi).mockResolvedValue({ ok: true, data: sampleEvent });
     vi.mocked(patchEventForApi).mockResolvedValue({
       ok: true,
@@ -75,6 +119,11 @@ describe("event write freeze routes", () => {
       delete process.env.EVENT_WRITE_PERSISTENCE;
     } else {
       process.env.EVENT_WRITE_PERSISTENCE = originalEventWrite;
+    }
+    if (originalAdminSecret === undefined) {
+      delete process.env.ADMIN_SESSION_SECRET;
+    } else {
+      process.env.ADMIN_SESSION_SECRET = originalAdminSecret;
     }
   });
 

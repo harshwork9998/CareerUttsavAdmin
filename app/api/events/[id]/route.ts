@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { requireAdminUser } from "@/lib/server/admin-auth";
 import { getEventForApi } from "@/lib/server/event-service";
 import { getEventWriteBlockedResponse } from "@/lib/server/event-write-guard";
 import {
@@ -13,6 +14,9 @@ export const dynamic = "force-dynamic";
 type RouteContext = { params: Promise<{ id: string }> };
 
 export async function GET(_request: Request, context: RouteContext) {
+  const auth = await requireAdminUser();
+  if (auth instanceof NextResponse) return auth;
+
   const { id } = await context.params;
   const event = await getEventForApi(id);
   if (!event) {
@@ -22,6 +26,9 @@ export async function GET(_request: Request, context: RouteContext) {
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
+  const auth = await requireAdminUser();
+  if (auth instanceof NextResponse) return auth;
+
   const blocked = getEventWriteBlockedResponse();
   if (blocked) return blocked;
 
@@ -44,6 +51,9 @@ export async function PATCH(request: Request, context: RouteContext) {
 }
 
 export async function DELETE(_request: Request, context: RouteContext) {
+  const auth = await requireAdminUser();
+  if (auth instanceof NextResponse) return auth;
+
   const blocked = getEventWriteBlockedResponse();
   if (blocked) return blocked;
 

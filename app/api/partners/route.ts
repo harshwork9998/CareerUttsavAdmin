@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { requireAdminUser } from "@/lib/server/admin-auth";
 import {
   applyPartnerCredentialFields,
   toPublicPartner,
@@ -15,11 +16,17 @@ import type { Partner } from "@/types";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const auth = await requireAdminUser();
+  if (auth instanceof NextResponse) return auth;
+
   const partners = await listPartnersForApi();
   return NextResponse.json(partners.map(toPublicPartner));
 }
 
 export async function POST(request: Request) {
+  const auth = await requireAdminUser();
+  if (auth instanceof NextResponse) return auth;
+
   const body = (await request.json()) as Omit<
     Partner,
     "id" | "createdAt" | "updatedAt"

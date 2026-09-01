@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { requireAdminUser } from "@/lib/server/admin-auth";
 import {
   createRegistrationForApi,
   listRegistrationsForApi,
@@ -13,6 +14,9 @@ const NO_STORE_HEADERS = {
 };
 
 export async function GET() {
+  const auth = await requireAdminUser();
+  if (auth instanceof NextResponse) return auth;
+
   return NextResponse.json(await listRegistrationsForApi(), {
     headers: NO_STORE_HEADERS,
   });

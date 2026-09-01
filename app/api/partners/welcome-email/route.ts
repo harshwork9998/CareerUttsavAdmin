@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { requireAdminUser } from "@/lib/server/admin-auth";
 import {
   PARTNER_WELCOME_EMAIL_SUBJECT,
   buildPartnerWelcomeHtmlFromTemplate,
@@ -11,6 +12,9 @@ import { PARTNER_WELCOME_HTML_TEMPLATE } from "@/lib/partner-welcome-email-templ
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
+  const auth = await requireAdminUser();
+  if (auth instanceof NextResponse) return auth;
+
   const body = (await request.json()) as Partial<PartnerWelcomeEmailInput>;
   const partnerName = body.partnerName?.trim() ?? "";
   const login = body.login?.trim() ?? "";

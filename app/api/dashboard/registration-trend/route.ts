@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { requireAdminUser } from "@/lib/server/admin-auth";
 import { buildRegistrationTrendSeries } from "@/lib/registration-time-series";
 import { listEventsForApi } from "@/lib/server/event-service";
 import { listRegistrationsForApi } from "@/lib/server/registration-service";
@@ -7,6 +8,9 @@ import { listRegistrationsForApi } from "@/lib/server/registration-service";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
+  const auth = await requireAdminUser();
+  if (auth instanceof NextResponse) return auth;
+
   const { searchParams } = new URL(request.url);
   const from = searchParams.get("from")?.trim() ?? "";
   const to = searchParams.get("to")?.trim() ?? "";
