@@ -101,7 +101,7 @@ describe("whatsapp webhook processor", () => {
     markProcessedMock.mockResolvedValue(undefined);
     loadConversationMock.mockResolvedValue(null);
     saveConversationMock.mockImplementation(async (state: WhatsAppConversationState) => state);
-    deleteExpiredMock.mockResolvedValue(undefined);
+    deleteExpiredMock.mockResolvedValue(false);
     getSeminarsMock.mockResolvedValue([{ id: "sem-001", title: "AI Careers" }]);
     vi.mocked(getRegistrationForApi).mockResolvedValue(null);
     processTurnMock.mockResolvedValue({

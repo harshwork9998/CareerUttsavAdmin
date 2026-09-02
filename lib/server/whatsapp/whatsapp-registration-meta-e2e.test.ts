@@ -225,7 +225,7 @@ describe("whatsapp registration meta e2e (mocked)", () => {
       completion.actions.some(
         (action) =>
           action.type === "TEXT" &&
-          action.body.includes("3 of 3 selected")
+          action.body.includes("3 seminars selected")
       )
     ).toBe(true);
     expect(

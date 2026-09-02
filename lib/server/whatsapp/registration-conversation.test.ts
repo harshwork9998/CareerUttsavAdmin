@@ -17,6 +17,8 @@ import {
 } from "@/lib/server/whatsapp/registration-interactive-ids";
 import {
   createInitialConversationState,
+  isChooseAnotherSeminarText,
+  isFinishRegistrationText,
   processRegistrationConversationTurn,
   resetConversationAnswers,
   buildSeminarListRows,
@@ -63,7 +65,7 @@ function advanceToSeminarsStep(options: SeminarOption[] = seminarOptions) {
     .conversation;
 }
 
-function expectNoDoneSelecting(actions: ReturnType<typeof turn>["actions"]) {
+function expectNoFinishOnInitialList(actions: ReturnType<typeof turn>["actions"]) {
   expect(
     actions.some(
       (action) =>
@@ -73,6 +75,60 @@ function expectNoDoneSelecting(actions: ReturnType<typeof turn>["actions"]) {
         )
     )
   ).toBe(false);
+}
+
+const DUPLICATE_SEMINAR_MESSAGE = `✅ You've already selected that seminar.
+
+Please choose another one or finish your registration.`;
+
+function expectDecisionButtons(
+  actions: ReturnType<typeof turn>["actions"],
+  chooseAnotherTitle?: string
+) {
+  const buttons = actions.find((action) => action.type === "BUTTONS");
+  expect(buttons?.type).toBe("BUTTONS");
+  if (buttons?.type !== "BUTTONS") return;
+  expect(buttons.buttons.map((button) => button.id)).toEqual([
+    REGISTRATION_INTERACTIVE_IDS.CHOOSE_ANOTHER,
+    REGISTRATION_INTERACTIVE_IDS.FINISH,
+  ]);
+  if (chooseAnotherTitle) {
+    expect(buttons.buttons[0]?.title).toBe(chooseAnotherTitle);
+  }
+}
+
+function listSeminarRowIds(actions: ReturnType<typeof turn>["actions"]) {
+  return actions.flatMap((action) =>
+    action.type === "LIST"
+      ? action.sections.flatMap((section) => section.rows.map((row) => row.id))
+      : []
+  );
+}
+
+function finishRegistration(
+  conversation: WhatsAppConversationState,
+  options: SeminarOption[] = seminarOptions
+) {
+  return turn(
+    conversation,
+    { interactiveId: REGISTRATION_INTERACTIVE_IDS.FINISH },
+    "919876543210",
+    null,
+    options
+  );
+}
+
+function chooseAnotherSeminar(
+  conversation: WhatsAppConversationState,
+  options: SeminarOption[] = seminarOptions
+) {
+  return turn(
+    conversation,
+    { interactiveId: REGISTRATION_INTERACTIVE_IDS.CHOOSE_ANOTHER },
+    "919876543210",
+    null,
+    options
+  );
 }
 
 function selectSeminar(
@@ -368,14 +424,10 @@ describe("whatsapp registration conversation engine", () => {
     expect(
       duplicate.actions.some(
         (action) =>
-          action.type === "TEXT" &&
-          action.body ===
-            "You have already selected this seminar. Please choose another."
+          action.type === "TEXT" && action.body === DUPLICATE_SEMINAR_MESSAGE
       )
     ).toBe(true);
-    expect(duplicate.actions.some((action) => action.type === "LIST")).toBe(
-      true
-    );
+    expectDecisionButtons(duplicate.actions, "Choose another");
 
     const second = turn(duplicate.conversation, {
       interactiveId: seminarInteractiveId("sem-002"),
@@ -426,10 +478,11 @@ describe("whatsapp registration conversation engine", () => {
       result.actions.some(
         (action) =>
           action.type === "TEXT" &&
-          action.body.includes("3 of 3 selected")
+          action.body.includes("3 seminars selected") &&
+          action.body.includes("Completing your registration")
       )
-    ).toBe(false);
-    expectNoDoneSelecting(result.actions);
+    ).toBe(true);
+    expectNoFinishOnInitialList(result.actions);
     expect(
       result.actions.some((action) => action.type === "LIST")
     ).toBe(false);
@@ -468,11 +521,19 @@ describe("whatsapp registration conversation engine", () => {
     const result = turn(conversation, { text: "hello" });
     expect(result.conversation.studentName).toBe("Aarav Sharma");
     expect(result.conversation.currentStep).toBe("AWAITING_EMAIL");
+    expect(result.refreshExpiry).toBe(true);
     expect(
       result.actions.some(
         (action) =>
           action.type === "BUTTONS" &&
-          action.body.includes("registration in progress")
+          action.body.includes("Welcome back")
+      )
+    ).toBe(true);
+    expect(
+      result.actions.some(
+        (action) =>
+          action.type === "BUTTONS" &&
+          action.body.includes("Next step: Email")
       )
     ).toBe(true);
   });
@@ -552,7 +613,7 @@ describe("whatsapp registration conversation engine", () => {
     ).toBe(true);
   });
 
-  it("recommends top 3 seminars and guides the user through three selections", () => {
+  it("guides the user through flexible seminar selection", () => {
     let conversation = advanceToSeminarsStep();
 
     const initial = turn(conversation, { text: "show seminars" });
@@ -560,59 +621,37 @@ describe("whatsapp registration conversation engine", () => {
       initial.actions.some(
         (action) =>
           action.type === "LIST" &&
-          action.body.includes("Choose your seminar interests") &&
-          action.body.includes("Please select your *top 3 seminars* from the list below.")
+          action.body.includes("Choose up to 3 seminars") &&
+          action.body.includes("Start by choosing your first seminar")
       )
     ).toBe(true);
-    expectNoDoneSelecting(initial.actions);
+    expectNoFinishOnInitialList(initial.actions);
 
     const first = selectSeminar(conversation, "sem-001");
     conversation = first.conversation;
     expect(conversation.selectedSeminarIds).toEqual(["sem-001"]);
     expect(conversation.currentStep).toBe("AWAITING_SEMINARS");
-    expect(
-      first.actions.some(
-        (action) =>
-          action.type === "TEXT" &&
-          action.body.includes("1 of 3 selected") &&
-          action.body.includes("AI Careers") &&
-          action.body.includes("2 more seminars")
-      )
-    ).toBe(true);
-    expect(first.actions.some((action) => action.type === "LIST")).toBe(true);
-    expectNoDoneSelecting(first.actions);
+    expect(conversation.status).toBe("ACTIVE");
+    expectDecisionButtons(first.actions, "Choose another");
+    expect(first.actions.some((action) => action.type === "LIST")).toBe(false);
 
     const second = selectSeminar(conversation, "sem-002");
     conversation = second.conversation;
     expect(conversation.selectedSeminarIds).toEqual(["sem-001", "sem-002"]);
-    expect(
-      second.actions.some(
-        (action) =>
-          action.type === "TEXT" &&
-          action.body.includes("2 of 3 selected") &&
-          action.body.includes("Design Thinking") &&
-          action.body.includes("1 more seminar")
-      )
-    ).toBe(true);
-    expect(second.actions.some((action) => action.type === "LIST")).toBe(true);
+    expectDecisionButtons(second.actions, "Choose one more");
 
     const duplicate = selectSeminar(conversation, "sem-002");
     expect(duplicate.conversation.selectedSeminarIds).toEqual([
       "sem-001",
       "sem-002",
     ]);
-    expect(duplicate.conversation.currentStep).toBe("AWAITING_SEMINARS");
     expect(
       duplicate.actions.some(
         (action) =>
-          action.type === "TEXT" &&
-          action.body ===
-            "You have already selected this seminar. Please choose another."
+          action.type === "TEXT" && action.body === DUPLICATE_SEMINAR_MESSAGE
       )
     ).toBe(true);
-    expect(duplicate.actions.some((action) => action.type === "LIST")).toBe(
-      true
-    );
+    expectDecisionButtons(duplicate.actions, "Choose one more");
 
     const third = selectSeminar(conversation, "sem-003");
     expect(third.conversation.selectedSeminarIds).toEqual([
@@ -625,9 +664,11 @@ describe("whatsapp registration conversation engine", () => {
     expect(
       third.actions.some(
         (action) =>
-          action.type === "TEXT" && action.body.includes("3 of 3 selected")
+          action.type === "TEXT" &&
+          action.body.includes("3 seminars selected") &&
+          action.body.includes("Completing your registration")
       )
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("keeps seminar:finish available for stale Done Selecting messages", () => {
@@ -641,7 +682,7 @@ describe("whatsapp registration conversation engine", () => {
 
     const finished = turn(
       conversation,
-      { interactiveId: REGISTRATION_INTERACTIVE_IDS.FINISH },
+      { interactiveId: REGISTRATION_INTERACTIVE_IDS.FINISH_LEGACY },
       "919876543210",
       null,
       extendedSeminars
@@ -798,9 +839,10 @@ describe("whatsapp registration conversation engine", () => {
       finished.actions.some(
         (action) =>
           action.type === "TEXT" &&
-          action.body.includes("3 of 3 selected")
+          action.body.includes("3 seminars selected") &&
+          action.body.includes("Completing your registration")
       )
-    ).toBe(false);
+    ).toBe(true);
     expect(finished.actions.some((action) => action.type === "LIST")).toBe(false);
   });
 
@@ -920,5 +962,202 @@ describe("whatsapp registration conversation engine", () => {
     expect(result.conversation.currentStep).toBe("AWAITING_NAME");
     expect(result.conversation.status).toBe("ACTIVE");
     expectNameStepActions(result.actions);
+  });
+});
+
+describe("flexible WhatsApp seminar selection UX", () => {
+  it("stores the first seminar selection", () => {
+    const conversation = advanceToSeminarsStep();
+    const first = selectSeminar(conversation, "sem-001");
+    expect(first.conversation.selectedSeminarIds).toEqual(["sem-001"]);
+  });
+
+  it("does not auto-complete after the first seminar selection", () => {
+    const conversation = advanceToSeminarsStep();
+    const first = selectSeminar(conversation, "sem-001");
+    expect(first.conversation.currentStep).toBe("AWAITING_SEMINARS");
+    expect(first.conversation.status).toBe("ACTIVE");
+  });
+
+  it("offers Choose another and Finish after the first seminar selection", () => {
+    const conversation = advanceToSeminarsStep();
+    const first = selectSeminar(conversation, "sem-001");
+    expectDecisionButtons(first.actions, "Choose another");
+  });
+
+  it("completes after Finish with one seminar", () => {
+    let conversation = advanceToSeminarsStep();
+    conversation = selectSeminar(conversation, "sem-001").conversation;
+    const finished = finishRegistration(conversation);
+    expect(finished.conversation.currentStep).toBe("READY_TO_REGISTER");
+    expect(finished.conversation.selectedSeminarIds).toEqual(["sem-001"]);
+  });
+
+  it("stores two unique seminar selections", () => {
+    let conversation = advanceToSeminarsStep();
+    conversation = selectSeminar(conversation, "sem-001").conversation;
+    const second = selectSeminar(conversation, "sem-002");
+    expect(second.conversation.selectedSeminarIds).toEqual([
+      "sem-001",
+      "sem-002",
+    ]);
+  });
+
+  it("does not auto-complete after the second seminar selection", () => {
+    let conversation = advanceToSeminarsStep();
+    conversation = selectSeminar(conversation, "sem-001").conversation;
+    const second = selectSeminar(conversation, "sem-002");
+    expect(second.conversation.currentStep).toBe("AWAITING_SEMINARS");
+    expect(second.conversation.status).toBe("ACTIVE");
+  });
+
+  it("offers Choose one more and Finish after the second seminar selection", () => {
+    let conversation = advanceToSeminarsStep();
+    conversation = selectSeminar(conversation, "sem-001").conversation;
+    const second = selectSeminar(conversation, "sem-002");
+    expectDecisionButtons(second.actions, "Choose one more");
+  });
+
+  it("completes after Finish with two seminars", () => {
+    let conversation = advanceToSeminarsStep();
+    conversation = selectSeminar(conversation, "sem-001").conversation;
+    conversation = selectSeminar(conversation, "sem-002").conversation;
+    const finished = finishRegistration(conversation);
+    expect(finished.conversation.currentStep).toBe("READY_TO_REGISTER");
+    expect(finished.conversation.selectedSeminarIds).toEqual([
+      "sem-001",
+      "sem-002",
+    ]);
+  });
+
+  it("auto-completes after the third unique seminar selection", () => {
+    const conversation = advanceToSeminarsStep();
+    const result = completeThreeSeminarSelections(conversation);
+    expect(result.conversation.currentStep).toBe("READY_TO_REGISTER");
+    expect(result.conversation.selectedSeminarIds).toHaveLength(3);
+  });
+
+  it("persists exactly three seminars after auto-complete", () => {
+    const conversation = advanceToSeminarsStep();
+    const result = completeThreeSeminarSelections(conversation);
+    expect(result.conversation.selectedSeminarIds).toEqual([
+      "sem-001",
+      "sem-002",
+      "sem-003",
+    ]);
+  });
+
+  it("treats done as Finish after one seminar", () => {
+    let conversation = advanceToSeminarsStep();
+    conversation = selectSeminar(conversation, "sem-001").conversation;
+    const finished = turn(conversation, { text: "done" });
+    expect(finished.conversation.currentStep).toBe("READY_TO_REGISTER");
+    expect(isFinishRegistrationText("done")).toBe(true);
+  });
+
+  it("treats finish as Finish after two seminars", () => {
+    let conversation = advanceToSeminarsStep();
+    conversation = selectSeminar(conversation, "sem-001").conversation;
+    conversation = selectSeminar(conversation, "sem-002").conversation;
+    const finished = turn(conversation, { text: "finish" });
+    expect(finished.conversation.currentStep).toBe("READY_TO_REGISTER");
+    expect(isFinishRegistrationText("finish")).toBe(true);
+  });
+
+  it("does not complete done with zero seminars and shows the seminar picker", () => {
+    const conversation = advanceToSeminarsStep();
+    const result = turn(conversation, { text: "done" });
+    expect(result.conversation.currentStep).toBe("AWAITING_SEMINARS");
+    expect(result.conversation.selectedSeminarIds).toEqual([]);
+    expect(
+      result.actions.some(
+        (action) =>
+          action.type === "TEXT" &&
+          action.body.includes(
+            "Please choose at least one seminar before completing your registration."
+          )
+      )
+    ).toBe(true);
+    expect(result.actions.some((action) => action.type === "LIST")).toBe(true);
+  });
+
+  it("does not treat continue as Finish", () => {
+    expect(isFinishRegistrationText("continue")).toBe(false);
+  });
+
+  it("does not treat yes as Choose another", () => {
+    expect(isChooseAnotherSeminarText("yes")).toBe(false);
+  });
+
+  it("treats more as Choose another after one seminar", () => {
+    let conversation = advanceToSeminarsStep();
+    conversation = selectSeminar(conversation, "sem-001").conversation;
+    const result = turn(conversation, { text: "more" });
+    expect(isChooseAnotherSeminarText("more")).toBe(true);
+    expect(result.actions.some((action) => action.type === "LIST")).toBe(true);
+    const ids = listSeminarRowIds(result.actions);
+    expect(ids).toContain(seminarInteractiveId("sem-002"));
+    expect(ids).not.toContain(seminarInteractiveId("sem-001"));
+  });
+
+  it("treats one more as Choose another after two seminars", () => {
+    let conversation = advanceToSeminarsStep();
+    conversation = selectSeminar(conversation, "sem-001").conversation;
+    conversation = selectSeminar(conversation, "sem-002").conversation;
+    const result = turn(conversation, { text: "one more" });
+    expect(isChooseAnotherSeminarText("one more")).toBe(true);
+    expect(result.actions.some((action) => action.type === "LIST")).toBe(true);
+    const ids = listSeminarRowIds(result.actions);
+    expect(ids).toContain(seminarInteractiveId("sem-003"));
+    expect(ids).not.toContain(seminarInteractiveId("sem-001"));
+    expect(ids).not.toContain(seminarInteractiveId("sem-002"));
+  });
+
+  it("excludes already-selected seminars from the next list", () => {
+    let conversation = advanceToSeminarsStep();
+    conversation = selectSeminar(conversation, "sem-002").conversation;
+    const result = chooseAnotherSeminar(conversation);
+    const ids = listSeminarRowIds(result.actions);
+    expect(ids).toEqual([
+      seminarInteractiveId("sem-001"),
+      seminarInteractiveId("sem-003"),
+    ]);
+  });
+
+  it("does not duplicate a seminar when the same reply is selected again", () => {
+    let conversation = advanceToSeminarsStep();
+    conversation = selectSeminar(conversation, "sem-001").conversation;
+    const duplicate = selectSeminar(conversation, "sem-001");
+    expect(duplicate.conversation.selectedSeminarIds).toEqual(["sem-001"]);
+  });
+
+  it("returns a recovery message for duplicate seminar replies", () => {
+    let conversation = advanceToSeminarsStep();
+    conversation = selectSeminar(conversation, "sem-001").conversation;
+    const duplicate = selectSeminar(conversation, "sem-001");
+    expect(
+      duplicate.actions.some(
+        (action) =>
+          action.type === "TEXT" && action.body === DUPLICATE_SEMINAR_MESSAGE
+      )
+    ).toBe(true);
+  });
+
+  it("never stores more than three seminars", () => {
+    const conversation = advanceToSeminarsStep();
+    const result = completeThreeSeminarSelections(conversation);
+    expect(result.conversation.selectedSeminarIds.length).toBeLessThanOrEqual(3);
+  });
+
+  it("routes stale interaction after three selections to completion without a fourth seminar", () => {
+    let conversation = advanceToSeminarsStep();
+    conversation = completeThreeSeminarSelections(conversation).conversation;
+    expect(conversation.selectedSeminarIds).toHaveLength(3);
+
+    const stale = turn(conversation, {
+      interactiveId: seminarInteractiveId("sem-001"),
+    });
+    expect(stale.conversation.selectedSeminarIds).toHaveLength(3);
+    expect(stale.conversation.currentStep).toBe("READY_TO_REGISTER");
   });
 });

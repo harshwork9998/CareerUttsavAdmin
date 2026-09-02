@@ -9,6 +9,7 @@ import {
 import {
   isSupportedConversationMessageType,
   normalizeWaId,
+  resolveConversationRefreshExpiry,
   type WhatsAppBotAction,
 } from "@/lib/server/whatsapp/registration-conversation";
 import { dispatchWhatsAppBotActions } from "@/lib/server/whatsapp/whatsapp-bot-dispatcher";
@@ -97,7 +98,7 @@ async function processInboundUserMessage(
     return;
   }
 
-  await deleteExpiredWhatsAppConversation(waId);
+  const sessionExpired = await deleteExpiredWhatsAppConversation(waId);
   const existingConversation = await loadWhatsAppConversationForWaId(waId);
   const seminarOptions = await getWhatsAppSeminarOptions();
   const completedRegistrationNumber = await resolveCompletedRegistrationNumber(
@@ -110,10 +111,14 @@ async function processInboundUserMessage(
     seminarOptions,
     waId,
     completedRegistrationNumber,
+    sessionExpired,
   });
 
   let saved = await saveWhatsAppConversationState(turn.conversation, {
-    refreshExpiry: turn.refreshExpiry,
+    refreshExpiry: resolveConversationRefreshExpiry(
+      turn.conversation,
+      turn.refreshExpiry
+    ),
   });
 
   const actions: WhatsAppBotAction[] = [...turn.actions];
@@ -127,7 +132,10 @@ async function processInboundUserMessage(
     actions.push(...completion.actions);
     if (completion.conversation) {
       saved = await saveWhatsAppConversationState(completion.conversation, {
-        refreshExpiry: false,
+        refreshExpiry: resolveConversationRefreshExpiry(
+          completion.conversation,
+          false
+        ),
       });
     }
     safeLogConversationProgress({

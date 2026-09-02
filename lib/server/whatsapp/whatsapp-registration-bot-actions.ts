@@ -1,13 +1,23 @@
 import type { WhatsAppBotAction } from "@/lib/server/whatsapp/registration-conversation";
 
-export const WHATSAPP_SEMINAR_SELECTION_COMPLETE_MESSAGE =
-  "✅ *3 of 3 selected*\n\nYour seminar preferences are saved.";
+export function buildWhatsAppSeminarSelectionCompleteActions(
+  selectedCount = 3
+): WhatsAppBotAction[] {
+  if (selectedCount <= 0) {
+    return [];
+  }
 
-export function buildWhatsAppSeminarSelectionCompleteActions(): WhatsAppBotAction[] {
+  const countLabel =
+    selectedCount === 1
+      ? "1 seminar"
+      : `${selectedCount} seminars`;
+
   return [
     {
       type: "TEXT",
-      body: WHATSAPP_SEMINAR_SELECTION_COMPLETE_MESSAGE,
+      body: `✅ *${countLabel} selected*
+
+Your seminar preferences are saved.`,
     },
   ];
 }
@@ -16,11 +26,14 @@ export function buildWhatsAppRegistrationSuccessActions(input: {
   registrationNumber: string;
   qrPngBase64: string;
   includeSeminarCompleteMessage?: boolean;
+  selectedSeminarCount?: number;
 }): WhatsAppBotAction[] {
   const actions: WhatsAppBotAction[] = [];
 
   if (input.includeSeminarCompleteMessage !== false) {
-    actions.push(...buildWhatsAppSeminarSelectionCompleteActions());
+    actions.push(
+      ...buildWhatsAppSeminarSelectionCompleteActions(input.selectedSeminarCount)
+    );
   }
 
   actions.push(

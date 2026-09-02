@@ -11,7 +11,10 @@ export const REGISTRATION_INTERACTIVE_IDS = {
   CONTINUE: "registration:continue",
   RESTART: "registration:restart",
   CANCEL: "registration:cancel",
-  FINISH: "seminar:finish",
+  CHOOSE_ANOTHER: "seminar_choose_another",
+  FINISH: "seminar_finish",
+  /** @deprecated Legacy interactive ID kept for stale WhatsApp button replies. */
+  FINISH_LEGACY: "seminar:finish",
 } as const;
 
 const CLASS_PREFIX = "class:";
@@ -105,6 +108,8 @@ export function isRegistrationInteractiveId(id: string): boolean {
     id === REGISTRATION_INTERACTIVE_IDS.RESTART ||
     id === REGISTRATION_INTERACTIVE_IDS.CANCEL ||
     id === REGISTRATION_INTERACTIVE_IDS.FINISH ||
+    id === REGISTRATION_INTERACTIVE_IDS.FINISH_LEGACY ||
+    id === REGISTRATION_INTERACTIVE_IDS.CHOOSE_ANOTHER ||
     id.startsWith(CLASS_PREFIX) ||
     id.startsWith(BOARD_PREFIX) ||
     id.startsWith(GENDER_PREFIX) ||

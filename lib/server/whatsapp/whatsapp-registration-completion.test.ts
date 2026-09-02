@@ -198,7 +198,7 @@ describe("whatsapp registration completion", () => {
       result.actions.some(
         (action) =>
           action.type === "TEXT" &&
-          action.body.includes("3 of 3 selected")
+          action.body.includes("1 seminar selected")
       )
     ).toBe(true);
   });
@@ -305,7 +305,7 @@ describe("whatsapp registration completion", () => {
       result.actions.some(
         (action) =>
           action.type === "TEXT" &&
-          action.body.includes("3 of 3 selected")
+          action.body.includes("1 seminar selected")
       )
     ).toBe(false);
     expect(createStudentRegistrationMock).not.toHaveBeenCalled();
@@ -345,7 +345,7 @@ describe("whatsapp registration completion", () => {
       result.actions.some(
         (action) =>
           action.type === "TEXT" &&
-          action.body.includes("3 of 3 selected")
+          action.body.includes("1 seminar selected")
       )
     ).toBe(false);
     expect(
@@ -422,6 +422,34 @@ describe("whatsapp registration completion", () => {
     expect(result.status).toBe("FAILED");
     expect(finalizeMock).not.toHaveBeenCalled();
     expect(result.conversation?.status).toBe("READY_TO_REGISTER");
+  });
+
+  it("repairs stale seminar IDs instead of staying stuck in READY_TO_REGISTER", async () => {
+    loadConversationMock.mockResolvedValue({
+      ...readyConversation,
+      selectedSeminarIds: ["sem-001", "sem-stale"],
+    });
+
+    const result = await completeWhatsAppRegistrationForConversation("919876543210");
+
+    expect(result.status).toBe("SEMINAR_RECOVERY");
+    expect(result.conversation?.status).toBe("ACTIVE");
+    expect(result.conversation?.currentStep).toBe("AWAITING_SEMINARS");
+    expect(result.conversation?.selectedSeminarIds).toEqual(["sem-001"]);
+    expect(createStudentRegistrationMock).not.toHaveBeenCalled();
+  });
+
+  it("does not silently complete registration during seminar recovery", async () => {
+    loadConversationMock.mockResolvedValue({
+      ...readyConversation,
+      selectedSeminarIds: ["sem-stale"],
+    });
+
+    const result = await completeWhatsAppRegistrationForConversation("919876543210");
+
+    expect(result.status).toBe("SEMINAR_RECOVERY");
+    expect(result.conversation?.selectedSeminarIds).toEqual([]);
+    expect(createStudentRegistrationMock).not.toHaveBeenCalled();
   });
 });
 

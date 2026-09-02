@@ -14,7 +14,10 @@ function conversationExpiryFromNow(): Date {
 }
 
 function isExpired(record: { expiresAt: Date; status: string }): boolean {
-  return record.status === "ACTIVE" && record.expiresAt.getTime() <= Date.now();
+  return (
+    (record.status === "ACTIVE" || record.status === "READY_TO_REGISTER") &&
+    record.expiresAt.getTime() <= Date.now()
+  );
 }
 
 export async function loadWhatsAppConversationRecordByWaId(
@@ -158,11 +161,14 @@ export async function cancelWhatsAppConversationForEmailDuplicate(
   return loadWhatsAppConversationRecordByWaId(waId);
 }
 
-export async function deleteExpiredWhatsAppConversation(waId: string): Promise<void> {
+export async function deleteExpiredWhatsAppConversation(
+  waId: string
+): Promise<boolean> {
   const record = await prisma.whatsAppRegistrationConversation.findUnique({
     where: { waId },
   });
-  if (!record) return;
-  if (!isExpired(record)) return;
+  if (!record) return false;
+  if (!isExpired(record)) return false;
   await prisma.whatsAppRegistrationConversation.delete({ where: { waId } });
+  return true;
 }

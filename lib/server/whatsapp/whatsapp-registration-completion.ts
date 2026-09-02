@@ -14,6 +14,9 @@ import {
 } from "@/lib/server/registration-service";
 import { maskWaId } from "@/lib/server/whatsapp/meta-webhook";
 import {
+  WHATSAPP_SEMINAR_SELECTION_MAX,
+  WHATSAPP_SEMINAR_SELECTION_MIN,
+  buildInvalidSeminarRecoveryResult,
   type SeminarOption,
   type WhatsAppBotAction,
   type WhatsAppConversationState,
@@ -43,6 +46,7 @@ export type WhatsAppRegistrationCompletionStatus =
   | "INVALID_PHONE"
   | "INVALID_CONVERSATION"
   | "INVALID_SEMINARS"
+  | "SEMINAR_RECOVERY"
   | "CONFLICT"
   | "FAILED";
 
@@ -92,7 +96,8 @@ function isReadyConversation(
     Boolean(conversation.interestedStream?.trim()) &&
     Boolean(conversation.college?.trim()) &&
     Boolean(conversation.city?.trim()) &&
-    conversation.selectedSeminarIds.length > 0
+    conversation.selectedSeminarIds.length >= WHATSAPP_SEMINAR_SELECTION_MIN &&
+    conversation.selectedSeminarIds.length <= WHATSAPP_SEMINAR_SELECTION_MAX
   );
 }
 
@@ -116,6 +121,14 @@ export function resolveSeminarTitlesFromIds(
   }
 
   return { ok: true, titles };
+}
+
+function resolveValidSeminarIds(
+  selectedSeminarIds: string[],
+  seminarOptions: SeminarOption[]
+): string[] {
+  const optionById = new Map(seminarOptions.map((option) => [option.id, option]));
+  return selectedSeminarIds.filter((seminarId) => optionById.has(seminarId));
 }
 
 export function duplicateAllowsRegistrationNumberReveal(
@@ -414,13 +427,20 @@ export async function completeWhatsAppRegistrationForConversation(
     seminarOptions
   );
   if (!seminarResolution.ok) {
-    safeLogCompletion({ waId, status: "INVALID_SEMINARS" });
+    const validSeminarIds = resolveValidSeminarIds(
+      record.selectedSeminarIds,
+      seminarOptions
+    );
+    const recovery = buildInvalidSeminarRecoveryResult(
+      record,
+      seminarOptions,
+      validSeminarIds
+    );
+    safeLogCompletion({ waId, status: "SEMINAR_RECOVERY" });
     return {
-      status: "INVALID_SEMINARS",
-      conversation: record,
-      actions: buildWhatsAppCompletionFailureActions(
-        "One or more seminar selections are no longer available. Please start again."
-      ),
+      status: "SEMINAR_RECOVERY",
+      conversation: recovery.conversation,
+      actions: recovery.actions,
     };
   }
 
@@ -534,6 +554,7 @@ export async function completeWhatsAppRegistrationForConversation(
     actions: buildWhatsAppRegistrationSuccessActions({
       registrationNumber: registration.registrationNumber,
       qrPngBase64,
+      selectedSeminarCount: record.selectedSeminarIds.length,
     }),
   };
 }
