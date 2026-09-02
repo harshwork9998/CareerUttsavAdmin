@@ -26,6 +26,7 @@ import {
 import { completeWhatsAppRegistrationForConversation } from "@/lib/server/whatsapp/whatsapp-registration-completion";
 import { resolveCompletedRegistrationNumberForConversation } from "@/lib/server/whatsapp/whatsapp-completed-conversation-reconcile";
 import { getWhatsAppSeminarOptions } from "@/lib/server/whatsapp/whatsapp-seminar-context";
+import { runSerializedForWaId } from "@/lib/server/whatsapp/whatsapp-wa-id-serializer";
 
 function toIncomingMessage(
   message: NormalizedWhatsAppMessage
@@ -64,7 +65,7 @@ function safeLogConversationProgress(input: {
   });
 }
 
-async function processInboundUserMessage(
+async function processInboundUserMessageSerialized(
   message: NormalizedWhatsAppMessage
 ): Promise<void> {
   const waId = normalizeWaId(message.waId);
@@ -160,6 +161,14 @@ async function processInboundUserMessage(
 
   await dispatchWhatsAppBotActions(waId, actions);
   await markWhatsAppInboundMessageProcessed(message.messageId);
+}
+
+async function processInboundUserMessage(
+  message: NormalizedWhatsAppMessage
+): Promise<void> {
+  return runSerializedForWaId(message.waId, () =>
+    processInboundUserMessageSerialized(message)
+  );
 }
 
 export async function processVerifiedWhatsAppWebhook(rawBody: string): Promise<void> {
