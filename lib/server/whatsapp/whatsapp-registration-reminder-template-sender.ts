@@ -31,7 +31,12 @@ export async function sendWhatsAppRegistrationReminder24hTemplate(
     to,
     templateName: templateConfig.templateName,
     languageCode: templateConfig.languageCode,
-    bodyParameters: [reminderTemplateDisplayName(conversation.studentName)],
+    bodyParameters: [
+      {
+        parameterName: "student_name",
+        text: reminderTemplateDisplayName(conversation.studentName),
+      },
+    ],
   });
 
   if (!result.success) {

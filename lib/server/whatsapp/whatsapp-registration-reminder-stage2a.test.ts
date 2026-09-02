@@ -14,7 +14,6 @@ import {
 } from "@/lib/server/whatsapp/whatsapp-registration-reminder-config";
 import { REGISTRATION_INTERACTIVE_IDS } from "@/lib/server/whatsapp/registration-interactive-ids";
 import {
-  countCompletedCoreFields,
   determineReminderStageToSend,
   effectiveLastInboundAt,
   isEligibleForRegistrationReminder,
@@ -180,40 +179,86 @@ describe("WhatsApp registration reminder Stage 2A", () => {
     expect(isReturningUserInactivity(previousActivityAt)).toBe(false);
   });
 
-  it("treats 3 completed core fields as ineligible", () => {
-    const conversation = buildEligibleConversation({
-      studentName: "Aarav",
-      email: "aarav@example.com",
-      classLabel: "Class 10",
-      gender: null,
-      board: null,
-      interestedStream: null,
-      college: null,
-      city: null,
-    });
-    expect(countCompletedCoreFields(conversation)).toBe(3);
+  it("does not remind conversations without studentName", () => {
     expect(
       isEligibleForRegistrationReminder(
-        conversation,
+        buildEligibleConversation({
+          studentName: null,
+          email: null,
+          classLabel: null,
+          gender: null,
+        }),
+        new Date(Date.now() + WHATSAPP_CONVERSATION_TTL_MS)
+      )
+    ).toBe(false);
+    expect(
+      isEligibleForRegistrationReminder(
+        buildEligibleConversation({
+          studentName: "   ",
+        }),
         new Date(Date.now() + WHATSAPP_CONVERSATION_TTL_MS)
       )
     ).toBe(false);
   });
 
-  it("treats 4 completed core fields as eligible", () => {
+  it("reminds as soon as studentName is saved", () => {
     const conversation = buildEligibleConversation({
+      studentName: "Aarav Sharma",
+      email: null,
+      classLabel: null,
+      gender: null,
       board: null,
       interestedStream: null,
       college: null,
       city: null,
+      currentStep: "AWAITING_EMAIL",
     });
-    expect(countCompletedCoreFields(conversation)).toBe(4);
     expect(
       isEligibleForRegistrationReminder(
         conversation,
         new Date(Date.now() + WHATSAPP_CONVERSATION_TTL_MS)
       )
     ).toBe(true);
+  });
+
+  it("reminds when only studentName is present", () => {
+    expect(
+      isEligibleForRegistrationReminder(
+        buildEligibleConversation({
+          studentName: "Aarav Sharma",
+          email: null,
+          classLabel: null,
+          gender: null,
+          board: null,
+          interestedStream: null,
+          college: null,
+          city: null,
+          currentStep: "AWAITING_EMAIL",
+        }),
+        new Date(Date.now() + WHATSAPP_CONVERSATION_TTL_MS)
+      )
+    ).toBe(true);
+  });
+
+  it("does not remind AWAITING_START conversations", () => {
+    expect(
+      isEligibleForRegistrationReminder(
+        buildEligibleConversation({
+          currentStep: "AWAITING_START",
+          studentName: "Aarav Sharma",
+        }),
+        new Date(Date.now() + WHATSAPP_CONVERSATION_TTL_MS)
+      )
+    ).toBe(false);
+  });
+
+  it("does not remind expired conversations", () => {
+    expect(
+      isEligibleForRegistrationReminder(
+        buildEligibleConversation({ studentName: "Aarav Sharma" }),
+        new Date(Date.now() - 60_000)
+      )
+    ).toBe(false);
   });
 
   it("does not remind READY_TO_REGISTER conversations", () => {

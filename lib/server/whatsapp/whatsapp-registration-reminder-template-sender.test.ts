@@ -69,7 +69,41 @@ describe("whatsapp registration reminder template sender", () => {
       to: "919876543210",
       templateName: "career_uttsav_registration_reminder",
       languageCode: "en_US",
-      bodyParameters: ["Aarav"],
+      bodyParameters: [
+        {
+          parameterName: "student_name",
+          text: "Aarav",
+        },
+      ],
     });
+  });
+
+  it("falls back to there when studentName is unavailable", async () => {
+    await sendWhatsAppRegistrationReminder24hTemplate("919876543210", {
+      waId: "919876543210",
+      status: "ACTIVE",
+      currentStep: "AWAITING_EMAIL",
+      studentName: null,
+      email: null,
+      classLabel: null,
+      gender: null,
+      board: null,
+      interestedStream: null,
+      college: null,
+      city: null,
+      selectedSeminarIds: [],
+      completedRegistrationId: null,
+    });
+
+    expect(sendTemplateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bodyParameters: [
+          {
+            parameterName: "student_name",
+            text: "there",
+          },
+        ],
+      })
+    );
   });
 });

@@ -9,6 +9,7 @@ import {
   sendWhatsAppButtons,
   sendWhatsAppImage,
   sendWhatsAppList,
+  sendWhatsAppTemplate,
   sendWhatsAppText,
   setMetaClientFetchForTests,
   uploadWhatsAppMedia,
@@ -402,5 +403,47 @@ describe("meta client outbound requests", () => {
       caption: "Your Career Uttsav entry QR code",
     });
     expect(result).toEqual({ success: true, messageId: "wamid.image" });
+  });
+
+  it("sendWhatsAppTemplate sends named body parameters to Graph API", async () => {
+    captureFetch(async (_url, init) => {
+      const body = JSON.parse(String(init?.body));
+      expect(body).toMatchObject({
+        to: TEST_RECIPIENT,
+        type: "template",
+        template: {
+          name: "career_uttsav_registration_reminder",
+          language: { code: "en_US" },
+          components: [
+            {
+              type: "body",
+              parameters: [
+                {
+                  type: "text",
+                  parameter_name: "student_name",
+                  text: "Aarav",
+                },
+              ],
+            },
+          ],
+        },
+      });
+      return mockJsonResponse(200, {
+        messages: [{ id: "wamid.template" }],
+      });
+    });
+
+    const result = await sendWhatsAppTemplate({
+      to: TEST_RECIPIENT,
+      templateName: "career_uttsav_registration_reminder",
+      languageCode: "en_US",
+      bodyParameters: [
+        {
+          parameterName: "student_name",
+          text: "Aarav",
+        },
+      ],
+    });
+    expect(result).toEqual({ success: true, messageId: "wamid.template" });
   });
 });

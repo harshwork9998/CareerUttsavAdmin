@@ -67,11 +67,16 @@ export type SendWhatsAppImageInput = {
   caption?: string;
 };
 
+export type SendWhatsAppTemplateBodyParameter = {
+  parameterName: string;
+  text: string;
+};
+
 export type SendWhatsAppTemplateInput = {
   to: string;
   templateName: string;
   languageCode: string;
-  bodyParameters?: string[];
+  bodyParameters?: SendWhatsAppTemplateBodyParameter[];
 };
 
 type FetchFn = typeof fetch;
@@ -463,9 +468,10 @@ export async function sendWhatsAppTemplate(
       ? [
           {
             type: "body",
-            parameters: input.bodyParameters.map((text) => ({
+            parameters: input.bodyParameters.map((parameter) => ({
               type: "text",
-              text,
+              parameter_name: parameter.parameterName,
+              text: parameter.text,
             })),
           },
         ]

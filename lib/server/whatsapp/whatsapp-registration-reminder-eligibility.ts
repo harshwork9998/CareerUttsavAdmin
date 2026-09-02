@@ -9,30 +9,10 @@ import {
   WHATSAPP_REMINDER_RETRY_THROTTLE_MS,
 } from "@/lib/server/whatsapp/whatsapp-registration-reminder-config";
 
-const CORE_FIELD_KEYS = [
-  "studentName",
-  "email",
-  "classLabel",
-  "gender",
-  "board",
-  "interestedStream",
-  "college",
-  "city",
-] as const satisfies readonly (keyof WhatsAppConversationState)[];
-
-export function countCompletedCoreFields(
+export function hasReminderEligibleStudentName(
   conversation: WhatsAppConversationState
-): number {
-  let count = 0;
-  for (const key of CORE_FIELD_KEYS) {
-    const value = conversation[key];
-    if (typeof value === "string" && value.trim()) {
-      count += 1;
-    } else if (value) {
-      count += 1;
-    }
-  }
-  return count;
+): boolean {
+  return Boolean(conversation.studentName?.trim());
 }
 
 export function isEligibleForRegistrationReminder(
@@ -49,7 +29,7 @@ export function isEligibleForRegistrationReminder(
   if (expiresAt.getTime() <= nowMs) {
     return false;
   }
-  return countCompletedCoreFields(conversation) >= 4;
+  return hasReminderEligibleStudentName(conversation);
 }
 
 export function effectiveLastInboundAt(
