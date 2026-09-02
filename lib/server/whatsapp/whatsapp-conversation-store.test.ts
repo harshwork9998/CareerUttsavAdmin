@@ -133,6 +133,7 @@ describe("whatsapp conversation store expiry", () => {
   });
 
   it("loads ACTIVE conversations before 7 days", async () => {
+    const expiresAt = new Date(Date.now() + WHATSAPP_CONVERSATION_TTL_MS);
     findUniqueMock.mockResolvedValue({
       id: "conv-1",
       waId: "919876543210",
@@ -150,11 +151,17 @@ describe("whatsapp conversation store expiry", () => {
       completedRegistrationId: null,
       createdAt: new Date(),
       updatedAt: new Date(),
-      expiresAt: new Date(Date.now() + WHATSAPP_CONVERSATION_TTL_MS),
+      expiresAt,
     });
 
-    const result = await loadWhatsAppConversationForWaId("919876543210");
-    expect(result?.status).toBe("ACTIVE");
+    const { loadWhatsAppConversationTurnContext } = await import(
+      "@/lib/server/whatsapp/whatsapp-conversation-store"
+    );
+    const loaded = await loadWhatsAppConversationTurnContext("919876543210");
+    expect(loaded.conversation?.status).toBe("ACTIVE");
+    expect(loaded.previousActivityAt?.getTime()).toBe(
+      expiresAt.getTime() - WHATSAPP_CONVERSATION_TTL_MS
+    );
   });
 
   it("loads COMPLETED conversations even when expiresAt is in the past", async () => {

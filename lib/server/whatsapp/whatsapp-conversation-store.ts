@@ -23,19 +23,32 @@ function isExpired(record: { expiresAt: Date; status: string }): boolean {
 export async function loadWhatsAppConversationRecordByWaId(
   waId: string
 ): Promise<WhatsAppConversationState | null> {
+  const loaded = await loadWhatsAppConversationTurnContext(waId);
+  return loaded.conversation;
+}
+
+export async function loadWhatsAppConversationTurnContext(waId: string): Promise<{
+  conversation: WhatsAppConversationState | null;
+  previousActivityAt: Date | null;
+}> {
   const record = await prisma.whatsAppRegistrationConversation.findUnique({
     where: { waId },
   });
 
   if (!record) {
-    return null;
+    return { conversation: null, previousActivityAt: null };
   }
 
   if (isExpired(record)) {
-    return null;
+    return { conversation: null, previousActivityAt: null };
   }
 
-  return mapPrismaConversationToState(record);
+  return {
+    conversation: mapPrismaConversationToState(record),
+    previousActivityAt: new Date(
+      record.expiresAt.getTime() - WHATSAPP_CONVERSATION_TTL_MS
+    ),
+  };
 }
 
 export async function loadWhatsAppConversationForWaId(

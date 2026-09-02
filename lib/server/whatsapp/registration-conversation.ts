@@ -23,6 +23,7 @@ import {
 import { formatNumberedSeminarListRow } from "@/lib/server/whatsapp/seminar-list-display";
 
 export const WHATSAPP_CONVERSATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export const WHATSAPP_RESUME_INACTIVITY_MS = 30 * 60 * 1000;
 export const WHATSAPP_SEMINAR_LIST_ROW_LIMIT = 10;
 export const WHATSAPP_SEMINAR_LIST_PAGE_SIZE = 8;
 export const WHATSAPP_SEMINAR_SELECTION_MIN = 1;
@@ -141,6 +142,20 @@ export function resolveConversationRefreshExpiry(
     return true;
   }
   return turnRefreshExpiry;
+}
+
+export function computePreviousActivityAtFromExpiresAt(expiresAt: Date): Date {
+  return new Date(expiresAt.getTime() - WHATSAPP_CONVERSATION_TTL_MS);
+}
+
+export function isReturningUserInactivity(
+  previousActivityAt: Date | null | undefined,
+  nowMs: number = Date.now()
+): boolean {
+  if (!previousActivityAt) {
+    return true;
+  }
+  return nowMs - previousActivityAt.getTime() >= WHATSAPP_RESUME_INACTIVITY_MS;
 }
 
 export function normalizeWaId(waId: string): string {
@@ -341,7 +356,7 @@ function beginNameStep(
   };
 }
 
-function resumePromptActions(
+export function buildWelcomeBackPromptActions(
   conversation: WhatsAppConversationState
 ): WhatsAppBotAction[] {
   return [
@@ -357,7 +372,7 @@ Would you like to continue where you left off?`,
       buttons: [
         {
           id: REGISTRATION_INTERACTIVE_IDS.CONTINUE,
-          title: "Continue registration",
+          title: "Continue",
         },
         {
           id: REGISTRATION_INTERACTIVE_IDS.RESTART,
@@ -366,6 +381,33 @@ Would you like to continue where you left off?`,
       ],
     },
   ];
+}
+
+function recentGreetingRepromptResult(
+  conversation: WhatsAppConversationState,
+  seminarOptions: SeminarOption[],
+  completedRegistrationNumber?: string | null
+): ConversationTurnResult {
+  return {
+    conversation,
+    actions: promptForStep(
+      conversation.currentStep,
+      seminarOptions,
+      conversation,
+      completedRegistrationNumber
+    ),
+    refreshExpiry: true,
+  };
+}
+
+function isGreetingOrStartResumeMessage(
+  text: string,
+  interactiveId: string | undefined
+): boolean {
+  return (
+    (text !== "" && isGreetingText(text)) ||
+    interactiveId === REGISTRATION_INTERACTIVE_IDS.START
+  );
 }
 
 export function resumeProgressContextLine(
@@ -963,7 +1005,8 @@ function handleGlobalControls(
   conversation: WhatsAppConversationState,
   message: IncomingConversationMessage,
   seminarOptions: SeminarOption[],
-  completedRegistrationNumber?: string | null
+  completedRegistrationNumber?: string | null,
+  previousActivityAt?: Date | null
 ): ConversationTurnResult | null {
   const text = message.text?.trim() ?? "";
   const interactiveId = message.interactiveId;
@@ -1048,16 +1091,22 @@ function handleGlobalControls(
   }
 
   if (
-    isIncompleteConversationStatus(conversation.status) &&
+    conversation.status === "ACTIVE" &&
     conversation.currentStep !== "AWAITING_START" &&
-    ((text && isGreetingText(text)) ||
-      interactiveId === REGISTRATION_INTERACTIVE_IDS.START)
+    isGreetingOrStartResumeMessage(text, interactiveId)
   ) {
-    return {
+    if (isReturningUserInactivity(previousActivityAt)) {
+      return {
+        conversation,
+        actions: buildWelcomeBackPromptActions(conversation),
+        refreshExpiry: true,
+      };
+    }
+    return recentGreetingRepromptResult(
       conversation,
-      actions: resumePromptActions(conversation),
-      refreshExpiry: true,
-    };
+      seminarOptions,
+      completedRegistrationNumber
+    );
   }
 
   if (
@@ -1066,8 +1115,7 @@ function handleGlobalControls(
   ) {
     if (
       conversation.status === "COMPLETED" &&
-      ((text && isGreetingText(text)) ||
-        interactiveId === REGISTRATION_INTERACTIVE_IDS.START)
+      isGreetingOrStartResumeMessage(text, interactiveId)
     ) {
       return {
         conversation,
@@ -1078,12 +1126,12 @@ function handleGlobalControls(
 
     if (
       conversation.status === "READY_TO_REGISTER" &&
-      ((text && isGreetingText(text)) ||
-        interactiveId === REGISTRATION_INTERACTIVE_IDS.START)
+      isGreetingOrStartResumeMessage(text, interactiveId) &&
+      isReturningUserInactivity(previousActivityAt)
     ) {
       return {
         conversation,
-        actions: resumePromptActions(conversation),
+        actions: buildWelcomeBackPromptActions(conversation),
         refreshExpiry: true,
       };
     }
@@ -1110,6 +1158,7 @@ export function processRegistrationConversationTurn(input: {
   waId: string;
   completedRegistrationNumber?: string | null;
   sessionExpired?: boolean;
+  previousActivityAt?: Date | null;
 }): ConversationTurnResult {
   const normalizedWaId = normalizeWaId(input.waId);
   const sessionExpired = input.sessionExpired ?? false;
@@ -1127,7 +1176,8 @@ export function processRegistrationConversationTurn(input: {
     conversation,
     input.message,
     input.seminarOptions,
-    input.completedRegistrationNumber
+    input.completedRegistrationNumber,
+    input.previousActivityAt
   );
   if (global) {
     return global;

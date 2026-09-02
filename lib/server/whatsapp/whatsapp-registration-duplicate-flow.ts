@@ -162,6 +162,7 @@ export async function processWhatsAppRegistrationConversationTurnAsync(input: {
   waId: string;
   completedRegistrationNumber?: string | null;
   sessionExpired?: boolean;
+  previousActivityAt?: Date | null;
 }): Promise<ConversationTurnResult> {
   const normalizedWaId = normalizeWaId(input.waId);
   let conversation =

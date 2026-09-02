@@ -16,7 +16,7 @@ import { dispatchWhatsAppBotActions } from "@/lib/server/whatsapp/whatsapp-bot-d
 import { processWhatsAppRegistrationConversationTurnAsync } from "@/lib/server/whatsapp/whatsapp-registration-duplicate-flow";
 import {
   deleteExpiredWhatsAppConversation,
-  loadWhatsAppConversationForWaId,
+  loadWhatsAppConversationTurnContext,
   saveWhatsAppConversationState,
 } from "@/lib/server/whatsapp/whatsapp-conversation-store";
 import {
@@ -38,8 +38,8 @@ function toIncomingMessage(
 
 async function resolveCompletedRegistrationNumber(
   conversation: Awaited<
-    ReturnType<typeof loadWhatsAppConversationForWaId>
-  >
+    ReturnType<typeof loadWhatsAppConversationTurnContext>
+  >["conversation"]
 ): Promise<string | null> {
   return resolveCompletedRegistrationNumberForConversation(conversation);
 }
@@ -99,7 +99,8 @@ async function processInboundUserMessage(
   }
 
   const sessionExpired = await deleteExpiredWhatsAppConversation(waId);
-  const existingConversation = await loadWhatsAppConversationForWaId(waId);
+  const { conversation: existingConversation, previousActivityAt } =
+    await loadWhatsAppConversationTurnContext(waId);
   const seminarOptions = await getWhatsAppSeminarOptions();
   const completedRegistrationNumber = await resolveCompletedRegistrationNumber(
     existingConversation
@@ -112,6 +113,7 @@ async function processInboundUserMessage(
     waId,
     completedRegistrationNumber,
     sessionExpired,
+    previousActivityAt,
   });
 
   let saved = await saveWhatsAppConversationState(turn.conversation, {

@@ -165,7 +165,8 @@ function turn(
   message: { text?: string; interactiveId?: string },
   waId = "919876543210",
   completedRegistrationNumber?: string | null,
-  options: SeminarOption[] = seminarOptions
+  options: SeminarOption[] = seminarOptions,
+  previousActivityAt?: Date | null
 ) {
   return processRegistrationConversationTurn({
     conversation,
@@ -173,6 +174,7 @@ function turn(
     seminarOptions: options,
     waId,
     completedRegistrationNumber,
+    previousActivityAt,
   });
 }
 
@@ -515,10 +517,17 @@ describe("whatsapp registration conversation engine", () => {
     expect("parentPhone" in state).toBe(false);
   });
 
-  it("preserves progress when user says hi during an active flow", () => {
+  it("preserves progress when user says hi during an active flow after inactivity", () => {
     let conversation = beginAtNameStep();
     conversation = turn(conversation, { text: "Aarav Sharma" }).conversation;
-    const result = turn(conversation, { text: "hello" });
+    const result = turn(
+      conversation,
+      { text: "hello" },
+      "919876543210",
+      null,
+      seminarOptions,
+      new Date(Date.now() - 31 * 60 * 1000)
+    );
     expect(result.conversation.studentName).toBe("Aarav Sharma");
     expect(result.conversation.currentStep).toBe("AWAITING_EMAIL");
     expect(result.refreshExpiry).toBe(true);
@@ -536,6 +545,30 @@ describe("whatsapp registration conversation engine", () => {
           action.body.includes("Next step: Email")
       )
     ).toBe(true);
+  });
+
+  it("re-prompts the current step when user says hi with recent activity", () => {
+    let conversation = beginAtNameStep();
+    conversation = turn(conversation, { text: "Aarav Sharma" }).conversation;
+    const result = turn(
+      conversation,
+      { text: "hello" },
+      "919876543210",
+      null,
+      seminarOptions,
+      new Date(Date.now() - 10_000)
+    );
+    expect(result.conversation.currentStep).toBe("AWAITING_EMAIL");
+    expect(
+      result.actions.some(
+        (action) =>
+          action.type === "TEXT" &&
+          action.body.includes("Please enter your email address")
+      )
+    ).toBe(true);
+    expect(
+      result.actions.some((action) => action.type === "BUTTONS")
+    ).toBe(false);
   });
 
   it("restart clears incomplete answers", () => {

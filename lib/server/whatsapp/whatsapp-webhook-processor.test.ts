@@ -18,7 +18,7 @@ vi.mock("@/lib/server/whatsapp/whatsapp-inbound-message-store", () => ({
 }));
 
 vi.mock("@/lib/server/whatsapp/whatsapp-conversation-store", () => ({
-  loadWhatsAppConversationForWaId: (...args: unknown[]) =>
+  loadWhatsAppConversationTurnContext: (...args: unknown[]) =>
     loadConversationMock(...args),
   saveWhatsAppConversationState: (...args: unknown[]) =>
     saveConversationMock(...args),
@@ -99,7 +99,10 @@ describe("whatsapp webhook processor", () => {
     vi.clearAllMocks();
     claimMock.mockResolvedValue("new");
     markProcessedMock.mockResolvedValue(undefined);
-    loadConversationMock.mockResolvedValue(null);
+    loadConversationMock.mockResolvedValue({
+      conversation: null,
+      previousActivityAt: null,
+    });
     saveConversationMock.mockImplementation(async (state: WhatsAppConversationState) => state);
     deleteExpiredMock.mockResolvedValue(false);
     getSeminarsMock.mockResolvedValue([{ id: "sem-001", title: "AI Careers" }]);
