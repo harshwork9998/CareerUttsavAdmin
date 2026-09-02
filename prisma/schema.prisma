@@ -446,6 +446,9 @@ model WhatsAppRegistrationConversation {
   city               String?
   selectedSeminarIds Json                       @default("[]")
   completedRegistrationId String?               @unique
+  lastInboundAt          DateTime?
+  highestReminderStageSent Int                @default(0)
+  lastReminderAttemptAt  DateTime?
   createdAt          DateTime                   @default(now())
   updatedAt          DateTime                   @updatedAt
   expiresAt          DateTime

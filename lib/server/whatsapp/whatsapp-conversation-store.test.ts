@@ -149,6 +149,9 @@ describe("whatsapp conversation store expiry", () => {
       city: null,
       selectedSeminarIds: [],
       completedRegistrationId: null,
+      lastInboundAt: null,
+      highestReminderStageSent: 0,
+      lastReminderAttemptAt: null,
       createdAt: new Date(),
       updatedAt: new Date(),
       expiresAt,
@@ -162,6 +165,41 @@ describe("whatsapp conversation store expiry", () => {
     expect(loaded.previousActivityAt?.getTime()).toBe(
       expiresAt.getTime() - WHATSAPP_CONVERSATION_TTL_MS
     );
+    expect(loaded.lastInboundAt).toBeNull();
+  });
+
+  it("prefers lastInboundAt for previousActivityAt when present", async () => {
+    const lastInboundAt = new Date(Date.now() - 45 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + WHATSAPP_CONVERSATION_TTL_MS);
+    findUniqueMock.mockResolvedValue({
+      id: "conv-1",
+      waId: "919876543210",
+      status: "ACTIVE",
+      currentStep: "AWAITING_EMAIL",
+      studentName: "Aarav Sharma",
+      email: null,
+      classLabel: null,
+      gender: null,
+      board: null,
+      interestedStream: null,
+      college: null,
+      city: null,
+      selectedSeminarIds: [],
+      completedRegistrationId: null,
+      lastInboundAt,
+      highestReminderStageSent: 0,
+      lastReminderAttemptAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      expiresAt,
+    });
+
+    const { loadWhatsAppConversationTurnContext } = await import(
+      "@/lib/server/whatsapp/whatsapp-conversation-store"
+    );
+    const loaded = await loadWhatsAppConversationTurnContext("919876543210");
+    expect(loaded.previousActivityAt?.getTime()).toBe(lastInboundAt.getTime());
+    expect(loaded.lastInboundAt?.getTime()).toBe(lastInboundAt.getTime());
   });
 
   it("loads COMPLETED conversations even when expiresAt is in the past", async () => {
@@ -205,6 +243,9 @@ describe("whatsapp conversation store expiry", () => {
       city: null,
       selectedSeminarIds: [],
       completedRegistrationId: null,
+      lastInboundAt: null,
+      highestReminderStageSent: 0,
+      lastReminderAttemptAt: null,
       createdAt: new Date(),
       updatedAt: new Date(),
       expiresAt: new Date(Date.now() + WHATSAPP_CONVERSATION_TTL_MS),

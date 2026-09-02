@@ -114,6 +114,7 @@ export type ConversationTurnResult = {
   conversation: WhatsAppConversationState;
   actions: WhatsAppBotAction[];
   refreshExpiry: boolean;
+  resetReminderTracking?: boolean;
 };
 
 export function isIncompleteConversationStatus(
@@ -483,6 +484,7 @@ function performRegistrationRestart(
       },
     ],
     refreshExpiry: true,
+    resetReminderTracking: true,
   };
 }
 

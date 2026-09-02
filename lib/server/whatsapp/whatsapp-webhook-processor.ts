@@ -122,6 +122,8 @@ async function processInboundUserMessageSerialized(
       turn.conversation,
       turn.refreshExpiry
     ),
+    touchLastInboundAt: true,
+    resetReminderTracking: turn.resetReminderTracking ?? false,
   });
 
   const actions: WhatsAppBotAction[] = [...turn.actions];
@@ -139,6 +141,7 @@ async function processInboundUserMessageSerialized(
           completion.conversation,
           false
         ),
+        touchLastInboundAt: true,
       });
     }
     safeLogConversationProgress({

@@ -102,6 +102,7 @@ describe("whatsapp webhook processor", () => {
     loadConversationMock.mockResolvedValue({
       conversation: null,
       previousActivityAt: null,
+      lastInboundAt: null,
     });
     saveConversationMock.mockImplementation(async (state: WhatsAppConversationState) => state);
     deleteExpiredMock.mockResolvedValue(false);
@@ -229,6 +230,10 @@ describe("whatsapp webhook processor", () => {
       messageType: "text",
     });
     expect(processTurnMock).toHaveBeenCalledOnce();
+    expect(saveConversationMock).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ touchLastInboundAt: true })
+    );
     expect(dispatchMock).toHaveBeenCalledWith(
       "919876543210",
       expect.any(Array)

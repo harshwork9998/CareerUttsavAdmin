@@ -4,6 +4,7 @@ import {
   WHATSAPP_CONVERSATION_TTL_MS,
   type WhatsAppConversationState,
 } from "@/lib/server/whatsapp/registration-conversation";
+import { isEligibleForRegistrationReminder } from "@/lib/server/whatsapp/whatsapp-registration-reminder-eligibility";
 import {
   mapPrismaConversationToState,
   mapStateToPrismaConversationData,
@@ -30,24 +31,28 @@ export async function loadWhatsAppConversationRecordByWaId(
 export async function loadWhatsAppConversationTurnContext(waId: string): Promise<{
   conversation: WhatsAppConversationState | null;
   previousActivityAt: Date | null;
+  lastInboundAt: Date | null;
 }> {
   const record = await prisma.whatsAppRegistrationConversation.findUnique({
     where: { waId },
   });
 
   if (!record) {
-    return { conversation: null, previousActivityAt: null };
+    return { conversation: null, previousActivityAt: null, lastInboundAt: null };
   }
 
   if (isExpired(record)) {
-    return { conversation: null, previousActivityAt: null };
+    return { conversation: null, previousActivityAt: null, lastInboundAt: null };
   }
+
+  const previousActivityAt =
+    record.lastInboundAt ??
+    new Date(record.expiresAt.getTime() - WHATSAPP_CONVERSATION_TTL_MS);
 
   return {
     conversation: mapPrismaConversationToState(record),
-    previousActivityAt: new Date(
-      record.expiresAt.getTime() - WHATSAPP_CONVERSATION_TTL_MS
-    ),
+    previousActivityAt,
+    lastInboundAt: record.lastInboundAt,
   };
 }
 
@@ -59,8 +64,13 @@ export async function loadWhatsAppConversationForWaId(
 
 export async function saveWhatsAppConversationState(
   state: WhatsAppConversationState,
-  options: { refreshExpiry: boolean }
+  options: {
+    refreshExpiry: boolean;
+    touchLastInboundAt?: boolean;
+    resetReminderTracking?: boolean;
+  }
 ): Promise<WhatsAppConversationState> {
+  const now = new Date();
   const expiresAt = options.refreshExpiry
     ? conversationExpiryFromNow()
     : (
@@ -71,11 +81,32 @@ export async function saveWhatsAppConversationState(
       )?.expiresAt ?? conversationExpiryFromNow();
 
   const data = mapStateToPrismaConversationData(state, expiresAt);
+  const reminderPatch: {
+    lastInboundAt?: Date;
+    highestReminderStageSent?: number;
+    lastReminderAttemptAt?: Date | null;
+  } = {};
+
+  if (options.touchLastInboundAt) {
+    reminderPatch.lastInboundAt = now;
+  }
+  if (options.resetReminderTracking) {
+    reminderPatch.highestReminderStageSent = 0;
+    reminderPatch.lastReminderAttemptAt = null;
+  }
 
   const saved = await prisma.whatsAppRegistrationConversation.upsert({
     where: { waId: state.waId },
-    create: data,
-    update: data,
+    create: {
+      ...data,
+      lastInboundAt: options.touchLastInboundAt ? now : null,
+      highestReminderStageSent: 0,
+      lastReminderAttemptAt: null,
+    },
+    update: {
+      ...data,
+      ...reminderPatch,
+    },
   });
 
   return mapPrismaConversationToState(saved);
@@ -184,4 +215,88 @@ export async function deleteExpiredWhatsAppConversation(
   if (!isExpired(record)) return false;
   await prisma.whatsAppRegistrationConversation.delete({ where: { waId } });
   return true;
+}
+
+export type WhatsAppRegistrationReminderCandidate = {
+  waId: string;
+  lastInboundAt: Date | null;
+  highestReminderStageSent: number;
+  lastReminderAttemptAt: Date | null;
+  expiresAt: Date;
+};
+
+export async function listWhatsAppRegistrationReminderCandidates(): Promise<
+  WhatsAppRegistrationReminderCandidate[]
+> {
+  const now = new Date();
+  const records = await prisma.whatsAppRegistrationConversation.findMany({
+    where: {
+      status: "ACTIVE",
+      expiresAt: { gt: now },
+      currentStep: { not: "AWAITING_START" },
+    },
+  });
+
+  return records
+    .filter((record) =>
+      isEligibleForRegistrationReminder(
+        mapPrismaConversationToState(record),
+        record.expiresAt,
+        now.getTime()
+      )
+    )
+    .map((record) => ({
+      waId: record.waId,
+      lastInboundAt: record.lastInboundAt,
+      highestReminderStageSent: record.highestReminderStageSent,
+      lastReminderAttemptAt: record.lastReminderAttemptAt,
+      expiresAt: record.expiresAt,
+    }));
+}
+
+export async function loadWhatsAppRegistrationReminderContext(waId: string): Promise<{
+  conversation: WhatsAppConversationState;
+  lastInboundAt: Date | null;
+  highestReminderStageSent: number;
+  lastReminderAttemptAt: Date | null;
+  expiresAt: Date;
+} | null> {
+  const record = await prisma.whatsAppRegistrationConversation.findUnique({
+    where: { waId },
+  });
+  if (!record || isExpired(record)) {
+    return null;
+  }
+
+  return {
+    conversation: mapPrismaConversationToState(record),
+    lastInboundAt: record.lastInboundAt,
+    highestReminderStageSent: record.highestReminderStageSent,
+    lastReminderAttemptAt: record.lastReminderAttemptAt,
+    expiresAt: record.expiresAt,
+  };
+}
+
+export async function recordWhatsAppRegistrationReminderSuccess(
+  waId: string,
+  stage: 2 | 6
+): Promise<void> {
+  await prisma.whatsAppRegistrationConversation.update({
+    where: { waId },
+    data: {
+      highestReminderStageSent: stage,
+      lastReminderAttemptAt: null,
+    },
+  });
+}
+
+export async function recordWhatsAppRegistrationReminderFailure(
+  waId: string
+): Promise<void> {
+  await prisma.whatsAppRegistrationConversation.update({
+    where: { waId },
+    data: {
+      lastReminderAttemptAt: new Date(),
+    },
+  });
 }
