@@ -5,6 +5,7 @@ import {
 import {
   WHATSAPP_REMINDER_2H_MS,
   WHATSAPP_REMINDER_6H_MS,
+  WHATSAPP_REMINDER_24H_MS,
   WHATSAPP_REMINDER_RETRY_THROTTLE_MS,
 } from "@/lib/server/whatsapp/whatsapp-registration-reminder-config";
 
@@ -63,7 +64,13 @@ export function effectiveLastInboundAt(
 export function determineReminderStageToSend(
   inactivityMs: number,
   highestReminderStageSent: number
-): 2 | 6 | null {
+): 2 | 6 | 24 | null {
+  if (inactivityMs >= WHATSAPP_REMINDER_24H_MS) {
+    if (highestReminderStageSent >= 24) {
+      return null;
+    }
+    return 24;
+  }
   if (inactivityMs >= WHATSAPP_REMINDER_6H_MS) {
     if (highestReminderStageSent >= 6) {
       return null;

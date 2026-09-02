@@ -326,6 +326,7 @@ describe("WhatsApp registration reminder Stage 2A", () => {
       checked: 0,
       sent2h: 0,
       sent6h: 0,
+      sent24h: 0,
       skipped: 0,
       failed: 0,
     });
@@ -364,6 +365,7 @@ describe("WhatsApp registration reminder Stage 2A", () => {
       checked: 0,
       sent2h: 0,
       sent6h: 0,
+      sent24h: 0,
       skipped: 0,
       failed: 0,
     });

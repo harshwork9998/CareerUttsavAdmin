@@ -10,6 +10,7 @@ import {
   buildWhatsAppRegistrationReminder6hActions,
 } from "@/lib/server/whatsapp/whatsapp-registration-reminder-messages";
 import { isWhatsAppRegistrationRemindersEnabled } from "@/lib/server/whatsapp/whatsapp-registration-reminder-config";
+import { sendWhatsAppRegistrationReminder24hTemplate } from "@/lib/server/whatsapp/whatsapp-registration-reminder-template-sender";
 import {
   listWhatsAppRegistrationReminderCandidates,
   loadWhatsAppRegistrationReminderContext,
@@ -23,11 +24,17 @@ export type WhatsAppRegistrationReminderProcessorResult = {
   checked: number;
   sent2h: number;
   sent6h: number;
+  sent24h: number;
   skipped: number;
   failed: number;
 };
 
-type ReminderProcessOutcome = "sent2h" | "sent6h" | "skipped" | "failed";
+type ReminderProcessOutcome =
+  | "sent2h"
+  | "sent6h"
+  | "sent24h"
+  | "skipped"
+  | "failed";
 
 async function processReminderCandidate(
   candidate: WhatsAppRegistrationReminderCandidate,
@@ -77,6 +84,20 @@ async function processReminderCandidate(
       return "skipped";
     }
 
+    if (stage === 24) {
+      const templateSend = await sendWhatsAppRegistrationReminder24hTemplate(
+        candidate.waId,
+        context.conversation
+      );
+      if (!templateSend.success) {
+        await recordWhatsAppRegistrationReminderFailure(candidate.waId);
+        return "failed";
+      }
+
+      await recordWhatsAppRegistrationReminderSuccess(candidate.waId, 24);
+      return "sent24h";
+    }
+
     const actions =
       stage === 2
         ? buildWhatsAppRegistrationReminder2hActions(context.conversation)
@@ -99,6 +120,7 @@ export async function processWhatsAppRegistrationReminders(): Promise<WhatsAppRe
       checked: 0,
       sent2h: 0,
       sent6h: 0,
+      sent24h: 0,
       skipped: 0,
       failed: 0,
     };
@@ -109,6 +131,7 @@ export async function processWhatsAppRegistrationReminders(): Promise<WhatsAppRe
     checked: candidates.length,
     sent2h: 0,
     sent6h: 0,
+    sent24h: 0,
     skipped: 0,
     failed: 0,
   };
@@ -120,6 +143,8 @@ export async function processWhatsAppRegistrationReminders(): Promise<WhatsAppRe
         result.sent2h += 1;
       } else if (outcome === "sent6h") {
         result.sent6h += 1;
+      } else if (outcome === "sent24h") {
+        result.sent24h += 1;
       } else if (outcome === "failed") {
         result.failed += 1;
       } else {

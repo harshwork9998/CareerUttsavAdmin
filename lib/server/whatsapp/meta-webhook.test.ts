@@ -163,6 +163,46 @@ describe("meta webhook signature verification", () => {
 });
 
 describe("meta webhook payload handling", () => {
+  it("normalizes a template quick-reply Continue button", () => {
+    const payload = parseMetaWebhookPayload(
+      JSON.stringify({
+        object: "whatsapp_business_account",
+        entry: [
+          {
+            changes: [
+              {
+                value: {
+                  messaging_product: "whatsapp",
+                  messages: [
+                    {
+                      from: "16315551181",
+                      id: "wamid.template-continue",
+                      timestamp: "1504902988",
+                      type: "button",
+                      button: {
+                        text: "Continue",
+                        payload: "Continue",
+                      },
+                    },
+                  ],
+                },
+                field: "messages",
+              },
+            ],
+          },
+        ],
+      })
+    );
+    expect(payload).not.toBeNull();
+    const messages = extractNormalizedWhatsAppMessages(payload!);
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      type: "button",
+      interactiveReplyId: "registration:continue",
+      interactiveReplyTitle: "Continue",
+    });
+  });
+
   it("normalizes a text message webhook", () => {
     const payload = parseMetaWebhookPayload(JSON.stringify(textMessagePayload));
     expect(payload).not.toBeNull();

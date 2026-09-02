@@ -17,6 +17,21 @@ export const REGISTRATION_INTERACTIVE_IDS = {
   FINISH_LEGACY: "seminar:finish",
 } as const;
 
+export function mapTemplateQuickReplyToInteractiveId(input: {
+  text?: string;
+  payload?: string;
+}): string | null {
+  const text = input.text?.trim();
+  const payload = input.payload?.trim();
+  if (
+    payload === REGISTRATION_INTERACTIVE_IDS.CONTINUE ||
+    text === "Continue"
+  ) {
+    return REGISTRATION_INTERACTIVE_IDS.CONTINUE;
+  }
+  return null;
+}
+
 const CLASS_PREFIX = "class:";
 const BOARD_PREFIX = "board:";
 const GENDER_PREFIX = "gender:";
