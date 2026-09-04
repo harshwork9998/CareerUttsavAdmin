@@ -279,7 +279,7 @@ export async function loadWhatsAppRegistrationReminderContext(waId: string): Pro
 
 export async function recordWhatsAppRegistrationReminderSuccess(
   waId: string,
-  stage: 2 | 6 | 24
+  stage: 2 | 6 | 12
 ): Promise<void> {
   await prisma.whatsAppRegistrationConversation.update({
     where: { waId },

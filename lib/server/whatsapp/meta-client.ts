@@ -67,18 +67,6 @@ export type SendWhatsAppImageInput = {
   caption?: string;
 };
 
-export type SendWhatsAppTemplateBodyParameter = {
-  parameterName: string;
-  text: string;
-};
-
-export type SendWhatsAppTemplateInput = {
-  to: string;
-  templateName: string;
-  languageCode: string;
-  bodyParameters?: SendWhatsAppTemplateBodyParameter[];
-};
-
 type FetchFn = typeof fetch;
 
 let customFetch: FetchFn | null = null;
@@ -446,48 +434,6 @@ export async function sendWhatsAppImage(
       image: {
         id: input.mediaId,
         ...(input.caption ? { caption: input.caption } : {}),
-      },
-    },
-  });
-}
-
-export async function sendWhatsAppTemplate(
-  input: SendWhatsAppTemplateInput
-): Promise<MetaSendResult> {
-  const configResult = getMetaClientConfig();
-  if (!configResult.ok) {
-    return {
-      success: false,
-      errorCode: configResult.errorCode,
-      retryable: false,
-    };
-  }
-
-  const components =
-    input.bodyParameters && input.bodyParameters.length > 0
-      ? [
-          {
-            type: "body",
-            parameters: input.bodyParameters.map((parameter) => ({
-              type: "text",
-              parameter_name: parameter.parameterName,
-              text: parameter.text,
-            })),
-          },
-        ]
-      : undefined;
-
-  return sendMetaMessagePayload({
-    config: configResult.config,
-    to: input.to,
-    actionType: "TEMPLATE",
-    payload: {
-      ...buildBaseMessagePayload(input.to),
-      type: "template",
-      template: {
-        name: input.templateName,
-        language: { code: input.languageCode },
-        ...(components ? { components } : {}),
       },
     },
   });

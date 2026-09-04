@@ -1,7 +1,5 @@
 import { createHmac, timingSafeEqual } from "crypto";
 
-import { mapTemplateQuickReplyToInteractiveId } from "@/lib/server/whatsapp/registration-interactive-ids";
-
 const SIGNATURE_PREFIX = "sha256=";
 
 export type MetaWebhookVerificationInput = {
@@ -35,7 +33,6 @@ type MetaWebhookMessage = {
     button_reply?: { id?: string; title?: string };
     list_reply?: { id?: string; title?: string };
   };
-  button?: { text?: string; payload?: string };
 };
 
 type MetaWebhookChangeValue = {
@@ -141,34 +138,10 @@ export function parseMetaWebhookPayload(rawBody: string): MetaWebhookPayload | n
   }
 }
 
-function readTemplateButtonReply(message: MetaWebhookMessage): {
-  id?: string;
-  title?: string;
-} {
-  if (message.type !== "button" || !message.button) {
-    return {};
-  }
-
-  const mappedId = mapTemplateQuickReplyToInteractiveId(message.button);
-  if (!mappedId) {
-    return {};
-  }
-
-  return {
-    id: mappedId,
-    title: message.button.text,
-  };
-}
-
 function readInteractiveReply(message: MetaWebhookMessage): {
   id?: string;
   title?: string;
 } {
-  const templateButtonReply = readTemplateButtonReply(message);
-  if (templateButtonReply.id) {
-    return templateButtonReply;
-  }
-
   const interactive = message.interactive;
   if (!interactive) {
     return {};

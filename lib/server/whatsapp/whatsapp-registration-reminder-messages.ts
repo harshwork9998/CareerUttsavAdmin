@@ -63,3 +63,26 @@ Would you like to continue?`,
     },
   ];
 }
+
+export function buildWhatsAppRegistrationReminder12hActions(
+  _conversation: WhatsAppConversationState
+): WhatsAppBotAction[] {
+  return [
+    {
+      type: "BUTTONS",
+      body: `Your Career Uttsav registration is still in progress.
+
+Your details are saved, so you can continue from where you left off.`,
+      buttons: [
+        {
+          id: REGISTRATION_INTERACTIVE_IDS.CONTINUE,
+          title: "Continue",
+        },
+        {
+          id: REGISTRATION_INTERACTIVE_IDS.RESTART,
+          title: "Start over",
+        },
+      ],
+    },
+  ];
+}

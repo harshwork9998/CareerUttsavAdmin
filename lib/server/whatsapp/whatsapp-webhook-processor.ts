@@ -7,7 +7,7 @@ import {
   type NormalizedWhatsAppMessage,
 } from "@/lib/server/whatsapp/meta-webhook";
 import {
-  isSupportedConversationMessage,
+  isSupportedConversationMessageType,
   normalizeWaId,
   resolveConversationRefreshExpiry,
   type WhatsAppBotAction,
@@ -87,7 +87,7 @@ async function processInboundUserMessageSerialized(
     return;
   }
 
-  if (!isSupportedConversationMessage(message)) {
+  if (!isSupportedConversationMessageType(message.type)) {
     safeLogConversationProgress({
       messageId: message.messageId,
       messageType: message.type,

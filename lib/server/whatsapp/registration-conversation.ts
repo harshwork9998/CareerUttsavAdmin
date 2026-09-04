@@ -1536,15 +1536,5 @@ export function processRegistrationConversationTurn(input: {
 }
 
 export function isSupportedConversationMessageType(type: string): boolean {
-  return type === "text" || type === "interactive" || type === "button";
-}
-
-export function isSupportedConversationMessage(input: {
-  type: string;
-  interactiveReplyId?: string;
-}): boolean {
-  if (input.type === "text" || input.type === "interactive") {
-    return true;
-  }
-  return input.type === "button" && Boolean(input.interactiveReplyId);
+  return type === "text" || type === "interactive";
 }
