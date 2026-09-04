@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "crypto";
 
-/** Password reset links expire after 30 minutes. */
-export const PASSWORD_RESET_TTL_MS = 30 * 60 * 1000;
+/** Password reset links expire after 60 minutes. */
+export const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
 
 export const INVALID_RESET_LINK_MESSAGE =
   "Reset link is invalid or has expired.";

@@ -1,5 +1,11 @@
 import { ROLE_LABELS } from "@/constants";
-import { sendEmail } from "@/lib/email";
+import { sendEmail, type EmailSendOutcome } from "@/lib/email";
+import {
+  logPasswordResetError,
+  logPasswordResetInfo,
+  logPasswordResetWarning,
+  maskEmailForLog,
+} from "@/lib/server/admin-password-reset-logging";
 import type { RoleName, User } from "@/types";
 
 export const ADMIN_APPROVED_EMAIL_SUBJECT =
@@ -21,6 +27,19 @@ export type AdminAuthEmailNotificationResult = {
   attempted: boolean;
   sent: boolean;
 };
+
+export type PasswordResetEmailOutcome = EmailSendOutcome;
+
+export type AdminPasswordResetEmailResult = {
+  attempted: boolean;
+  outcome: PasswordResetEmailOutcome;
+  sent: boolean;
+  messageId?: string;
+  error?: string;
+  durationMs: number;
+};
+
+export const PASSWORD_RESET_EMAIL_TIMEOUT_MS = 12_000;
 
 export type AdminAccountApprovedEmailInput = {
   name: string;
@@ -134,7 +153,7 @@ We received a request to reset the password for your Career Uttsav Admin account
 Reset Password:
 ${input.resetUrl}
 
-This link will expire in 30 minutes.
+This link will expire in 60 minutes.
 
 If you did not request a password reset, you can ignore this email.
 
@@ -145,7 +164,7 @@ Career Uttsav Team`;
     `Hello ${name},`,
     "We received a request to reset the password for your Career Uttsav Admin account.",
     `Reset Password: ${input.resetUrl}`,
-    "This link will expire in 30 minutes.",
+    "This link will expire in 60 minutes.",
     "If you did not request a password reset, you can ignore this email.",
     "Regards,",
     "Career Uttsav Team",
@@ -224,8 +243,12 @@ export async function sendAdminAccountRejectedEmail(
 
 export async function sendAdminPasswordResetEmail(
   input: AdminPasswordResetEmailInput
-): Promise<AdminAuthEmailNotificationResult> {
+): Promise<AdminPasswordResetEmailResult> {
   const content = buildAdminPasswordResetEmailContent(input);
+
+  logPasswordResetInfo("resend_request_started", {
+    recipient: maskEmailForLog(input.email),
+  });
 
   const result = await sendEmail({
     to: input.email,
@@ -233,14 +256,54 @@ export async function sendAdminPasswordResetEmail(
     html: content.html,
     text: content.text,
     tags: [{ name: "category", value: "admin-password-reset" }],
+    timeoutMs: PASSWORD_RESET_EMAIL_TIMEOUT_MS,
   });
 
-  if (!result.ok) {
-    logEmailFailure("password-reset", result.error);
-    return { attempted: true, sent: false };
+  if (result.ok) {
+    logPasswordResetInfo("resend_accepted", {
+      recipient: maskEmailForLog(input.email),
+      message_id: result.id,
+      duration_ms: result.durationMs,
+    });
+
+    return {
+      attempted: true,
+      outcome: "accepted",
+      sent: true,
+      messageId: result.id,
+      durationMs: result.durationMs,
+    };
   }
 
-  return { attempted: true, sent: true };
+  if (result.outcome === "unknown") {
+    logPasswordResetWarning("resend_outcome_unknown", {
+      recipient: maskEmailForLog(input.email),
+      error: result.error,
+      duration_ms: result.durationMs,
+    });
+
+    return {
+      attempted: true,
+      outcome: "unknown",
+      sent: false,
+      error: result.error,
+      durationMs: result.durationMs,
+    };
+  }
+
+  logPasswordResetError("resend_failed", {
+    recipient: maskEmailForLog(input.email),
+    error: result.error,
+    duration_ms: result.durationMs,
+  });
+
+  return {
+    attempted: true,
+    outcome: "definitive_failure",
+    sent: false,
+    error: result.error,
+    durationMs: result.durationMs,
+  };
 }
 
 export function buildAdminReviewSuccessMessage(

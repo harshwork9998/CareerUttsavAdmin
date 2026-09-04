@@ -19,11 +19,43 @@ export type SendEmailInput = {
   replyTo?: string;
   tags?: { name: string; value: string }[];
   attachments?: EmailAttachment[];
+  timeoutMs?: number;
 };
 
+export type EmailSendOutcome = "accepted" | "definitive_failure" | "unknown";
+
 export type SendEmailResult =
-  | { ok: true; id: string }
-  | { ok: false; error: string };
+  | { ok: true; id: string; durationMs: number; outcome: "accepted" }
+  | {
+      ok: false;
+      error: string;
+      durationMs: number;
+      outcome: "definitive_failure" | "unknown";
+    };
+
+export const EMAIL_SEND_TIMEOUT_ERROR = "EMAIL_SEND_TIMEOUT";
+
+export const RESEND_AMBIGUOUS_NETWORK_ERROR =
+  "Unable to fetch data. The request could not be resolved.";
+
+function classifyEmailSendFailure(
+  error: string
+): "definitive_failure" | "unknown" {
+  if (
+    error === EMAIL_SEND_TIMEOUT_ERROR ||
+    error === RESEND_AMBIGUOUS_NETWORK_ERROR
+  ) {
+    return "unknown";
+  }
+
+  return "definitive_failure";
+}
+
+/**
+ * Resend v6.x forwards unknown PostOptions fields (including `signal`) to `fetch`
+ * at runtime even though CreateEmailRequestOptions does not yet declare it.
+ */
+type ResendEmailSendOptions = { signal?: AbortSignal };
 
 let resendClient: Resend | null = null;
 
@@ -108,39 +140,130 @@ export async function generateRegistrationQrDataUrl(
  * Reusable Resend sender for transactional emails.
  * Callers decide whether to await or fire-and-forget.
  */
-export async function sendEmail(
-  input: SendEmailInput
+async function performSendEmail(
+  input: SendEmailInput,
+  signal?: AbortSignal
 ): Promise<SendEmailResult> {
+  const startedAt = Date.now();
+  const elapsedMs = () => Date.now() - startedAt;
+
+  if (signal?.aborted) {
+    return {
+      ok: false,
+      error: EMAIL_SEND_TIMEOUT_ERROR,
+      durationMs: elapsedMs(),
+      outcome: "unknown",
+    };
+  }
+
   try {
     const resend = getResendClient();
-    const { data, error } = await resend.emails.send({
-      from: input.from ?? getDefaultFromAddress(),
-      to: input.to,
-      subject: input.subject,
-      html: input.html,
-      text: input.text,
-      replyTo: input.replyTo,
-      tags: input.tags,
-      attachments: input.attachments?.map((attachment) => ({
-        filename: attachment.filename,
-        content: attachment.content,
-        contentId: attachment.contentId,
-      })),
-    });
+    const requestOptions: ResendEmailSendOptions | undefined = signal
+      ? { signal }
+      : undefined;
+    const { data, error } = await resend.emails.send(
+      {
+        from: input.from ?? getDefaultFromAddress(),
+        to: input.to,
+        subject: input.subject,
+        html: input.html,
+        text: input.text,
+        replyTo: input.replyTo,
+        tags: input.tags,
+        attachments: input.attachments?.map((attachment) => ({
+          filename: attachment.filename,
+          content: attachment.content,
+          contentId: attachment.contentId,
+        })),
+      },
+      requestOptions as Parameters<Resend["emails"]["send"]>[1]
+    );
+
+    if (signal?.aborted) {
+      return {
+        ok: false,
+        error: EMAIL_SEND_TIMEOUT_ERROR,
+        durationMs: elapsedMs(),
+        outcome: "unknown",
+      };
+    }
+
+    const durationMs = elapsedMs();
 
     if (error) {
-      return { ok: false, error: error.message };
+      return {
+        ok: false,
+        error: error.message,
+        durationMs,
+        outcome: classifyEmailSendFailure(error.message),
+      };
     }
 
     if (!data?.id) {
-      return { ok: false, error: "Resend did not return an email id" };
+      return {
+        ok: false,
+        error: "Resend did not return an email id",
+        durationMs,
+        outcome: "definitive_failure",
+      };
     }
 
-    return { ok: true, id: data.id };
+    return { ok: true, id: data.id, durationMs, outcome: "accepted" };
   } catch (error) {
+    if (signal?.aborted) {
+      return {
+        ok: false,
+        error: EMAIL_SEND_TIMEOUT_ERROR,
+        durationMs: elapsedMs(),
+        outcome: "unknown",
+      };
+    }
+
     const message =
       error instanceof Error ? error.message : "Unknown email send failure";
-    return { ok: false, error: message };
+    return {
+      ok: false,
+      error: message,
+      durationMs: elapsedMs(),
+      outcome:
+        message === "RESEND_API_KEY is not set in the environment"
+          ? "definitive_failure"
+          : "unknown",
+    };
+  }
+}
+
+export async function sendEmail(
+  input: SendEmailInput
+): Promise<SendEmailResult> {
+  if (!input.timeoutMs) {
+    return performSendEmail(input);
+  }
+
+  const startedAt = Date.now();
+  const controller = new AbortController();
+  let timedOut = false;
+
+  const timeoutHandle = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, input.timeoutMs);
+
+  try {
+    const result = await performSendEmail(input, controller.signal);
+
+    if (timedOut || controller.signal.aborted) {
+      return {
+        ok: false,
+        error: EMAIL_SEND_TIMEOUT_ERROR,
+        durationMs: input.timeoutMs,
+        outcome: "unknown",
+      };
+    }
+
+    return result;
+  } finally {
+    clearTimeout(timeoutHandle);
   }
 }
 

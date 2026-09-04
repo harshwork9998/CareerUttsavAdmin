@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { hashAdminPassword, verifyAdminPassword } from "@/lib/admin-password";
 import { ROLE_ID_BY_NAME } from "@/constants";
@@ -18,11 +18,13 @@ vi.mock("@/lib/server/admin-auth-email", () => ({
 vi.mock("@/lib/server/admin-user-prisma-store", () => ({
   findPrismaAdminUserRecordByEmail: vi.fn(),
   createPrismaPasswordResetToken: vi.fn(),
-  revokeUnusedPrismaResetTokensForUser: vi.fn(),
+  revokePrismaPasswordResetTokenById: vi.fn(),
+  revokeOtherUnusedPrismaResetTokensForUser: vi.fn(),
   resetAdminPasswordWithPrismaToken: vi.fn(),
 }));
 
 import { sendAdminPasswordResetEmail } from "@/lib/server/admin-auth-email";
+import { isPrismaAdminUserPersistence } from "@/lib/server/admin-user-persistence-mode";
 import { shouldThrottleForgotPasswordRequest } from "@/lib/server/admin-forgot-password-throttle";
 import {
   FORGOT_PASSWORD_GENERIC_MESSAGE,
@@ -30,15 +32,18 @@ import {
   resetAdminPasswordWithToken,
 } from "@/lib/server/admin-password-reset-service";
 import {
+  buildPasswordResetUrl,
   generateRawResetToken,
   hashResetToken,
   INVALID_RESET_LINK_MESSAGE,
+  PASSWORD_RESET_TTL_MS,
 } from "@/lib/server/admin-reset-token";
 import {
   createPrismaPasswordResetToken,
   findPrismaAdminUserRecordByEmail,
   resetAdminPasswordWithPrismaToken,
-  revokeUnusedPrismaResetTokensForUser,
+  revokeOtherUnusedPrismaResetTokensForUser,
+  revokePrismaPasswordResetTokenById,
 } from "@/lib/server/admin-user-prisma-store";
 import { AdminUserError } from "@/lib/server/admin-user-errors";
 
@@ -59,22 +64,54 @@ const activeUser = {
   updatedAt: new Date(),
 };
 
+function successfulEmailResult() {
+  return {
+    attempted: true,
+    outcome: "accepted" as const,
+    sent: true,
+    messageId: "email-001",
+    durationMs: 120,
+  };
+}
+
 describe("reset token helpers", () => {
+  it("uses a 60-minute TTL", () => {
+    expect(PASSWORD_RESET_TTL_MS).toBe(60 * 60 * 1000);
+  });
+
   it("hashes raw token with SHA-256", () => {
     const raw = generateRawResetToken();
     expect(hashResetToken(raw)).toHaveLength(64);
     expect(hashResetToken(raw)).not.toBe(raw);
+  });
+
+  it("builds reset URL from ADMIN_LOGIN_URL", () => {
+    const original = process.env.ADMIN_LOGIN_URL;
+    process.env.ADMIN_LOGIN_URL = "https://admin.example.test";
+    const raw = generateRawResetToken();
+    expect(buildPasswordResetUrl(raw)).toBe(
+      `https://admin.example.test/reset-password?token=${encodeURIComponent(raw)}`
+    );
+    if (original === undefined) {
+      delete process.env.ADMIN_LOGIN_URL;
+    } else {
+      process.env.ADMIN_LOGIN_URL = original;
+    }
   });
 });
 
 describe("requestAdminPasswordReset", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(sendAdminPasswordResetEmail).mockResolvedValue({
-      attempted: true,
-      sent: true,
-    });
-    vi.mocked(createPrismaPasswordResetToken).mockResolvedValue("tok-1");
+    process.env.RESEND_API_KEY = "re_test_key";
+    vi.mocked(isPrismaAdminUserPersistence).mockReturnValue(true);
+    vi.mocked(shouldThrottleForgotPasswordRequest).mockReturnValue(false);
+    vi.mocked(sendAdminPasswordResetEmail).mockResolvedValue(successfulEmailResult());
+    vi.mocked(createPrismaPasswordResetToken).mockResolvedValue("tok-new");
+  });
+
+  afterEach(() => {
+    delete process.env.RESEND_API_KEY;
   });
 
   it("returns the same generic message for unknown email", async () => {
@@ -84,11 +121,18 @@ describe("requestAdminPasswordReset", () => {
     expect(sendAdminPasswordResetEmail).not.toHaveBeenCalled();
   });
 
-  it("does not email pending approval accounts", async () => {
+  it("returns the same generic message for inactive users", async () => {
     vi.mocked(findPrismaAdminUserRecordByEmail).mockResolvedValue({
       ...activeUser,
       status: "PendingApproval",
     });
+    const result = await requestAdminPasswordReset(activeUser.email);
+    expect(result.message).toBe(FORGOT_PASSWORD_GENERIC_MESSAGE);
+    expect(createPrismaPasswordResetToken).not.toHaveBeenCalled();
+  });
+
+  it("returns the same generic message when throttled", async () => {
+    vi.mocked(shouldThrottleForgotPasswordRequest).mockReturnValue(true);
     const result = await requestAdminPasswordReset(activeUser.email);
     expect(result.message).toBe(FORGOT_PASSWORD_GENERIC_MESSAGE);
     expect(createPrismaPasswordResetToken).not.toHaveBeenCalled();
@@ -110,31 +154,159 @@ describe("requestAdminPasswordReset", () => {
         resetUrl: expect.stringContaining("/reset-password?token="),
       })
     );
-  });
-
-  it("revokes token when email send fails", async () => {
-    vi.mocked(findPrismaAdminUserRecordByEmail).mockResolvedValue(activeUser);
-    vi.mocked(sendAdminPasswordResetEmail).mockResolvedValue({
-      attempted: true,
-      sent: false,
-    });
-    await requestAdminPasswordReset(activeUser.email);
-    expect(revokeUnusedPrismaResetTokensForUser).toHaveBeenCalledWith(
-      activeUser.id
+    expect(revokeOtherUnusedPrismaResetTokensForUser).toHaveBeenCalledWith(
+      activeUser.id,
+      "tok-new"
     );
   });
 
-  it("returns generic response when throttled", async () => {
-    vi.mocked(shouldThrottleForgotPasswordRequest).mockReturnValue(true);
+  it("returns generic response when provider send fails", async () => {
+    vi.mocked(findPrismaAdminUserRecordByEmail).mockResolvedValue(activeUser);
+    vi.mocked(sendAdminPasswordResetEmail).mockResolvedValue({
+      attempted: true,
+      outcome: "definitive_failure",
+      sent: false,
+      error: "Provider unavailable",
+      durationMs: 250,
+    });
+
     const result = await requestAdminPasswordReset(activeUser.email);
     expect(result.message).toBe(FORGOT_PASSWORD_GENERIC_MESSAGE);
-    expect(createPrismaPasswordResetToken).not.toHaveBeenCalled();
+    expect(revokePrismaPasswordResetTokenById).toHaveBeenCalledWith("tok-new");
+    expect(revokeOtherUnusedPrismaResetTokensForUser).not.toHaveBeenCalled();
+  });
+
+  it("returns generic response when provider throws via email layer", async () => {
+    vi.mocked(findPrismaAdminUserRecordByEmail).mockResolvedValue(activeUser);
+    vi.mocked(sendAdminPasswordResetEmail).mockResolvedValue({
+      attempted: true,
+      outcome: "definitive_failure",
+      sent: false,
+      error: "RESEND_API_KEY is not set in the environment",
+      durationMs: 5,
+    });
+
+    const result = await requestAdminPasswordReset(activeUser.email);
+    expect(result.message).toBe(FORGOT_PASSWORD_GENERIC_MESSAGE);
+    expect(revokePrismaPasswordResetTokenById).toHaveBeenCalledWith("tok-new");
+  });
+
+  it("returns generic response when provider times out", async () => {
+    vi.mocked(findPrismaAdminUserRecordByEmail).mockResolvedValue(activeUser);
+    vi.mocked(sendAdminPasswordResetEmail).mockResolvedValue({
+      attempted: true,
+      outcome: "unknown",
+      sent: false,
+      error: "EMAIL_SEND_TIMEOUT",
+      durationMs: 12_000,
+    });
+
+    const result = await requestAdminPasswordReset(activeUser.email);
+    expect(result.message).toBe(FORGOT_PASSWORD_GENERIC_MESSAGE);
+    expect(revokePrismaPasswordResetTokenById).not.toHaveBeenCalled();
+    expect(revokeOtherUnusedPrismaResetTokensForUser).not.toHaveBeenCalled();
+  });
+
+  it("preserves all tokens when send outcome is unknown", async () => {
+    vi.mocked(findPrismaAdminUserRecordByEmail).mockResolvedValue(activeUser);
+    vi.mocked(sendAdminPasswordResetEmail).mockResolvedValue({
+      attempted: true,
+      outcome: "unknown",
+      sent: false,
+      error: "Unable to fetch data. The request could not be resolved.",
+      durationMs: 500,
+    });
+
+    await requestAdminPasswordReset(activeUser.email);
+
+    expect(revokePrismaPasswordResetTokenById).not.toHaveBeenCalled();
+    expect(revokeOtherUnusedPrismaResetTokensForUser).not.toHaveBeenCalled();
+  });
+
+  it("preserves previous valid token when new email send fails definitively", async () => {
+    vi.mocked(findPrismaAdminUserRecordByEmail).mockResolvedValue(activeUser);
+    vi.mocked(sendAdminPasswordResetEmail).mockResolvedValue({
+      attempted: true,
+      outcome: "definitive_failure",
+      sent: false,
+      error: "Provider unavailable",
+      durationMs: 100,
+    });
+
+    await requestAdminPasswordReset(activeUser.email);
+
+    expect(revokePrismaPasswordResetTokenById).toHaveBeenCalledWith("tok-new");
+    expect(revokeOtherUnusedPrismaResetTokensForUser).not.toHaveBeenCalled();
+  });
+
+  it("invalidates previous tokens only after successful send", async () => {
+    vi.mocked(findPrismaAdminUserRecordByEmail).mockResolvedValue(activeUser);
+    await requestAdminPasswordReset(activeUser.email);
+
+    expect(revokeOtherUnusedPrismaResetTokensForUser).toHaveBeenCalledWith(
+      activeUser.id,
+      "tok-new"
+    );
+    expect(revokePrismaPasswordResetTokenById).not.toHaveBeenCalled();
+  });
+
+  it("exposes provider message ID in internal email result", async () => {
+    vi.mocked(findPrismaAdminUserRecordByEmail).mockResolvedValue(activeUser);
+    await requestAdminPasswordReset(activeUser.email);
+
+    expect(sendAdminPasswordResetEmail).toHaveBeenCalled();
+    const emailResult = await vi.mocked(sendAdminPasswordResetEmail).mock.results[0]
+      ?.value;
+    expect(emailResult).toMatchObject({
+      outcome: "accepted",
+      sent: true,
+      messageId: "email-001",
+    });
+  });
+
+  it("logs safely without raw token or reset URL", async () => {
+    vi.mocked(findPrismaAdminUserRecordByEmail).mockResolvedValue(activeUser);
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await requestAdminPasswordReset(activeUser.email);
+
+    const logged = JSON.stringify([
+      ...infoSpy.mock.calls,
+      ...warnSpy.mock.calls,
+      ...errorSpy.mock.calls,
+    ]);
+    expect(logged).not.toMatch(/\/reset-password\?token=/);
+    expect(logged).not.toContain("re_test_key");
+
+    infoSpy.mockRestore();
+    warnSpy.mockRestore();
+    errorSpy.mockRestore();
+  });
+
+  it("logs persistence-mode no-op while keeping generic response", async () => {
+    vi.mocked(isPrismaAdminUserPersistence).mockReturnValue(false);
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const result = await requestAdminPasswordReset(activeUser.email);
+    expect(result.message).toBe(FORGOT_PASSWORD_GENERIC_MESSAGE);
+    expect(
+      errorSpy.mock.calls.some(
+        (call) =>
+          call[0] === "[admin-password-reset]" &&
+          (call[1] as { event?: string })?.event === "persistence_mode_noop"
+      )
+    ).toBe(true);
+
+    errorSpy.mockRestore();
   });
 });
 
 describe("resetAdminPasswordWithToken", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(isPrismaAdminUserPersistence).mockReturnValue(true);
   });
 
   it("resets password using hashed token lookup", async () => {
@@ -170,7 +342,7 @@ describe("createPrismaPasswordResetToken policy", () => {
     await createPrismaPasswordResetToken({
       userId: activeUser.id,
       tokenHash: hashResetToken(raw),
-      expiresAt: new Date(Date.now() + 60_000),
+      expiresAt: new Date(Date.now() + PASSWORD_RESET_TTL_MS),
     });
     const args = vi.mocked(createPrismaPasswordResetToken).mock.calls[0]![0];
     expect(args.tokenHash).not.toBe(raw);

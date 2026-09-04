@@ -360,18 +360,34 @@ export async function createPrismaPasswordResetToken(input: {
   tokenHash: string;
   expiresAt: Date;
 }): Promise<string> {
-  return prisma.$transaction(async (tx) => {
-    await tx.adminPasswordResetToken.deleteMany({
-      where: { userId: input.userId, usedAt: null },
-    });
-    const created = await tx.adminPasswordResetToken.create({
-      data: {
-        userId: input.userId,
-        tokenHash: input.tokenHash,
-        expiresAt: input.expiresAt,
-      },
-    });
-    return created.id;
+  const created = await prisma.adminPasswordResetToken.create({
+    data: {
+      userId: input.userId,
+      tokenHash: input.tokenHash,
+      expiresAt: input.expiresAt,
+    },
+  });
+  return created.id;
+}
+
+export async function revokePrismaPasswordResetTokenById(
+  tokenId: string
+): Promise<void> {
+  await prisma.adminPasswordResetToken.deleteMany({
+    where: { id: tokenId, usedAt: null },
+  });
+}
+
+export async function revokeOtherUnusedPrismaResetTokensForUser(
+  userId: string,
+  keepTokenId: string
+): Promise<void> {
+  await prisma.adminPasswordResetToken.deleteMany({
+    where: {
+      userId,
+      usedAt: null,
+      id: { not: keepTokenId },
+    },
   });
 }
 

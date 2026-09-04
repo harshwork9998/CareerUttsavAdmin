@@ -13,9 +13,12 @@ import {
   ADMIN_REJECTED_EMAIL_SUBJECT,
   buildAdminAccountApprovedEmailContent,
   buildAdminAccountRejectedEmailContent,
+  buildAdminPasswordResetEmailContent,
   buildAdminReviewSuccessMessage,
+  PASSWORD_RESET_EMAIL_TIMEOUT_MS,
   sendAdminAccountApprovedEmail,
   sendAdminAccountRejectedEmail,
+  sendAdminPasswordResetEmail,
 } from "@/lib/server/admin-auth-email";
 
 const approvedUser: User = {
@@ -82,7 +85,12 @@ describe("admin auth email delivery", () => {
   });
 
   it("sends approval email to the registered address", async () => {
-    vi.mocked(sendEmail).mockResolvedValue({ ok: true, id: "email-001" });
+    vi.mocked(sendEmail).mockResolvedValue({
+      ok: true,
+      id: "email-001",
+      durationMs: 10,
+      outcome: "accepted",
+    });
 
     const result = await sendAdminAccountApprovedEmail(approvedUser);
 
@@ -98,7 +106,12 @@ describe("admin auth email delivery", () => {
   });
 
   it("sends rejection email to the registered address", async () => {
-    vi.mocked(sendEmail).mockResolvedValue({ ok: true, id: "email-002" });
+    vi.mocked(sendEmail).mockResolvedValue({
+      ok: true,
+      id: "email-002",
+      durationMs: 10,
+      outcome: "accepted",
+    });
 
     const result = await sendAdminAccountRejectedEmail(rejectedUser);
 
@@ -115,6 +128,8 @@ describe("admin auth email delivery", () => {
     vi.mocked(sendEmail).mockResolvedValue({
       ok: false,
       error: "Provider unavailable",
+      durationMs: 15,
+      outcome: "definitive_failure",
     });
 
     const result = await sendAdminAccountApprovedEmail(approvedUser);
@@ -139,5 +154,96 @@ describe("admin review success messages", () => {
     expect(
       buildAdminReviewSuccessMessage("reject", { attempted: true, sent: false })
     ).toBe("Account rejected, but notification email could not be sent.");
+  });
+});
+
+describe("admin password reset email delivery", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.RESEND_API_KEY = "re_test_key";
+  });
+
+  it("mentions a 60-minute expiry in email copy", () => {
+    const content = buildAdminPasswordResetEmailContent({
+      name: "Admin User",
+      email: "admin@careeruttsav.in",
+      resetUrl: "https://admin.careeruttsav.in/reset-password?token=example",
+    });
+    expect(content.text).toContain("60 minutes");
+    expect(content.html).toContain("60 minutes");
+  });
+
+  it("returns provider message id and duration on success", async () => {
+    vi.mocked(sendEmail).mockResolvedValue({
+      ok: true,
+      id: "email-reset-001",
+      durationMs: 88,
+      outcome: "accepted",
+    });
+
+    const result = await sendAdminPasswordResetEmail({
+      name: "Admin User",
+      email: "admin@careeruttsav.in",
+      resetUrl: "https://admin.careeruttsav.in/reset-password?token=example",
+    });
+
+    expect(result).toEqual({
+      attempted: true,
+      outcome: "accepted",
+      sent: true,
+      messageId: "email-reset-001",
+      durationMs: 88,
+    });
+    expect(sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        timeoutMs: PASSWORD_RESET_EMAIL_TIMEOUT_MS,
+      })
+    );
+  });
+
+  it("returns safe failure details when provider rejects", async () => {
+    vi.mocked(sendEmail).mockResolvedValue({
+      ok: false,
+      error: "Provider unavailable",
+      durationMs: 42,
+      outcome: "definitive_failure",
+    });
+
+    const result = await sendAdminPasswordResetEmail({
+      name: "Admin User",
+      email: "admin@careeruttsav.in",
+      resetUrl: "https://admin.careeruttsav.in/reset-password?token=example",
+    });
+
+    expect(result).toEqual({
+      attempted: true,
+      outcome: "definitive_failure",
+      sent: false,
+      error: "Provider unavailable",
+      durationMs: 42,
+    });
+  });
+
+  it("returns unknown outcome for timeout without treating it as definitive failure", async () => {
+    vi.mocked(sendEmail).mockResolvedValue({
+      ok: false,
+      error: "EMAIL_SEND_TIMEOUT",
+      durationMs: 12_000,
+      outcome: "unknown",
+    });
+
+    const result = await sendAdminPasswordResetEmail({
+      name: "Admin User",
+      email: "admin@careeruttsav.in",
+      resetUrl: "https://admin.careeruttsav.in/reset-password?token=example",
+    });
+
+    expect(result).toEqual({
+      attempted: true,
+      outcome: "unknown",
+      sent: false,
+      error: "EMAIL_SEND_TIMEOUT",
+      durationMs: 12_000,
+    });
   });
 });
