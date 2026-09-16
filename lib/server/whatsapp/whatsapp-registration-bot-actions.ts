@@ -30,7 +30,7 @@ export function buildWhatsAppRegistrationSuccessActions(input: {
 }): WhatsAppBotAction[] {
   const actions: WhatsAppBotAction[] = [];
 
-  if (input.includeSeminarCompleteMessage !== false) {
+  if (input.includeSeminarCompleteMessage === true) {
     actions.push(
       ...buildWhatsAppSeminarSelectionCompleteActions(input.selectedSeminarCount)
     );

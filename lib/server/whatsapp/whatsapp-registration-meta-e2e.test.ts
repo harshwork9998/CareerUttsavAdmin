@@ -221,13 +221,27 @@ describe("whatsapp registration meta e2e (mocked)", () => {
     expect(generateQrMock).toHaveBeenCalledWith(REGISTRATION_NUMBER);
     expect(completion.status).toBe("SUCCESS");
     expect(completion.registrationNumber).toBe(REGISTRATION_NUMBER);
+    const seminarSavedMessages = [
+      ...dispatchedActions,
+      ...completion.actions,
+    ].filter(
+      (action) =>
+        action.type === "TEXT" &&
+        action.body.includes("Your seminar preferences are saved")
+    );
+    expect(seminarSavedMessages).toHaveLength(1);
+    const seminarSavedMessage = seminarSavedMessages[0];
+    expect(seminarSavedMessage?.type).toBe("TEXT");
+    if (seminarSavedMessage?.type === "TEXT") {
+      expect(seminarSavedMessage.body).toContain("Completing your registration");
+    }
     expect(
       completion.actions.some(
         (action) =>
           action.type === "TEXT" &&
           action.body.includes("3 seminars selected")
       )
-    ).toBe(true);
+    ).toBe(false);
     expect(
       completion.actions.some(
         (action) =>
@@ -251,6 +265,56 @@ describe("whatsapp registration meta e2e (mocked)", () => {
     expect(outboundTypes.filter((type) => type === "MEDIA_UPLOAD")).toHaveLength(
       1
     );
+  });
+
+  it("does not duplicate seminar-saved confirmation when finishing with one seminar", async () => {
+    const dispatchedActions: WhatsAppBotAction[] = [];
+    let conversation: WhatsAppConversationState | null = null;
+
+    const steps: Array<{ text?: string; interactiveId?: string }> = [
+      { text: "hi" },
+      { interactiveId: REGISTRATION_INTERACTIVE_IDS.START },
+      { text: "Aarav Sharma" },
+      { text: "aarav@example.com" },
+      { interactiveId: classInteractiveId(REGISTRATION_CLASS_OPTIONS[1]!) },
+      { interactiveId: genderInteractiveId("Male") },
+      { interactiveId: boardInteractiveId(REGISTRATION_BOARD_OPTIONS[0]!) },
+      {
+        interactiveId: streamInteractiveId(REGISTRATION_STREAM_OPTIONS[0]!),
+      },
+      { text: "National Public School" },
+      { text: "Bangalore" },
+      { interactiveId: seminarInteractiveId("sem-001") },
+      { interactiveId: REGISTRATION_INTERACTIVE_IDS.FINISH },
+    ];
+
+    for (const message of steps) {
+      const result = turn(conversation, message);
+      conversation = result.conversation;
+      dispatchedActions.push(...result.actions);
+      await dispatchWhatsAppBotActions(WA_ID, result.actions);
+    }
+
+    loadConversationMock.mockResolvedValue(conversation);
+    const completion = await completeWhatsAppRegistrationForConversation(WA_ID);
+    await dispatchWhatsAppBotActions(WA_ID, completion.actions);
+
+    expect(conversation?.currentStep).toBe("READY_TO_REGISTER");
+    expect(completion.status).toBe("SUCCESS");
+    expect(
+      [...dispatchedActions, ...completion.actions].filter(
+        (action) =>
+          action.type === "TEXT" &&
+          action.body.includes("Your seminar preferences are saved")
+      )
+    ).toHaveLength(0);
+    expect(
+      completion.actions.some(
+        (action) =>
+          action.type === "TEXT" &&
+          action.body.includes("Registration Successful")
+      )
+    ).toBe(true);
   });
 });
 
@@ -386,9 +450,9 @@ describe("whatsapp registration completion delivery failures (mocked)", () => {
     const summary = await dispatchWhatsAppBotActions(WA_ID, completion.actions);
 
     expect(createStudentRegistrationMock).toHaveBeenCalledOnce();
+    expect(summary.results).toHaveLength(2);
     expect(summary.results[0].success).toBe(true);
-    expect(summary.results[1].success).toBe(true);
-    expect(summary.results[2].success).toBe(false);
+    expect(summary.results[1].success).toBe(false);
   });
 
   it("keeps a completed conversation completed after delivery failure", async () => {

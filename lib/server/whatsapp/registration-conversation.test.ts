@@ -1024,6 +1024,22 @@ describe("flexible WhatsApp seminar selection UX", () => {
     const finished = finishRegistration(conversation);
     expect(finished.conversation.currentStep).toBe("READY_TO_REGISTER");
     expect(finished.conversation.selectedSeminarIds).toEqual(["sem-001"]);
+    expect(
+      finished.actions.some(
+        (action) =>
+          action.type === "TEXT" &&
+          action.body.includes(
+            "Your registration details are ready. We will complete your registration shortly."
+          )
+      )
+    ).toBe(true);
+    expect(
+      finished.actions.some(
+        (action) =>
+          action.type === "TEXT" &&
+          action.body.includes("Your seminar preferences are saved")
+      )
+    ).toBe(false);
   });
 
   it("stores two unique seminar selections", () => {
@@ -1061,6 +1077,22 @@ describe("flexible WhatsApp seminar selection UX", () => {
       "sem-001",
       "sem-002",
     ]);
+    expect(
+      finished.actions.some(
+        (action) =>
+          action.type === "TEXT" &&
+          action.body.includes(
+            "Your registration details are ready. We will complete your registration shortly."
+          )
+      )
+    ).toBe(true);
+    expect(
+      finished.actions.some(
+        (action) =>
+          action.type === "TEXT" &&
+          action.body.includes("Your seminar preferences are saved")
+      )
+    ).toBe(false);
   });
 
   it("auto-completes after the third unique seminar selection", () => {
@@ -1068,6 +1100,20 @@ describe("flexible WhatsApp seminar selection UX", () => {
     const result = completeThreeSeminarSelections(conversation);
     expect(result.conversation.currentStep).toBe("READY_TO_REGISTER");
     expect(result.conversation.selectedSeminarIds).toHaveLength(3);
+    expect(
+      result.actions.filter(
+        (action) =>
+          action.type === "TEXT" &&
+          action.body.includes("Your seminar preferences are saved")
+      )
+    ).toHaveLength(1);
+    expect(
+      result.actions.some(
+        (action) =>
+          action.type === "TEXT" &&
+          action.body.includes("Completing your registration")
+      )
+    ).toBe(true);
   });
 
   it("persists exactly three seminars after auto-complete", () => {

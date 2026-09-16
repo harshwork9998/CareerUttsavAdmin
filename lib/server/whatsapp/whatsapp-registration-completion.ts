@@ -554,7 +554,6 @@ export async function completeWhatsAppRegistrationForConversation(
     actions: buildWhatsAppRegistrationSuccessActions({
       registrationNumber: registration.registrationNumber,
       qrPngBase64,
-      selectedSeminarCount: record.selectedSeminarIds.length,
     }),
   };
 }

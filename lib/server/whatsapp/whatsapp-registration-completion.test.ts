@@ -191,14 +191,46 @@ describe("whatsapp registration completion", () => {
     });
   });
 
-  it("includes seminar completion message only for successful registrations", async () => {
+  it("does not repeat seminar-saved confirmation in success actions", async () => {
     const result = await completeWhatsAppRegistrationForConversation("919876543210");
 
     expect(
       result.actions.some(
         (action) =>
           action.type === "TEXT" &&
-          action.body.includes("1 seminar selected")
+          action.body.includes("Your seminar preferences are saved")
+      )
+    ).toBe(false);
+    expect(
+      result.actions.some(
+        (action) =>
+          action.type === "TEXT" &&
+          action.body.includes("Registration Successful")
+      )
+    ).toBe(true);
+  });
+
+  it("does not repeat seminar-saved confirmation after finishing with two seminars", async () => {
+    loadConversationMock.mockResolvedValue({
+      ...readyConversation,
+      selectedSeminarIds: ["sem-001", "sem-002"],
+    });
+
+    const result = await completeWhatsAppRegistrationForConversation("919876543210");
+
+    expect(result.status).toBe("SUCCESS");
+    expect(
+      result.actions.filter(
+        (action) =>
+          action.type === "TEXT" &&
+          action.body.includes("Your seminar preferences are saved")
+      )
+    ).toHaveLength(0);
+    expect(
+      result.actions.some(
+        (action) =>
+          action.type === "TEXT" &&
+          action.body.includes("Registration Successful")
       )
     ).toBe(true);
   });
