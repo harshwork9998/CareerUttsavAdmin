@@ -47,9 +47,8 @@ export function selectedSeminarsStillValidInCatalog(
   );
 }
 
-const COMBINED_MESSAGE_HEADER = `Seminar Preferences
-
-Choose up to 3 seminars you'd like to attend.`;
+const COMBINED_MESSAGE_HEADER =
+  "Choose up to 3 seminars you'd like to attend.";
 
 const COMBINED_MESSAGE_FOOTER = `Reply with the seminar numbers/letters separated by commas.
 

@@ -196,7 +196,7 @@ describe("Stage 1.1 recent greeting re-prompt", () => {
       result.actions.some(
         (action) =>
           action.type === "TEXT" &&
-          action.body.includes("Seminar Preferences")
+          action.body.includes("Choose up to 3 seminars you'd like to attend.")
       )
     ).toBe(true);
   });

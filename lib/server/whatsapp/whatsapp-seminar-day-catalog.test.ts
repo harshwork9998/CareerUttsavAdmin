@@ -77,7 +77,7 @@ describe("whatsapp seminar day catalog", () => {
     const message = formatCombinedSeminarSelectionMessage(catalog);
     expect(message).toContain("Day 1");
     expect(message).toContain("Day 2");
-    expect(message).toContain("Seminar Preferences");
+    expect(message).toContain("Choose up to 3 seminars you'd like to attend.");
   });
 
   it("orders seminars deterministically by start time", () => {

@@ -81,7 +81,7 @@ describe("WhatsApp comma-separated seminar flow", () => {
       result.actions.some(
         (action) =>
           action.type === "TEXT" &&
-          action.body.includes("Seminar Preferences")
+          action.body.includes("Choose up to 3 seminars you'd like to attend.")
       )
     ).toBe(true);
   });
@@ -142,7 +142,7 @@ describe("WhatsApp comma-separated seminar flow", () => {
       resumed.actions.some(
         (action) =>
           action.type === "TEXT" &&
-          action.body.includes("Seminar Preferences")
+          action.body.includes("Choose up to 3 seminars you'd like to attend.")
       )
     ).toBe(true);
   });
@@ -219,7 +219,7 @@ describe("WhatsApp comma-separated seminar flow", () => {
       migrated.actions.some(
         (action) =>
           action.type === "TEXT" &&
-          action.body.includes("Seminar Preferences")
+          action.body.includes("Choose up to 3 seminars you'd like to attend.")
       )
     ).toBe(true);
   });
