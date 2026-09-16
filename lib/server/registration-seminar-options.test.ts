@@ -39,6 +39,8 @@ describe("registration seminar options", () => {
     );
 
     expect(aiCareers?.id).toBe("sem-001-b");
+    expect(aiCareers?.date).toBe("2026-08-15");
+    expect(aiCareers?.startTime).toBe("11:30");
   });
 
   it("appends event-only seminars that are not in the shared catalog", async () => {
@@ -64,6 +66,8 @@ describe("registration seminar options", () => {
     expect(options.at(-1)).toEqual({
       id: "sem-extra",
       title: "Future Skills Workshop",
+      date: "2026-08-16",
+      startTime: "16:00",
     });
   });
 });

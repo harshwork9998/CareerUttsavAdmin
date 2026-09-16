@@ -8,6 +8,7 @@ const loadConversationMock = vi.fn();
 const saveConversationMock = vi.fn();
 const deleteExpiredMock = vi.fn();
 const getSeminarsMock = vi.fn();
+const getCatalogMock = vi.fn();
 const dispatchMock = vi.fn();
 const processTurnMock = vi.fn();
 
@@ -28,6 +29,7 @@ vi.mock("@/lib/server/whatsapp/whatsapp-conversation-store", () => ({
 
 vi.mock("@/lib/server/whatsapp/whatsapp-seminar-context", () => ({
   getWhatsAppSeminarOptions: (...args: unknown[]) => getSeminarsMock(...args),
+  getWhatsAppSeminarDayCatalog: (...args: unknown[]) => getCatalogMock(...args),
 }));
 
 vi.mock("@/lib/server/whatsapp/whatsapp-bot-dispatcher", () => ({
@@ -107,6 +109,12 @@ describe("whatsapp webhook processor", () => {
     saveConversationMock.mockImplementation(async (state: WhatsAppConversationState) => state);
     deleteExpiredMock.mockResolvedValue(false);
     getSeminarsMock.mockResolvedValue([{ id: "sem-001", title: "AI Careers" }]);
+    getCatalogMock.mockResolvedValue({
+      day1: [],
+      day2: [],
+      day1Date: null,
+      day2Date: null,
+    });
     vi.mocked(getRegistrationForApi).mockResolvedValue(null);
     processTurnMock.mockResolvedValue({
       conversation: {

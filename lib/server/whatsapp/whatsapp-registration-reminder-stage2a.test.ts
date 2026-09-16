@@ -353,6 +353,12 @@ describe("WhatsApp registration reminder Stage 2A", () => {
       conversation: buildEligibleConversation(),
       message: { interactiveId: REGISTRATION_INTERACTIVE_IDS.RESTART },
       seminarOptions: [],
+      seminarDayCatalog: {
+        day1: [],
+        day2: [],
+        day1Date: null,
+        day2Date: null,
+      },
       waId: "919876543210",
     });
     expect(restart.resetReminderTracking).toBe(true);

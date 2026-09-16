@@ -36,6 +36,13 @@ const seminarOptions: SeminarOption[] = [
   { id: "sem-001", title: "AI Careers" },
 ];
 
+const emptySeminarDayCatalog = {
+  day1: [],
+  day2: [],
+  day1Date: null,
+  day2Date: null,
+};
+
 const existingRegistration = {
   id: "reg-existing",
   kind: "student" as const,
@@ -100,6 +107,7 @@ describe("whatsapp registration duplicate flow", () => {
       conversation: null,
       message: { text: "hi" },
       seminarOptions,
+      seminarDayCatalog: emptySeminarDayCatalog,
       waId: "919876543210",
     });
 
@@ -145,6 +153,7 @@ describe("whatsapp registration duplicate flow", () => {
       conversation,
       message: { text: "aarav@example.com" },
       seminarOptions,
+      seminarDayCatalog: emptySeminarDayCatalog,
       waId: "919876543210",
     });
 
@@ -185,6 +194,7 @@ describe("whatsapp registration duplicate flow", () => {
       conversation,
       message: { text: "newemail@example.com" },
       seminarOptions,
+      seminarDayCatalog: emptySeminarDayCatalog,
       waId: "919876543210",
     });
 
@@ -216,6 +226,7 @@ describe("whatsapp registration duplicate flow", () => {
       conversation,
       message: { text: "aarav@example.com" },
       seminarOptions,
+      seminarDayCatalog: emptySeminarDayCatalog,
       waId: "919876543210",
     });
 
@@ -241,6 +252,7 @@ describe("whatsapp registration duplicate flow", () => {
       conversation: completed,
       message: { text: "hello" },
       seminarOptions,
+      seminarDayCatalog: emptySeminarDayCatalog,
       waId: "919876543210",
       completedRegistrationNumber: "CU-BLR-2026-00001",
     });
@@ -276,6 +288,7 @@ describe("whatsapp registration duplicate flow", () => {
       conversation: staleCompleted,
       message: { text: "hi" },
       seminarOptions,
+      seminarDayCatalog: emptySeminarDayCatalog,
       waId: "919876543210",
     });
 
@@ -314,6 +327,7 @@ describe("whatsapp registration duplicate flow", () => {
       conversation: staleCompleted,
       message: { text: "hello" },
       seminarOptions,
+      seminarDayCatalog: emptySeminarDayCatalog,
       waId: "919876543210",
     });
 
@@ -333,6 +347,7 @@ describe("whatsapp registration duplicate flow", () => {
       conversation,
       message: { text: "newuser@example.com" },
       seminarOptions,
+      seminarDayCatalog: emptySeminarDayCatalog,
       waId: "919876543210",
     });
 
@@ -350,6 +365,7 @@ describe("whatsapp registration duplicate flow", () => {
       conversation: createInitialConversationState("919876543210"),
       message: { interactiveId: REGISTRATION_INTERACTIVE_IDS.START },
       seminarOptions,
+      seminarDayCatalog: emptySeminarDayCatalog,
       waId: "919876543210",
     });
 
@@ -373,6 +389,7 @@ describe("whatsapp registration duplicate flow", () => {
         conversation,
         message: { text: "Aarav Sharma" },
         seminarOptions,
+        seminarDayCatalog: emptySeminarDayCatalog,
         waId: "919876543210",
       })
     ).conversation;
@@ -381,6 +398,7 @@ describe("whatsapp registration duplicate flow", () => {
       conversation,
       message: { text: "newuser@example.com" },
       seminarOptions,
+      seminarDayCatalog: emptySeminarDayCatalog,
       waId: "919876543210",
     });
 

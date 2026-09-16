@@ -15,6 +15,7 @@ import {
   type WhatsAppBotAction,
   type WhatsAppConversationState,
 } from "@/lib/server/whatsapp/registration-conversation";
+import type { WhatsAppSeminarDayCatalog } from "@/lib/server/whatsapp/whatsapp-seminar-day-catalog";
 import {
   buildWhatsAppAlreadyRegisteredActions,
   buildWhatsAppEmailDuplicatePrivacyActions,
@@ -159,6 +160,7 @@ export async function processWhatsAppRegistrationConversationTurnAsync(input: {
   conversation: WhatsAppConversationState | null;
   message: IncomingConversationMessage;
   seminarOptions: SeminarOption[];
+  seminarDayCatalog: WhatsAppSeminarDayCatalog;
   waId: string;
   completedRegistrationNumber?: string | null;
   sessionExpired?: boolean;

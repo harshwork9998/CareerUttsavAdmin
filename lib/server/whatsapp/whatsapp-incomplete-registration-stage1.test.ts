@@ -31,12 +31,13 @@ import {
   type SeminarOption,
   type WhatsAppConversationState,
 } from "@/lib/server/whatsapp/registration-conversation";
+import {
+  buildTestSeminarDayCatalog,
+  buildTestSeminarOptions,
+} from "@/lib/server/whatsapp/whatsapp-seminar-test-fixtures";
 
-const seminarOptions: SeminarOption[] = [
-  { id: "sem-001", title: "AI Careers" },
-  { id: "sem-002", title: "Design Thinking" },
-  { id: "sem-003", title: "Startup Skills" },
-];
+const seminarOptions: SeminarOption[] = buildTestSeminarOptions();
+const seminarDayCatalog = buildTestSeminarDayCatalog(seminarOptions);
 
 const recentActivityAt = new Date(Date.now() - 10_000);
 const returningActivityAt = new Date(
@@ -55,7 +56,7 @@ const readyConversation: WhatsAppConversationState = {
   interestedStream: "Science",
   college: "National Public School",
   city: "Bangalore",
-  selectedSeminarIds: ["sem-001", "sem-stale"],
+  selectedSeminarIds: ["sem-d1-1", "sem-stale"],
   completedRegistrationId: null,
 };
 
@@ -70,10 +71,12 @@ function turn(
     previousActivityAt?: Date | null;
   } = {}
 ) {
+  const selectedOptions = options.seminarOptions ?? seminarOptions;
   return processRegistrationConversationTurn({
     conversation,
     message,
-    seminarOptions: options.seminarOptions ?? seminarOptions,
+    seminarOptions: selectedOptions,
+    seminarDayCatalog: buildTestSeminarDayCatalog(selectedOptions),
     waId: options.waId ?? "919876543210",
     completedRegistrationNumber: options.completedRegistrationNumber,
     sessionExpired: options.sessionExpired,
@@ -116,14 +119,11 @@ function advanceToCityStep() {
   }).conversation;
 }
 
-function advanceToSeminarsStep(selectedIds: string[] = []) {
+function advanceToSeminarsStep(selection?: string) {
   let conversation = advanceToCityStep();
   conversation = turn(conversation, { text: "Bangalore" }).conversation;
-  conversation = turn(conversation, { text: "show seminars" }).conversation;
-  for (const seminarId of selectedIds) {
-    conversation = turn(conversation, {
-      interactiveId: seminarInteractiveId(seminarId),
-    }).conversation;
+  if (selection) {
+    conversation = turn(conversation, { text: selection }).conversation;
   }
   return conversation;
 }
@@ -195,32 +195,32 @@ describe("Stage 1.1 recent greeting re-prompt", () => {
     expect(
       result.actions.some(
         (action) =>
-          action.type === "LIST" &&
-          action.body.includes("Choose up to 3 seminars")
+          action.type === "TEXT" &&
+          action.body.includes("Seminar Preferences")
       )
     ).toBe(true);
   });
 
   it("re-prompts one-selected seminar UX after recent hi", () => {
-    const conversation = advanceToSeminarsStep(["sem-001"]);
+    const conversation = advanceToSeminarsStep("1");
     const result = turn(conversation, { text: "hi" }, { previousActivityAt: recentActivityAt });
     expect(
       result.actions.some(
         (action) =>
           action.type === "BUTTONS" &&
-          action.body.includes("1 seminar selected")
+          action.body.includes("Your seminar choices have been recorded")
       )
     ).toBe(true);
   });
 
   it("re-prompts two-selected seminar UX after recent hi", () => {
-    const conversation = advanceToSeminarsStep(["sem-001", "sem-002"]);
+    const conversation = advanceToSeminarsStep("1,2");
     const result = turn(conversation, { text: "hi" }, { previousActivityAt: recentActivityAt });
     expect(
       result.actions.some(
         (action) =>
           action.type === "BUTTONS" &&
-          action.body.includes("2 seminars selected")
+          action.body.includes("Your seminar choices have been recorded")
       )
     ).toBe(true);
   });
@@ -287,16 +287,24 @@ describe("Stage 1.1 direct answers after inactivity", () => {
 });
 
 describe("Stage 1.1 READY_TO_REGISTER and TTL helpers", () => {
-  it("does not block READY_TO_REGISTER completion retry on recent greeting", () => {
+  it("recovers stale READY_TO_REGISTER seminars on recent greeting", () => {
     const result = turn(readyConversation, { text: "hi" }, { previousActivityAt: recentActivityAt });
+    expect(result.conversation.status).toBe("ACTIVE");
+    expect(result.conversation.currentStep).toBe("AWAITING_SEMINARS");
+    expect(result.conversation.selectedSeminarIds).toEqual([]);
+    expect(result.actions.some((action) => action.type === "BUTTONS")).toBe(false);
+  });
+
+  it("does not block READY_TO_REGISTER completion retry on recent greeting when seminars are valid", () => {
+    const validReadyConversation = {
+      ...readyConversation,
+      selectedSeminarIds: ["sem-d1-1"],
+    };
+    const result = turn(validReadyConversation, { text: "hi" }, {
+      previousActivityAt: recentActivityAt,
+    });
     expect(result.conversation.status).toBe("READY_TO_REGISTER");
-    expect(
-      result.actions.some(
-        (action) =>
-          action.type === "TEXT" &&
-          action.body.includes("complete your registration shortly")
-      )
-    ).toBe(true);
+    expect(result.actions).toEqual([]);
     expect(
       result.actions.some(
         (action) =>
@@ -335,16 +343,16 @@ describe("Stage 1 restart and recovery regressions", () => {
   it("repairs invalid seminars without leaving READY_TO_REGISTER stuck", () => {
     const recovery = buildInvalidSeminarRecoveryResult(
       readyConversation,
-      seminarOptions,
-      ["sem-001"]
+      seminarDayCatalog
     );
     expect(recovery.conversation.status).toBe("ACTIVE");
     expect(recovery.conversation.currentStep).toBe("AWAITING_SEMINARS");
+    expect(recovery.conversation.selectedSeminarIds).toEqual([]);
   });
 
   it("shows seminar context lines for welcome-back summaries", () => {
     expect(resumeProgressContextLine(advanceToEmailStep())).toBe("Next step: Email");
-    expect(resumeProgressContextLine(advanceToSeminarsStep(["sem-001"]))).toBe(
+    expect(resumeProgressContextLine(advanceToSeminarsStep("1"))).toBe(
       "Seminars selected: 1"
     );
   });

@@ -36,7 +36,11 @@ import {
   loadWhatsAppConversationRecordByWaId,
 } from "@/lib/server/whatsapp/whatsapp-conversation-store";
 import { reconcileCompletedWhatsAppConversation } from "@/lib/server/whatsapp/whatsapp-completed-conversation-reconcile";
-import { getWhatsAppSeminarOptions } from "@/lib/server/whatsapp/whatsapp-seminar-context";
+import {
+  getWhatsAppSeminarDayCatalog,
+  getWhatsAppSeminarOptions,
+} from "@/lib/server/whatsapp/whatsapp-seminar-context";
+import { selectedSeminarsStillValidInCatalog } from "@/lib/server/whatsapp/whatsapp-seminar-day-catalog";
 import type { Registration } from "@/types";
 
 export type WhatsAppRegistrationCompletionStatus =
@@ -121,14 +125,6 @@ export function resolveSeminarTitlesFromIds(
   }
 
   return { ok: true, titles };
-}
-
-function resolveValidSeminarIds(
-  selectedSeminarIds: string[],
-  seminarOptions: SeminarOption[]
-): string[] {
-  const optionById = new Map(seminarOptions.map((option) => [option.id, option]));
-  return selectedSeminarIds.filter((seminarId) => optionById.has(seminarId));
 }
 
 export function duplicateAllowsRegistrationNumberReveal(
@@ -421,20 +417,24 @@ export async function completeWhatsAppRegistrationForConversation(
     };
   }
 
-  const seminarOptions = await getWhatsAppSeminarOptions();
+  const [seminarOptions, seminarDayCatalog] = await Promise.all([
+    getWhatsAppSeminarOptions(),
+    getWhatsAppSeminarDayCatalog(),
+  ]);
   const seminarResolution = resolveSeminarTitlesFromIds(
     record.selectedSeminarIds,
     seminarOptions
   );
-  if (!seminarResolution.ok) {
-    const validSeminarIds = resolveValidSeminarIds(
+  if (
+    !seminarResolution.ok ||
+    !selectedSeminarsStillValidInCatalog(
       record.selectedSeminarIds,
-      seminarOptions
-    );
+      seminarDayCatalog
+    )
+  ) {
     const recovery = buildInvalidSeminarRecoveryResult(
       record,
-      seminarOptions,
-      validSeminarIds
+      seminarDayCatalog
     );
     safeLogCompletion({ waId, status: "SEMINAR_RECOVERY" });
     return {

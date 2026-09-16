@@ -25,12 +25,13 @@ import {
   type WhatsAppBotAction,
   type WhatsAppConversationState,
 } from "@/lib/server/whatsapp/registration-conversation";
+import {
+  buildTestSeminarDayCatalog,
+  buildTestSeminarOptions,
+} from "@/lib/server/whatsapp/whatsapp-seminar-test-fixtures";
 
-const seminarOptions: SeminarOption[] = [
-  { id: "sem-001", title: "AI Careers" },
-  { id: "sem-002", title: "Design Thinking" },
-  { id: "sem-003", title: "Startup Skills" },
-];
+const seminarOptions: SeminarOption[] = buildTestSeminarOptions();
+const seminarDayCatalog = buildTestSeminarDayCatalog(seminarOptions);
 
 function expectAllButtonsPassMetaValidation(actions: WhatsAppBotAction[]) {
   for (const action of actions) {
@@ -50,11 +51,12 @@ function turn(
     conversation,
     message,
     seminarOptions,
+    seminarDayCatalog,
     waId: "919876543210",
   });
 }
 
-function advanceToSeminarsStep(selectedIds: string[] = []) {
+function advanceToSeminarsStep(selection?: string) {
   let conversation = turn(null, { text: "hi" }).conversation;
   conversation = turn(conversation, {
     interactiveId: REGISTRATION_INTERACTIVE_IDS.START,
@@ -75,11 +77,8 @@ function advanceToSeminarsStep(selectedIds: string[] = []) {
   }).conversation;
   conversation = turn(conversation, { text: "National Public School" }).conversation;
   conversation = turn(conversation, { text: "Bangalore" }).conversation;
-  conversation = turn(conversation, { text: "show seminars" }).conversation;
-  for (const seminarId of selectedIds) {
-    conversation = turn(conversation, {
-      interactiveId: seminarInteractiveId(seminarId),
-    }).conversation;
+  if (selection) {
+    conversation = turn(conversation, { text: selection }).conversation;
   }
   return conversation;
 }
@@ -186,15 +185,15 @@ describe("registration conversation Meta button validation", () => {
     );
   });
 
-  it("validates seminar decision buttons for one and two selections", () => {
-    const oneSelected = advanceToSeminarsStep(["sem-001"]);
+  it("validates Finish Registration button after seminar selection", () => {
+    const oneSelected = advanceToSeminarsStep("1");
     expectAllButtonsPassMetaValidation(
       turn(oneSelected, {
         interactiveId: REGISTRATION_INTERACTIVE_IDS.CONTINUE,
       }).actions
     );
 
-    const twoSelected = advanceToSeminarsStep(["sem-001", "sem-002"]);
+    const twoSelected = advanceToSeminarsStep("1,2");
     expectAllButtonsPassMetaValidation(
       turn(twoSelected, {
         interactiveId: REGISTRATION_INTERACTIVE_IDS.CONTINUE,

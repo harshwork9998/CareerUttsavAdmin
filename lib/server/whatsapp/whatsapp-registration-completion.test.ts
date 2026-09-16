@@ -11,6 +11,7 @@ const linkMock = vi.fn();
 const cancelMock = vi.fn();
 const loadConversationMock = vi.fn();
 const getSeminarsMock = vi.fn();
+const getCatalogMock = vi.fn();
 const generateQrMock = vi.fn();
 
 vi.mock("@/lib/server/registration-service", () => ({
@@ -41,6 +42,7 @@ vi.mock("@/lib/server/whatsapp/whatsapp-completed-conversation-reconcile", () =>
 
 vi.mock("@/lib/server/whatsapp/whatsapp-seminar-context", () => ({
   getWhatsAppSeminarOptions: (...args: unknown[]) => getSeminarsMock(...args),
+  getWhatsAppSeminarDayCatalog: (...args: unknown[]) => getCatalogMock(...args),
 }));
 
 vi.mock("@/lib/server/event-service", () => ({
@@ -59,6 +61,11 @@ import {
   duplicateAllowsRegistrationNumberReveal,
   resolveSeminarTitlesFromIds,
 } from "@/lib/server/whatsapp/whatsapp-registration-completion";
+import {
+  buildTestSeminarDayCatalog,
+  buildTestSeminarOptions,
+} from "@/lib/server/whatsapp/whatsapp-seminar-test-fixtures";
+import { buildWhatsAppSeminarDayCatalog } from "@/lib/server/whatsapp/whatsapp-seminar-day-catalog";
 
 const getEventForApiMock = vi.mocked(getEventForApi);
 
@@ -79,14 +86,12 @@ const readyConversation: WhatsAppConversationState = {
   interestedStream: "Science",
   college: "National Public School",
   city: "Bangalore",
-  selectedSeminarIds: ["sem-001"],
+  selectedSeminarIds: ["sem-d1-1"],
   completedRegistrationId: null,
 };
 
-const seminarOptions = [
-  { id: "sem-001", title: "AI Careers" },
-  { id: "sem-002", title: "Design Thinking" },
-];
+const seminarOptions = buildTestSeminarOptions();
+const seminarDayCatalog = buildTestSeminarDayCatalog(seminarOptions);
 
 const createdRegistration = {
   id: "reg-001",
@@ -109,7 +114,7 @@ const createdRegistration = {
   gender: "Male" as const,
   city: "Bangalore",
   state: "Karnataka",
-  seminarInterests: ["AI Careers"],
+  seminarInterests: ["Day 1 Seminar 1"],
 };
 
 const existingSameMobileRegistration = {
@@ -163,6 +168,7 @@ describe("whatsapp registration completion", () => {
     vi.clearAllMocks();
     loadConversationMock.mockResolvedValue(readyConversation);
     getSeminarsMock.mockResolvedValue(seminarOptions);
+    getCatalogMock.mockResolvedValue(seminarDayCatalog);
     resolveDuplicateMock.mockResolvedValue(mockNoDuplicateResolution());
     createStudentRegistrationMock.mockResolvedValue({
       ok: true,
@@ -213,7 +219,7 @@ describe("whatsapp registration completion", () => {
   it("does not repeat seminar-saved confirmation after finishing with two seminars", async () => {
     loadConversationMock.mockResolvedValue({
       ...readyConversation,
-      selectedSeminarIds: ["sem-001", "sem-002"],
+      selectedSeminarIds: ["sem-d1-1", "sem-d1-2"],
     });
 
     const result = await completeWhatsAppRegistrationForConversation("919876543210");
@@ -459,7 +465,7 @@ describe("whatsapp registration completion", () => {
   it("repairs stale seminar IDs instead of staying stuck in READY_TO_REGISTER", async () => {
     loadConversationMock.mockResolvedValue({
       ...readyConversation,
-      selectedSeminarIds: ["sem-001", "sem-stale"],
+      selectedSeminarIds: ["sem-d1-1", "sem-stale"],
     });
 
     const result = await completeWhatsAppRegistrationForConversation("919876543210");
@@ -467,7 +473,7 @@ describe("whatsapp registration completion", () => {
     expect(result.status).toBe("SEMINAR_RECOVERY");
     expect(result.conversation?.status).toBe("ACTIVE");
     expect(result.conversation?.currentStep).toBe("AWAITING_SEMINARS");
-    expect(result.conversation?.selectedSeminarIds).toEqual(["sem-001"]);
+    expect(result.conversation?.selectedSeminarIds).toEqual([]);
     expect(createStudentRegistrationMock).not.toHaveBeenCalled();
   });
 
@@ -498,6 +504,15 @@ describe("whatsapp registration completion with catalog seminar ids", () => {
     generateQrMock.mockResolvedValue("qr-base64");
     getRegistrationMock.mockResolvedValue(createdRegistration);
     getSeminarsMock.mockImplementation(() => catalogOptionsForFourSeminarEvent());
+    getCatalogMock.mockImplementation(async () => {
+      const options = await catalogOptionsForFourSeminarEvent();
+      const event = mockEvents[0]!;
+      return buildWhatsAppSeminarDayCatalog(
+        options,
+        event.startDate,
+        event.endDate
+      );
+    });
   });
 
   it("completes registration when only cat-{slug} catalogue ids are selected", async () => {
@@ -583,8 +598,8 @@ describe("whatsapp registration completion with catalog seminar ids", () => {
 describe("resolveSeminarTitlesFromIds", () => {
   it("maps seminar ids to titles and rejects foreign ids", () => {
     expect(
-      resolveSeminarTitlesFromIds(["sem-001", "sem-002"], seminarOptions)
-    ).toEqual({ ok: true, titles: ["AI Careers", "Design Thinking"] });
+      resolveSeminarTitlesFromIds(["sem-d1-1", "sem-d1-2"], seminarOptions)
+    ).toEqual({ ok: true, titles: ["Day 1 Seminar 1", "Day 1 Seminar 2"] });
     expect(
       resolveSeminarTitlesFromIds(["sem-foreign"], seminarOptions).ok
     ).toBe(false);
@@ -593,17 +608,22 @@ describe("resolveSeminarTitlesFromIds", () => {
   it("accepts more than three seminar ids for WhatsApp completion", () => {
     const extendedSeminars = [
       ...seminarOptions,
-      { id: "sem-003", title: "Startup Skills" },
-      { id: "sem-004", title: "Entrepreneurship" },
+      { id: "sem-d1-4", title: "Day 1 Seminar 4", date: "2026-08-15", startTime: "14:00" },
+      { id: "sem-d2-3", title: "Day 2 Seminar 3", date: "2026-08-16", startTime: "12:00" },
     ];
     expect(
       resolveSeminarTitlesFromIds(
-        ["sem-001", "sem-002", "sem-003", "sem-004"],
+        ["sem-d1-1", "sem-d1-2", "sem-d1-3", "sem-d2-1"],
         extendedSeminars
       )
     ).toEqual({
       ok: true,
-      titles: ["AI Careers", "Design Thinking", "Startup Skills", "Entrepreneurship"],
+      titles: [
+        "Day 1 Seminar 1",
+        "Day 1 Seminar 2",
+        "Day 1 Seminar 3",
+        "Day 2 Seminar 1",
+      ],
     });
   });
 

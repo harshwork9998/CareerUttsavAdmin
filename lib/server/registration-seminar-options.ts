@@ -9,6 +9,8 @@ import { getEventForApi } from "@/lib/server/event-service";
 export type RegistrationSeminarOption = {
   id: string;
   title: string;
+  date?: string;
+  startTime?: string;
 };
 
 function catalogSeminarId(canonicalTitle: string): string {
@@ -51,6 +53,8 @@ export async function getRegistrationSeminarOptions(): Promise<
       options.push({
         id: eventMatch.id,
         title: eventMatch.title.trim(),
+        date: eventMatch.date,
+        startTime: eventMatch.startTime,
       });
       claimedEventIds.add(eventMatch.id);
       continue;
@@ -69,6 +73,8 @@ export async function getRegistrationSeminarOptions(): Promise<
     options.push({
       id: seminar.id,
       title: seminar.title.trim(),
+      date: seminar.date,
+      startTime: seminar.startTime,
     });
   }
 
