@@ -183,7 +183,8 @@ describe("Stage 1.1 recent greeting re-prompt", () => {
     expect(
       result.actions.some(
         (action) =>
-          action.type === "TEXT" && action.body.includes("Please enter your city")
+          action.type === "TEXT" &&
+          action.body.includes("Please enter your city of residence")
       )
     ).toBe(true);
   });

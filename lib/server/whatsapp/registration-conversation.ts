@@ -28,6 +28,7 @@ export const WHATSAPP_SEMINAR_LIST_ROW_LIMIT = 10;
 export const WHATSAPP_SEMINAR_LIST_PAGE_SIZE = 8;
 export const WHATSAPP_SEMINAR_SELECTION_MIN = 1;
 export const WHATSAPP_SEMINAR_SELECTION_MAX = 3;
+export const WHATSAPP_CITY_PROMPT = "Please enter your city of residence.";
 /** @deprecated Use WHATSAPP_SEMINAR_SELECTION_MAX */
 export const WHATSAPP_SEMINAR_SELECTION_TARGET = WHATSAPP_SEMINAR_SELECTION_MAX;
 
@@ -955,7 +956,7 @@ function promptForStep(
         },
       ];
     case "AWAITING_CITY":
-      return [{ type: "TEXT", body: "Please enter your city." }];
+      return [{ type: "TEXT", body: WHATSAPP_CITY_PROMPT }];
     case "AWAITING_SEMINARS":
       return seminarSelectionActions(
         seminarOptions,
@@ -1366,7 +1367,7 @@ export function processRegistrationConversationTurn(input: {
     if (!text || !isValidPlaceName(text)) {
       return {
         conversation,
-        actions: [{ type: "TEXT", body: "Please enter your city." }],
+        actions: [{ type: "TEXT", body: WHATSAPP_CITY_PROMPT }],
         refreshExpiry: false,
       };
     }
