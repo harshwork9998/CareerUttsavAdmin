@@ -133,18 +133,21 @@ describe("parseSeminarSelectionInput", () => {
   });
 
   it.each([
-    "2,2",
-    "a,a",
-    "1,2,3,4",
-    "0",
-    "-1",
-    "99",
-    "z",
-    "two,seven",
-    "2 and 7",
-    "",
-  ])("rejects invalid input %s", (input) => {
-    expect(parseSeminarSelectionInput(input, catalog).ok).toBe(false);
+    ["2,2", "DUPLICATE_SELECTION"],
+    ["a,a", "DUPLICATE_SELECTION"],
+    ["1,2,3,4", "TOO_MANY_SELECTIONS"],
+    ["0", "EMPTY_OR_MALFORMED"],
+    ["-1", "EMPTY_OR_MALFORMED"],
+    ["99", "INVALID_OR_OUT_OF_RANGE_SELECTION"],
+    ["z", "INVALID_OR_OUT_OF_RANGE_SELECTION"],
+    ["two,seven", "EMPTY_OR_MALFORMED"],
+    ["2 and 7", "EMPTY_OR_MALFORMED"],
+    ["", "EMPTY_OR_MALFORMED"],
+  ])("rejects invalid input %s with %s", (input, error) => {
+    expect(parseSeminarSelectionInput(input, catalog)).toEqual({
+      ok: false,
+      error,
+    });
   });
 
   it("maps numeric keys to Day 1 seminar IDs", () => {

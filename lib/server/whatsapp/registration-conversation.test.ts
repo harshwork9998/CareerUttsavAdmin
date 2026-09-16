@@ -406,7 +406,7 @@ describe("whatsapp registration conversation engine", () => {
       result.actions.some(
         (action) =>
           action.type === "TEXT" &&
-          action.body.includes("Please choose up to 3 seminars")
+          action.body.includes("cannot select the same seminar twice")
       )
     ).toBe(true);
   });

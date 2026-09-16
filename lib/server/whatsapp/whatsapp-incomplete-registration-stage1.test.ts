@@ -208,7 +208,7 @@ describe("Stage 1.1 recent greeting re-prompt", () => {
       result.actions.some(
         (action) =>
           action.type === "BUTTONS" &&
-          action.body.includes("Your seminar choices have been recorded")
+          action.body.includes("Your seminar choices are already saved")
       )
     ).toBe(true);
   });
@@ -220,7 +220,7 @@ describe("Stage 1.1 recent greeting re-prompt", () => {
       result.actions.some(
         (action) =>
           action.type === "BUTTONS" &&
-          action.body.includes("Your seminar choices have been recorded")
+          action.body.includes("Your seminar choices are already saved")
       )
     ).toBe(true);
   });

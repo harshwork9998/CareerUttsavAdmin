@@ -23,12 +23,13 @@ import {
 import { formatNumberedSeminarListRow } from "@/lib/server/whatsapp/seminar-list-display";
 import {
   WHATSAPP_LEGACY_SEMINAR_MIGRATION_MESSAGE,
+  WHATSAPP_SEMINAR_FINISH_ALREADY_SAVED_PROMPT,
   WHATSAPP_SEMINAR_FINISH_PROMPT,
   WHATSAPP_STALE_SEMINAR_RECOVERY_MESSAGE,
   buildSeminarFinishSummaryBody,
   combinedSeminarSelectionActions,
-  invalidSeminarSelectionActions,
   parseSeminarSelectionInput,
+  seminarSelectionErrorActions,
   selectedSeminarsStillValidInCatalog,
   type WhatsAppSeminarDayCatalog,
 } from "@/lib/server/whatsapp/whatsapp-seminar-day-catalog";
@@ -730,11 +731,13 @@ function seminarTitlesForIds(
   );
 }
 
-function seminarFinishButtonActions(): WhatsAppBotAction[] {
+function seminarFinishButtonActions(
+  body: string = WHATSAPP_SEMINAR_FINISH_PROMPT
+): WhatsAppBotAction[] {
   return [
     {
       type: "BUTTONS",
-      body: WHATSAPP_SEMINAR_FINISH_PROMPT,
+      body,
       buttons: [
         {
           id: REGISTRATION_INTERACTIVE_IDS.FINISH,
@@ -743,6 +746,10 @@ function seminarFinishButtonActions(): WhatsAppBotAction[] {
       ],
     },
   ];
+}
+
+function seminarFinishReminderButtonActions(): WhatsAppBotAction[] {
+  return seminarFinishButtonActions(WHATSAPP_SEMINAR_FINISH_ALREADY_SAVED_PROMPT);
 }
 
 function isLegacySeminarSelectionState(
@@ -1035,6 +1042,14 @@ function handleGlobalControls(
     );
     if (staleRecovery) {
       return staleRecovery;
+    }
+
+    if (conversation.currentStep === "AWAITING_SEMINAR_FINISH") {
+      return {
+        conversation,
+        actions: seminarFinishReminderButtonActions(),
+        refreshExpiry: true,
+      };
     }
 
     if (isReturningUserInactivity(previousActivityAt)) {
@@ -1344,7 +1359,7 @@ export function processRegistrationConversationTurn(input: {
     if (interactiveId && !text) {
       return {
         conversation,
-        actions: invalidSeminarSelectionActions(input.seminarDayCatalog),
+        actions: seminarSelectionErrorActions("EMPTY_OR_MALFORMED"),
         refreshExpiry: false,
       };
     }
@@ -1361,7 +1376,7 @@ export function processRegistrationConversationTurn(input: {
     if (!parsed.ok) {
       return {
         conversation,
-        actions: invalidSeminarSelectionActions(input.seminarDayCatalog),
+        actions: seminarSelectionErrorActions(parsed.error),
         refreshExpiry: false,
       };
     }
@@ -1391,7 +1406,7 @@ export function processRegistrationConversationTurn(input: {
 
     return {
       conversation,
-      actions: seminarFinishButtonActions(),
+      actions: seminarFinishReminderButtonActions(),
       refreshExpiry: false,
     };
   }

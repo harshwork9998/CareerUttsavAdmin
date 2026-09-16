@@ -7,16 +7,35 @@ export type WhatsAppSeminarDayCatalog = {
   day2Date: string | null;
 };
 
-export const WHATSAPP_SEMINAR_INVALID_SELECTION_MESSAGE = `Please choose up to 3 seminars using the numbers or letters shown above.
+export const WHATSAPP_SEMINAR_FINISH_PROMPT = `Your seminar choices have been recorded.
+
+Tap Finish Registration to continue.`;
+
+export const WHATSAPP_SEMINAR_FINISH_ALREADY_SAVED_PROMPT = `Your seminar choices are already saved.
+
+Tap Finish Registration to continue.`;
+
+export const WHATSAPP_SEMINAR_TOO_MANY_SELECTIONS_MESSAGE = `You can select a maximum of 3 seminars.
+
+Please reply with up to 3 numbers/letters separated by commas.
 
 Examples:
 2
 2,7
 2,b,j`;
 
-export const WHATSAPP_SEMINAR_FINISH_PROMPT = `Your seminar choices have been recorded.
+export const WHATSAPP_SEMINAR_DUPLICATE_SELECTION_MESSAGE =
+  "You cannot select the same seminar twice. Please reply with different numbers/letters separated by commas.";
 
-Tap Finish Registration to continue.`;
+export const WHATSAPP_SEMINAR_INVALID_OR_OUT_OF_RANGE_MESSAGE =
+  "Please use only the numbers or letters shown in the seminar list above, separated by commas.";
+
+export const WHATSAPP_SEMINAR_EMPTY_OR_MALFORMED_MESSAGE = `Please reply with up to 3 seminar numbers/letters separated by commas.
+
+Examples:
+2
+2,7
+2,b,j`;
 
 export const WHATSAPP_LEGACY_SEMINAR_MIGRATION_MESSAGE =
   "Our seminar options have been updated. Please choose your seminar preferences below.";
@@ -158,9 +177,15 @@ export function formatCombinedSeminarSelectionMessage(
   return sections.join("\n");
 }
 
+export type SeminarSelectionParseError =
+  | "TOO_MANY_SELECTIONS"
+  | "DUPLICATE_SELECTION"
+  | "INVALID_OR_OUT_OF_RANGE_SELECTION"
+  | "EMPTY_OR_MALFORMED";
+
 export type ParsedSeminarSelection =
   | { ok: true; seminarIds: string[] }
-  | { ok: false };
+  | { ok: false; error: SeminarSelectionParseError };
 
 function tokenizeSelectionInput(input: string): string[] {
   return input
@@ -183,12 +208,15 @@ export function parseSeminarSelectionInput(
 ): ParsedSeminarSelection {
   const trimmed = input.trim();
   if (!trimmed) {
-    return { ok: false };
+    return { ok: false, error: "EMPTY_OR_MALFORMED" };
   }
 
   const tokens = tokenizeSelectionInput(trimmed);
-  if (tokens.length === 0 || tokens.length > 3) {
-    return { ok: false };
+  if (tokens.length === 0) {
+    return { ok: false, error: "EMPTY_OR_MALFORMED" };
+  }
+  if (tokens.length > 3) {
+    return { ok: false, error: "TOO_MANY_SELECTIONS" };
   }
 
   const resolvedIds: string[] = [];
@@ -196,18 +224,18 @@ export function parseSeminarSelectionInput(
 
   for (const token of tokens) {
     if (!isNumericToken(token) && !isAlphaToken(token)) {
-      return { ok: false };
+      return { ok: false, error: "EMPTY_OR_MALFORMED" };
     }
 
     if (isNumericToken(token)) {
       const position = Number.parseInt(token, 10);
       const seminar = catalog.day1[position - 1];
       if (!seminar) {
-        return { ok: false };
+        return { ok: false, error: "INVALID_OR_OUT_OF_RANGE_SELECTION" };
       }
       const key = `d1:${seminar.id}`;
       if (seen.has(key)) {
-        return { ok: false };
+        return { ok: false, error: "DUPLICATE_SELECTION" };
       }
       seen.add(key);
       resolvedIds.push(seminar.id);
@@ -216,22 +244,22 @@ export function parseSeminarSelectionInput(
 
     const index = day2LetterToIndex(token);
     if (index === null) {
-      return { ok: false };
+      return { ok: false, error: "INVALID_OR_OUT_OF_RANGE_SELECTION" };
     }
     const seminar = catalog.day2[index];
     if (!seminar) {
-      return { ok: false };
+      return { ok: false, error: "INVALID_OR_OUT_OF_RANGE_SELECTION" };
     }
     const key = `d2:${seminar.id}`;
     if (seen.has(key)) {
-      return { ok: false };
+      return { ok: false, error: "DUPLICATE_SELECTION" };
     }
     seen.add(key);
     resolvedIds.push(seminar.id);
   }
 
   if (resolvedIds.length === 0) {
-    return { ok: false };
+    return { ok: false, error: "EMPTY_OR_MALFORMED" };
   }
 
   return { ok: true, seminarIds: resolvedIds };
@@ -285,11 +313,28 @@ export function combinedSeminarSelectionActions(
   ];
 }
 
-export function invalidSeminarSelectionActions(
-  catalog: WhatsAppSeminarDayCatalog
+export function seminarSelectionErrorActions(
+  error: SeminarSelectionParseError
 ): Array<{ type: "TEXT"; body: string }> {
-  return [
-    { type: "TEXT", body: WHATSAPP_SEMINAR_INVALID_SELECTION_MESSAGE },
-    ...combinedSeminarSelectionActions(catalog),
-  ];
+  switch (error) {
+    case "TOO_MANY_SELECTIONS":
+      return [
+        { type: "TEXT", body: WHATSAPP_SEMINAR_TOO_MANY_SELECTIONS_MESSAGE },
+      ];
+    case "DUPLICATE_SELECTION":
+      return [
+        { type: "TEXT", body: WHATSAPP_SEMINAR_DUPLICATE_SELECTION_MESSAGE },
+      ];
+    case "INVALID_OR_OUT_OF_RANGE_SELECTION":
+      return [
+        {
+          type: "TEXT",
+          body: WHATSAPP_SEMINAR_INVALID_OR_OUT_OF_RANGE_MESSAGE,
+        },
+      ];
+    case "EMPTY_OR_MALFORMED":
+      return [
+        { type: "TEXT", body: WHATSAPP_SEMINAR_EMPTY_OR_MALFORMED_MESSAGE },
+      ];
+  }
 }

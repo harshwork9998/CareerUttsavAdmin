@@ -22,10 +22,16 @@ import {
   type WhatsAppConversationState,
 } from "@/lib/server/whatsapp/registration-conversation";
 import {
+  WHATSAPP_SEMINAR_FINISH_ALREADY_SAVED_PROMPT,
+  WHATSAPP_SEMINAR_FINISH_PROMPT,
+  WHATSAPP_SEMINAR_TOO_MANY_SELECTIONS_MESSAGE,
   WHATSAPP_STALE_SEMINAR_RECOVERY_MESSAGE,
   formatCombinedSeminarSelectionMessage,
 } from "@/lib/server/whatsapp/whatsapp-seminar-day-catalog";
+import { mapStateToPrismaConversationData } from "@/lib/server/whatsapp/whatsapp-conversation-map";
 import {
+  TEST_EVENT_END_DATE,
+  TEST_EVENT_START_DATE,
   buildTestSeminarDayCatalog,
   buildTestSeminarOptions,
   seminarTurnContext,
@@ -368,6 +374,180 @@ describe("WhatsApp stale seminar recovery", () => {
 
     expect(result.conversation.status).toBe("COMPLETED");
     expect(result.conversation.selectedSeminarIds).toEqual(["sem-stale"]);
+  });
+});
+
+const fourDay1Seminars: SeminarOption[] = [
+  {
+    id: "sem-overseas",
+    title: "All about Overseas Education",
+    date: TEST_EVENT_START_DATE,
+    startTime: "10:00",
+  },
+  {
+    id: "sem-stream",
+    title: "How to select a stream – Art – Science – Commerce?",
+    date: TEST_EVENT_START_DATE,
+    startTime: "11:00",
+  },
+  {
+    id: "sem-ai",
+    title: "Real Careers with Artificial Intelligence",
+    date: TEST_EVENT_START_DATE,
+    startTime: "12:00",
+  },
+  {
+    id: "sem-medicine",
+    title: "Medicine in the 21st century",
+    date: TEST_EVENT_START_DATE,
+    startTime: "14:00",
+  },
+];
+const fourDay1Catalog = buildTestSeminarDayCatalog(fourDay1Seminars);
+
+function expectFinishRegistrationActions(
+  actions: ReturnType<typeof turn>["actions"],
+  prompt: string = WHATSAPP_SEMINAR_FINISH_PROMPT
+) {
+  expect(
+    actions.some(
+      (action) =>
+        action.type === "BUTTONS" &&
+        action.body === prompt &&
+        action.buttons.some(
+          (button) =>
+            button.id === REGISTRATION_INTERACTIVE_IDS.FINISH &&
+            button.title === "Finish registration"
+        )
+    )
+  ).toBe(true);
+}
+
+describe("WhatsApp four Day 1 seminar selection regression", () => {
+  const awaitingSeminars = advanceToSeminarSelectionStep();
+
+  it.each([
+    ["1", ["sem-overseas"]],
+    ["2,3", ["sem-stream", "sem-ai"]],
+    [
+      "1,2,3",
+      ["sem-overseas", "sem-stream", "sem-ai"],
+    ],
+  ])("accepts %s and returns Finish Registration actions", (input, expectedIds) => {
+    const result = turn(awaitingSeminars, { text: input }, fourDay1Seminars, fourDay1Catalog);
+
+    expect(result.conversation.currentStep).toBe("AWAITING_SEMINAR_FINISH");
+    expect(result.conversation.selectedSeminarIds).toEqual(expectedIds);
+    expect(result.conversation.selectedSeminarIds).not.toEqual(
+      input.split(",").map((token) => token.trim())
+    );
+    expectFinishRegistrationActions(result.actions);
+  });
+
+  it("rejects 1,4,2,3 with only the max-3 error and no catalogue resend", () => {
+    const result = turn(awaitingSeminars, { text: "1,4,2,3" }, fourDay1Seminars, fourDay1Catalog);
+
+    expect(result.conversation.currentStep).toBe("AWAITING_SEMINARS");
+    expect(result.conversation.selectedSeminarIds).toEqual([]);
+    expect(result.actions).toEqual([
+      { type: "TEXT", body: WHATSAPP_SEMINAR_TOO_MANY_SELECTIONS_MESSAGE },
+    ]);
+    expect(
+      result.actions.some(
+        (action) =>
+          action.type === "TEXT" &&
+          action.body.includes("Choose up to 3 seminars you'd like to attend.")
+      )
+    ).toBe(false);
+  });
+
+  it("accepts 1,2,3 after a prior too-many rejection", () => {
+    let conversation = awaitingSeminars;
+    conversation = turn(
+      conversation,
+      { text: "1,4,2,3" },
+      fourDay1Seminars,
+      fourDay1Catalog
+    ).conversation;
+
+    const result = turn(conversation, { text: "1,2,3" }, fourDay1Seminars, fourDay1Catalog);
+    expect(result.conversation.currentStep).toBe("AWAITING_SEMINAR_FINISH");
+    expect(result.conversation.selectedSeminarIds).toEqual([
+      "sem-overseas",
+      "sem-stream",
+      "sem-ai",
+    ]);
+    expectFinishRegistrationActions(result.actions);
+  });
+
+  it("re-prompts Finish Registration after hello without changing saved selections", () => {
+    const selected = turn(
+      awaitingSeminars,
+      { text: "1,2" },
+      fourDay1Seminars,
+      fourDay1Catalog
+    );
+    const hello = turn(
+      selected.conversation,
+      { text: "hello" },
+      fourDay1Seminars,
+      fourDay1Catalog
+    );
+
+    expect(hello.conversation.currentStep).toBe("AWAITING_SEMINAR_FINISH");
+    expect(hello.conversation.selectedSeminarIds).toEqual([
+      "sem-overseas",
+      "sem-stream",
+    ]);
+    expectFinishRegistrationActions(
+      hello.actions,
+      WHATSAPP_SEMINAR_FINISH_ALREADY_SAVED_PROMPT
+    );
+  });
+
+  it("does not replace saved selections when user sends another selection at finish step", () => {
+    const selected = turn(
+      awaitingSeminars,
+      { text: "1,2" },
+      fourDay1Seminars,
+      fourDay1Catalog
+    );
+    const retry = turn(
+      selected.conversation,
+      { text: "2,3" },
+      fourDay1Seminars,
+      fourDay1Catalog
+    );
+
+    expect(retry.conversation.currentStep).toBe("AWAITING_SEMINAR_FINISH");
+    expect(retry.conversation.selectedSeminarIds).toEqual([
+      "sem-overseas",
+      "sem-stream",
+    ]);
+    expectFinishRegistrationActions(
+      retry.actions,
+      WHATSAPP_SEMINAR_FINISH_ALREADY_SAVED_PROMPT
+    );
+  });
+
+  it("persists finish-waiting state as AWAITING_SEMINAR_FINISH directly", () => {
+    const selected = turn(
+      awaitingSeminars,
+      { text: "1,2,3" },
+      fourDay1Seminars,
+      fourDay1Catalog
+    );
+    const prismaData = mapStateToPrismaConversationData(
+      selected.conversation,
+      new Date("2026-09-16T12:00:00.000Z")
+    );
+
+    expect(prismaData.currentStep).toBe("AWAITING_SEMINAR_FINISH");
+    expect(prismaData.selectedSeminarIds).toEqual([
+      "sem-overseas",
+      "sem-stream",
+      "sem-ai",
+    ]);
   });
 });
 
