@@ -4,7 +4,10 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { deliverableOptionLabel } from "@/constants/partner-deliverables";
-import { normalizePortalRepresentatives } from "@/lib/partner-portal-docs";
+import {
+  normalizePortalRepresentatives,
+  representativesShownInViewDocs,
+} from "@/lib/partner-portal-docs";
 import { validateLinkedInProfile } from "@/lib/partner-linkedin";
 import {
   mergeRepresentativesPreservingHistory,
@@ -75,6 +78,16 @@ describe("representative fields for View Docs", () => {
       { name: "Asha", designation: "Director", phone: "9876543210" },
       { name: "Earlier", designation: "Dean", phone: "9876543211" },
     ]);
+  });
+
+  it("shows only submitted representatives and skips blank slots", () => {
+    const shown = representativesShownInViewDocs([
+      { name: "Asha", designation: "Director", phone: "9876543210" },
+      { name: "Ravi", designation: "Dean", phone: "9876543211" },
+      { name: "Neha", designation: "Lead", phone: "9876543212" },
+      { name: "", designation: "", phone: "" },
+    ]);
+    expect(shown.map((person) => person.name)).toEqual(["Asha", "Ravi", "Neha"]);
   });
 
   it("labels the View Docs section Event Representatives and shows designation", () => {

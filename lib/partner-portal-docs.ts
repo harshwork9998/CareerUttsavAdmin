@@ -11,6 +11,17 @@ function isValidRepPhone(phone: string): boolean {
   return isValidIndianMobile(phone);
 }
 
+/** View Docs lists people who were actually submitted, never blank slots. */
+export function representativesShownInViewDocs<
+  T extends { name: string; designation?: string; phone: string },
+>(people: T[]): T[] {
+  return people.filter((person) =>
+    Boolean(
+      person.name.trim() || person.designation?.trim() || person.phone.trim()
+    )
+  );
+}
+
 function isRepresentativesRowComplete(
   row: PartnerRepresentativesSubmission
 ): boolean {

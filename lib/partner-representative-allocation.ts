@@ -21,8 +21,8 @@ export function parseRepresentativeSlotCount(
 }
 
 /**
- * Replace the allocated visible rows and keep any previously stored rows
- * beyond the new allocation.
+ * Replace representatives inside the current allocation and keep any
+ * previously stored rows beyond that maximum. Blank rows are not stored.
  */
 export function mergeRepresentativesPreservingHistory(
   existing: RepresentativeFields[] | undefined,
@@ -30,10 +30,12 @@ export function mergeRepresentativesPreservingHistory(
   submitted: RepresentativeFields[]
 ): RepresentativeFields[] {
   const prior = existing ?? [];
-  const next = prior.map((row) => ({ ...row }));
-  const visible = submitted.slice(0, allocation);
-  for (let index = 0; index < visible.length; index += 1) {
-    next[index] = visible[index];
-  }
-  return next;
+  const maximum = Number.isInteger(allocation) && allocation > 0 ? allocation : 0;
+  const visible = submitted
+    .filter(
+      (row) =>
+        Boolean(row.name.trim() || row.designation.trim() || row.phone.trim())
+    )
+    .slice(0, maximum);
+  return [...visible, ...prior.slice(maximum)];
 }

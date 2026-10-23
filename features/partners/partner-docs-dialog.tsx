@@ -31,6 +31,7 @@ import {
   formatDaysSinceUploadChip,
   getPartnerPortalUploadStatus,
   normalizePortalRepresentatives,
+  representativesShownInViewDocs,
   type PortalSubmissionChecklistItem,
 } from "@/lib/partner-portal-docs";
 import { enrichSeminarSlotAssignments } from "@/lib/partner-event-config";
@@ -417,7 +418,13 @@ function SubmissionPreview({
       partner.portalRepresentatives,
       partner.eventIds ?? []
     );
-    const totalPeople = repRows.reduce(
+    const visibleRows = repRows
+      .map((row) => ({
+        ...row,
+        representatives: representativesShownInViewDocs(row.representatives),
+      }))
+      .filter((row) => row.representatives.length > 0);
+    const totalPeople = visibleRows.reduce(
       (sum, row) => sum + row.representatives.length,
       0
     );
@@ -445,12 +452,12 @@ function SubmissionPreview({
             </p>
           </div>
 
-          {repRows.length === 0 ? (
+          {visibleRows.length === 0 ? (
             <p className="px-1 text-sm" style={{ color: INK.muted }}>
               No contact details yet.
             </p>
           ) : (
-            repRows.map((row) => (
+            visibleRows.map((row) => (
               <div
                 key={row.eventId}
                 className="rounded-2xl border p-5"
@@ -463,7 +470,8 @@ function SubmissionPreview({
                   {eventLabel(events, row.eventId)}
                 </p>
                 <p className="mt-1 text-sm" style={{ color: INK.secondary }}>
-                  {row.count} representative{row.count === 1 ? "" : "s"} submitted
+                  {row.representatives.length} representative
+                  {row.representatives.length === 1 ? "" : "s"} submitted
                 </p>
                 {row.representatives.length === 0 ? (
                   <p className="mt-3 text-sm" style={{ color: INK.muted }}>
