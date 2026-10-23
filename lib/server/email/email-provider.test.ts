@@ -313,6 +313,48 @@ describe("email provider routing", () => {
     expect(result.durationMs).toBeGreaterThanOrEqual(0);
   });
 
+  it.each([421, 450, 451, 452])(
+    "classifies SMTP %s as unknown",
+    async (responseCode) => {
+      useSmtpEnv();
+      sendMail.mockRejectedValue(
+        Object.assign(new Error(`${responseCode} 4.3.0 temporary rejection`), {
+          code: "EMESSAGE",
+          responseCode,
+          command: "DATA",
+        })
+      );
+
+      const result = await sendEmail(message);
+
+      expect(result).toMatchObject({
+        ok: false,
+        outcome: "unknown",
+      });
+    }
+  );
+
+  it.each([550, 553, 554])(
+    "classifies SMTP %s as definitive_failure",
+    async (responseCode) => {
+      useSmtpEnv();
+      sendMail.mockRejectedValue(
+        Object.assign(new Error(`${responseCode} permanent rejection`), {
+          code: "EENVELOPE",
+          responseCode,
+          command: "RCPT TO",
+        })
+      );
+
+      const result = await sendEmail(message);
+
+      expect(result).toMatchObject({
+        ok: false,
+        outcome: "definitive_failure",
+      });
+    }
+  );
+
   it("returns definitive_failure when SMTP rejects the message", async () => {
     useSmtpEnv();
     sendMail.mockRejectedValue(

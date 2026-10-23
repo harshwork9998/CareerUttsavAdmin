@@ -221,10 +221,20 @@ function classifySmtpError(error: unknown): "definitive_failure" | "unknown" {
 
   const responseCode =
     typeof failure.responseCode === "number" ? failure.responseCode : undefined;
-  if (responseCode === 421) {
+  // 4xx is a temporary SMTP failure. 451 must stay unknown so a password-reset
+  // token is not revoked when Google has not permanently rejected the message.
+  if (
+    responseCode !== undefined &&
+    responseCode >= 400 &&
+    responseCode <= 499
+  ) {
     return "unknown";
   }
-  if (responseCode !== undefined && responseCode >= 400) {
+  if (
+    responseCode !== undefined &&
+    responseCode >= 500 &&
+    responseCode <= 599
+  ) {
     return "definitive_failure";
   }
 
