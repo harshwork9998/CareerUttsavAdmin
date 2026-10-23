@@ -1,6 +1,7 @@
 import {
   CAREER_UTTSAV_SEMINARS,
   canonicalizeSeminarTitle,
+  isLegacyCareerUttsavSeminarTitle,
   seminarTitlesMatch,
 } from "@/features/dashboard/seminars";
 import { CURRENT_EVENT_ID } from "@/lib/current-events";
@@ -26,9 +27,11 @@ function catalogSeminarId(canonicalTitle: string): string {
 }
 
 /**
- * Canonical seminar catalog for student registration (website + WhatsApp).
- * Uses the shared Career Uttsav catalogue titles and reuses current-event
- * seminar IDs when titles match.
+ * Current seminar catalog for student registration.
+ * Returns the canonical 14 titles and reuses current-event seminar IDs
+ * when the event record uses the same title.
+ * Legacy 20-title event rows are not added as extra current choices.
+ * A custom title on the current event is still included.
  */
 export async function getRegistrationSeminarOptions(): Promise<
   RegistrationSeminarOption[]
@@ -46,6 +49,7 @@ export async function getRegistrationSeminarOptions(): Promise<
     const eventMatch = eventSeminars.find(
       (seminar) =>
         !claimedEventIds.has(seminar.id) &&
+        !isLegacyCareerUttsavSeminarTitle(seminar.title) &&
         seminarTitlesMatch(seminar.title, title)
     );
 
@@ -53,8 +57,8 @@ export async function getRegistrationSeminarOptions(): Promise<
       options.push({
         id: eventMatch.id,
         title: eventMatch.title.trim(),
-        date: eventMatch.date,
-        startTime: eventMatch.startTime,
+        date: eventMatch.date ?? undefined,
+        startTime: eventMatch.startTime ?? undefined,
       });
       claimedEventIds.add(eventMatch.id);
       continue;
@@ -70,11 +74,14 @@ export async function getRegistrationSeminarOptions(): Promise<
     if (claimedEventIds.has(seminar.id)) {
       continue;
     }
+    if (isLegacyCareerUttsavSeminarTitle(seminar.title)) {
+      continue;
+    }
     options.push({
       id: seminar.id,
       title: seminar.title.trim(),
-      date: seminar.date,
-      startTime: seminar.startTime,
+      date: seminar.date ?? undefined,
+      startTime: seminar.startTime ?? undefined,
     });
   }
 

@@ -1,4 +1,5 @@
 import type { WhatsAppBotAction } from "@/lib/server/whatsapp/registration-conversation";
+import { exportWhatsAppFirstName } from "@/lib/server/whatsapp/registration-conversation";
 
 export function buildWhatsAppSeminarSelectionCompleteActions(
   selectedCount = 3
@@ -25,10 +26,12 @@ Your seminar preferences are saved.`,
 export function buildWhatsAppRegistrationSuccessActions(input: {
   registrationNumber: string;
   qrPngBase64: string;
+  studentName?: string | null;
   includeSeminarCompleteMessage?: boolean;
   selectedSeminarCount?: number;
 }): WhatsAppBotAction[] {
   const actions: WhatsAppBotAction[] = [];
+  const firstName = exportWhatsAppFirstName(input.studentName ?? null);
 
   if (input.includeSeminarCompleteMessage === true) {
     actions.push(
@@ -39,21 +42,27 @@ export function buildWhatsAppRegistrationSuccessActions(input: {
   actions.push(
     {
       type: "TEXT",
-      body: `✅ Registration Successful!
+      body: `🎉 YOU’RE IN, ${firstName}!
 
-You're successfully registered for Career Uttsav.
+Your Career Uttsav 2026 registration is confirmed.
 
-Registration Number:
-${input.registrationNumber}
+📅 19–20 December 2026
+📍 Palace Grounds, Bengaluru
+🎟️ Entry: FREE
+Registration ID: ${input.registrationNumber}
 
-Please keep your QR code handy for entry at the event.`,
+And here’s your entry pass 👇`,
     },
     {
       type: "MEDIA",
       mimeType: "image/png",
-      filename: "registration-qr.png",
+      filename: "career-uttsav-event-pass.png",
       contentBase64: input.qrPngBase64,
       caption: "Your Career Uttsav entry QR code",
+    },
+    {
+      type: "TEXT",
+      body: "📱 Save this QR code. You’ll need it when you arrive.",
     }
   );
 
@@ -67,7 +76,7 @@ export function buildWhatsAppAlreadyRegisteredActions(input: {
   const actions: WhatsAppBotAction[] = [
     {
       type: "TEXT",
-      body: "You're already registered for Career Uttsav.",
+      body: "You’re already in! 🎉 Your Career Uttsav registration is complete. Here’s your pass again.",
     },
   ];
 
@@ -82,9 +91,13 @@ export function buildWhatsAppAlreadyRegisteredActions(input: {
     actions.push({
       type: "MEDIA",
       mimeType: "image/png",
-      filename: "registration-qr.png",
+      filename: "career-uttsav-event-pass.png",
       contentBase64: input.qrPngBase64,
       caption: "Your Career Uttsav entry QR code",
+    });
+    actions.push({
+      type: "TEXT",
+      body: "📱 Save this QR code. You’ll need it when you arrive.",
     });
   }
 
@@ -95,31 +108,7 @@ export function buildWhatsAppSameMobileAlreadyRegisteredActions(input: {
   registrationNumber?: string;
   qrPngBase64?: string;
 }): WhatsAppBotAction[] {
-  const actions: WhatsAppBotAction[] = [
-    {
-      type: "TEXT",
-      body: "You're already registered for Career Uttsav with this WhatsApp number.",
-    },
-  ];
-
-  if (input.registrationNumber) {
-    actions.push({
-      type: "TEXT",
-      body: `Registration Number:\n${input.registrationNumber}`,
-    });
-  }
-
-  if (input.qrPngBase64) {
-    actions.push({
-      type: "MEDIA",
-      mimeType: "image/png",
-      filename: "registration-qr.png",
-      contentBase64: input.qrPngBase64,
-      caption: "Your Career Uttsav entry QR code",
-    });
-  }
-
-  return actions;
+  return buildWhatsAppAlreadyRegisteredActions(input);
 }
 
 export function buildWhatsAppEmailDuplicatePrivacyActions(): WhatsAppBotAction[] {
@@ -147,3 +136,6 @@ export function buildWhatsAppCompletionFailureActions(
 ): WhatsAppBotAction[] {
   return [{ type: "TEXT", body: message }];
 }
+
+export const WHATSAPP_REGISTRATION_FAILURE_MESSAGE = `Something went wrong while creating your pass.
+Your details are safe — please try again in a moment.`;

@@ -35,6 +35,7 @@ import {
   buildTestSeminarDayCatalog,
   buildTestSeminarOptions,
 } from "@/lib/server/whatsapp/whatsapp-seminar-test-fixtures";
+import { WHATSAPP_SEMINAR_FINISH_REMINDER_PROMPT } from "@/lib/server/whatsapp/whatsapp-artwork-seminar-catalog";
 
 const seminarOptions: SeminarOption[] = buildTestSeminarOptions();
 const seminarDayCatalog = buildTestSeminarDayCatalog(seminarOptions);
@@ -56,7 +57,7 @@ const readyConversation: WhatsAppConversationState = {
   interestedStream: "Science",
   college: "National Public School",
   city: "Bangalore",
-  selectedSeminarIds: ["sem-d1-1", "sem-stale"],
+  selectedSeminarIds: ["sem-2026-01", "sem-stale"],
   completedRegistrationId: null,
 };
 
@@ -76,6 +77,7 @@ function turn(
     conversation,
     message,
     seminarOptions: selectedOptions,
+    eventArtworkSeminarOptions: buildTestSeminarOptions(),
     seminarDayCatalog: buildTestSeminarDayCatalog(selectedOptions),
     waId: options.waId ?? "919876543210",
     completedRegistrationNumber: options.completedRegistrationNumber,
@@ -155,7 +157,7 @@ describe("Stage 1.1 recent greeting re-prompt", () => {
       result.actions.some(
         (action) =>
           action.type === "TEXT" &&
-          action.body.includes("Please enter your school or college name")
+          action.body.includes("school / PU college")
       )
     ).toBe(true);
     expect(
@@ -172,7 +174,7 @@ describe("Stage 1.1 recent greeting re-prompt", () => {
       result.actions.some(
         (action) =>
           action.type === "TEXT" &&
-          action.body.includes("Please enter your email address")
+          action.body.includes("What’s your email ID?")
       )
     ).toBe(true);
   });
@@ -184,7 +186,7 @@ describe("Stage 1.1 recent greeting re-prompt", () => {
       result.actions.some(
         (action) =>
           action.type === "TEXT" &&
-          action.body.includes("Please enter your city of residence")
+          action.body.includes("And which city are you coming from?")
       )
     ).toBe(true);
   });
@@ -195,8 +197,8 @@ describe("Stage 1.1 recent greeting re-prompt", () => {
     expect(
       result.actions.some(
         (action) =>
-          action.type === "TEXT" &&
-          action.body.includes("Choose up to 3 seminars you'd like to attend.")
+          action.type === "MEDIA" &&
+          action.caption?.includes("Now build your Career Uttsav shortlist")
       )
     ).toBe(true);
   });
@@ -208,7 +210,7 @@ describe("Stage 1.1 recent greeting re-prompt", () => {
       result.actions.some(
         (action) =>
           action.type === "BUTTONS" &&
-          action.body.includes("Your seminar choices are already saved")
+          action.body === WHATSAPP_SEMINAR_FINISH_REMINDER_PROMPT
       )
     ).toBe(true);
   });
@@ -220,7 +222,7 @@ describe("Stage 1.1 recent greeting re-prompt", () => {
       result.actions.some(
         (action) =>
           action.type === "BUTTONS" &&
-          action.body.includes("Your seminar choices are already saved")
+          action.body === WHATSAPP_SEMINAR_FINISH_REMINDER_PROMPT
       )
     ).toBe(true);
   });
@@ -240,7 +242,7 @@ describe("Stage 1.1 returning greeting welcome-back", () => {
       result.actions.some(
         (action) =>
           action.type === "BUTTONS" &&
-          action.body.includes("Next step: College")
+          action.body.includes("saved your Career Uttsav registration progress")
       )
     ).toBe(true);
   });
@@ -298,7 +300,7 @@ describe("Stage 1.1 READY_TO_REGISTER and TTL helpers", () => {
   it("does not block READY_TO_REGISTER completion retry on recent greeting when seminars are valid", () => {
     const validReadyConversation = {
       ...readyConversation,
-      selectedSeminarIds: ["sem-d1-1"],
+      selectedSeminarIds: ["sem-2026-01"],
     };
     const result = turn(validReadyConversation, { text: "hi" }, {
       previousActivityAt: recentActivityAt,
@@ -341,10 +343,7 @@ describe("Stage 1 restart and recovery regressions", () => {
   });
 
   it("repairs invalid seminars without leaving READY_TO_REGISTER stuck", () => {
-    const recovery = buildInvalidSeminarRecoveryResult(
-      readyConversation,
-      seminarDayCatalog
-    );
+    const recovery = buildInvalidSeminarRecoveryResult(readyConversation);
     expect(recovery.conversation.status).toBe("ACTIVE");
     expect(recovery.conversation.currentStep).toBe("AWAITING_SEMINARS");
     expect(recovery.conversation.selectedSeminarIds).toEqual([]);

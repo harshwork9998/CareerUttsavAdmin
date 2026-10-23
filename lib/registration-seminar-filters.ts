@@ -1,4 +1,8 @@
-import { seminarMatchKey } from "@/features/dashboard/seminars";
+import {
+  CAREER_UTTSAV_SEMINARS,
+  isCurrentCareerUttsavSeminar,
+  seminarMatchKey,
+} from "@/features/dashboard/seminars";
 import { isStudentRegistration } from "@/lib/registration-kinds";
 import type { Registration } from "@/types";
 
@@ -26,6 +30,34 @@ export function registrationMatchesAllSeminars(
   return requiredSeminars.every((seminar) =>
     interests.has(seminarMatchKey(seminar))
   );
+}
+
+/**
+ * Current catalogue titles that exist on the event come first.
+ * Any other title already stored on a registration stays available
+ * so historical rows remain filterable and exportable.
+ */
+export function buildRegistrationSeminarFilterOptions(input: {
+  registrationTitles: readonly string[];
+  eventTitles: readonly string[];
+}): Array<{ label: string; value: string }> {
+  const stored = new Set<string>();
+  for (const title of input.registrationTitles) {
+    const trimmed = title.trim();
+    if (trimmed) stored.add(trimmed);
+  }
+
+  const current = CAREER_UTTSAV_SEMINARS.filter((title) =>
+    input.eventTitles.some(
+      (eventTitle) =>
+        eventTitle.trim() === title && isCurrentCareerUttsavSeminar(eventTitle)
+    )
+  );
+  const historical = [...stored]
+    .filter((title) => !isCurrentCareerUttsavSeminar(title))
+    .sort((a, b) => a.localeCompare(b));
+
+  return [...current, ...historical].map((value) => ({ label: value, value }));
 }
 
 export function slugifySeminarFilters(seminars: string[]): string {

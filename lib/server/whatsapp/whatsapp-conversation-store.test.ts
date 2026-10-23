@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { __setRegistrationAttemptStoreForTests } from "@/lib/server/registration-attempt-store";
 import { WHATSAPP_CONVERSATION_TTL_MS } from "@/lib/server/whatsapp/registration-conversation";
 import { mapPrismaConversationToState } from "@/lib/server/whatsapp/whatsapp-conversation-map";
 
@@ -16,6 +17,13 @@ vi.mock("@/lib/server/prisma", () => ({
       delete: (...args: unknown[]) => deleteMock(...args),
       updateMany: (...args: unknown[]) => updateManyMock(...args),
     },
+    registrationAttempt: {
+      findFirst: vi.fn().mockResolvedValue(null),
+      findUnique: vi.fn().mockResolvedValue(null),
+      update: vi.fn(),
+      updateMany: vi.fn(),
+      create: vi.fn(),
+    },
   },
 }));
 
@@ -28,6 +36,7 @@ import {
 describe("whatsapp conversation store expiry", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    __setRegistrationAttemptStoreForTests([]);
   });
 
   it("treats expired ACTIVE conversations as absent", async () => {
@@ -238,6 +247,7 @@ describe("whatsapp conversation store expiry", () => {
       classLabel: null,
       gender: null,
       board: null,
+      registrationAttemptId: null,
       interestedStream: null,
       college: null,
       city: null,

@@ -89,12 +89,16 @@ export interface User {
 export interface EventSeminar {
   id: string;
   title: string;
-  date: string; // YYYY-MM-DD within event start..end
-  startTime: string; // HH:mm
-  endTime: string; // HH:mm
-  panelistSlots: number;
-  /** 1-based auditorium number within the venue (1..event.hallCount) */
-  hall: number;
+  /** YYYY-MM-DD, or null when the session day is not decided. */
+  date: string | null;
+  /** HH:mm, or null when the start time is not decided. */
+  startTime: string | null;
+  /** HH:mm, or null when the end time is not decided. */
+  endTime: string | null;
+  /** Null means panelist capacity is not decided yet. */
+  panelistSlots: number | null;
+  /** 1-based auditorium number, or null when the hall is not decided. */
+  hall: number | null;
 }
 
 export interface Event {
@@ -154,6 +158,8 @@ interface RegistrationBase {
 /** Student fair registration — seminar picks, class, stream, etc. */
 export interface StudentRegistration extends RegistrationBase {
   kind: "student";
+  /** Where this completed registration was finished. Missing values are Unknown. */
+  source?: import("@/lib/registration-source").RegistrationSource;
   studentName: string;
   email: string;
   phone: string;

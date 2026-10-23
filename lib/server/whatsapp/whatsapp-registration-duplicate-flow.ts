@@ -1,7 +1,18 @@
 import { CURRENT_EVENT_ID } from "@/lib/current-events";
-import { generateRegistrationQrPngBase64 } from "@/lib/email";
+import { lastStepForWhatsAppConversation } from "@/lib/registration-attempt";
+import {
+  ensureWhatsAppRegistrationAttempt,
+  syncWhatsAppRegistrationAttempt,
+} from "@/lib/server/registration-attempt-store";
 import { requireIndianMobile } from "@/lib/indian-mobile";
-import { resolveStudentRegistrationDuplicate } from "@/lib/server/registration-service";
+import {
+  getRegistrationForApi,
+  resolveStudentRegistrationDuplicate,
+} from "@/lib/server/registration-service";
+import {
+  generateWhatsAppEntryPassPngBase64,
+  seminarTitlesForEventPass,
+} from "@/lib/server/whatsapp/event-pass";
 import {
   REGISTRATION_INTERACTIVE_IDS,
 } from "@/lib/server/whatsapp/registration-interactive-ids";
@@ -84,12 +95,33 @@ function shouldCheckMobileOnStart(
   );
 }
 
+async function storedSeminarTitles(registrationId?: string | null): Promise<string[]> {
+  if (!registrationId) {
+    return [];
+  }
+  try {
+    const registration = await getRegistrationForApi(registrationId);
+    return seminarTitlesForEventPass(registration);
+  } catch (error) {
+    console.error(
+      "[event-pass] stored seminar lookup failed",
+      error instanceof Error ? error.message : "unknown"
+    );
+    return [];
+  }
+}
+
 async function buildVerifiedRegistrationActions(input: {
+  registrationId?: string | null;
   registrationNumber?: string;
   variant: AlreadyRegisteredVariant;
 }): Promise<WhatsAppBotAction[]> {
+  const seminarTitles = await storedSeminarTitles(input.registrationId);
   const qrPngBase64 = input.registrationNumber
-    ? await generateRegistrationQrPngBase64(input.registrationNumber)
+    ? await generateWhatsAppEntryPassPngBase64({
+        registrationId: input.registrationNumber,
+        seminarTitles,
+      })
     : undefined;
   const builder =
     input.variant === "same_mobile_different_email"
@@ -128,6 +160,7 @@ async function buildAlreadyRegisteredTurn(input: {
   return {
     conversation,
     actions: await buildVerifiedRegistrationActions({
+      registrationId: input.registrationId,
       registrationNumber: input.registrationNumber,
       variant: input.variant,
     }),
@@ -151,6 +184,7 @@ export async function buildCompletedUserGreetingActions(input: {
   completedRegistrationNumber?: string | null;
 }): Promise<WhatsAppBotAction[]> {
   return buildVerifiedRegistrationActions({
+    registrationId: input.completedRegistrationId,
     registrationNumber: input.completedRegistrationNumber ?? undefined,
     variant: "standard",
   });
@@ -160,6 +194,7 @@ export async function processWhatsAppRegistrationConversationTurnAsync(input: {
   conversation: WhatsAppConversationState | null;
   message: IncomingConversationMessage;
   seminarOptions: SeminarOption[];
+  eventArtworkSeminarOptions: SeminarOption[];
   seminarDayCatalog: WhatsAppSeminarDayCatalog;
   waId: string;
   completedRegistrationNumber?: string | null;
@@ -264,8 +299,56 @@ export async function processWhatsAppRegistrationConversationTurnAsync(input: {
     }
   }
 
-  return processRegistrationConversationTurn({
+  if (conversation.status === "COMPLETED") {
+    return processRegistrationConversationTurn({
+      ...input,
+      conversation,
+    });
+  }
+
+  const attempt = await ensureWhatsAppRegistrationAttempt({
+    eventId: CURRENT_EVENT_ID,
+    waId: normalizedWaId,
+    attemptId: conversation.registrationAttemptId,
+  });
+  conversation = {
+    ...conversation,
+    registrationAttemptId: attempt.id,
+  };
+
+  const result = processRegistrationConversationTurn({
     ...input,
     conversation,
   });
+  const syncedConversation = {
+    ...result.conversation,
+    registrationAttemptId:
+      result.conversation.registrationAttemptId ?? attempt.id,
+  };
+  const seminarTitles = syncedConversation.selectedSeminarIds.flatMap((seminarId) => {
+    const match = input.seminarOptions.find((option) => option.id === seminarId);
+    return match?.title.trim() ? [match.title.trim()] : [];
+  });
+  await syncWhatsAppRegistrationAttempt({
+    attemptId: attempt.id,
+    currentStep: syncedConversation.currentStep,
+    name: syncedConversation.studentName,
+    email: syncedConversation.email,
+    classLabel: syncedConversation.classLabel,
+    gender: syncedConversation.gender,
+    board: syncedConversation.board,
+    interestedStream: syncedConversation.interestedStream,
+    college: syncedConversation.college,
+    city: syncedConversation.city,
+    seminarInterests:
+      syncedConversation.selectedSeminarIds.length > 0 && seminarTitles.length === 0
+        ? attempt.seminarInterests
+        : seminarTitles,
+    lastStep: lastStepForWhatsAppConversation(syncedConversation.currentStep),
+    clearProgress: false,
+  });
+  return {
+    ...result,
+    conversation: syncedConversation,
+  };
 }

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CURRENT_EVENT_ID } from "@/lib/current-events";
+import { __setRegistrationAttemptStoreForTests } from "@/lib/server/registration-attempt-store";
 import {
   REGISTRATION_INTERACTIVE_IDS,
 } from "@/lib/server/whatsapp/registration-interactive-ids";
@@ -11,17 +12,31 @@ import {
 
 const resolveDuplicateMock = vi.fn();
 const generateQrMock = vi.fn();
+const generatePassMock = vi.fn();
+const getRegistrationMock = vi.fn();
 const reconcileMock = vi.fn();
 const resolveCompletedNumberMock = vi.fn();
 
 vi.mock("@/lib/server/registration-service", () => ({
   resolveStudentRegistrationDuplicate: (...args: unknown[]) =>
     resolveDuplicateMock(...args),
+  getRegistrationForApi: (...args: unknown[]) => getRegistrationMock(...args),
 }));
 
 vi.mock("@/lib/email", () => ({
   generateRegistrationQrPngBase64: (...args: unknown[]) => generateQrMock(...args),
 }));
+
+vi.mock("@/lib/server/whatsapp/event-pass", async () => {
+  const actual = await vi.importActual<
+    typeof import("@/lib/server/whatsapp/event-pass")
+  >("@/lib/server/whatsapp/event-pass");
+  return {
+    ...actual,
+    generateWhatsAppEntryPassPngBase64: (...args: unknown[]) =>
+      generatePassMock(...args),
+  };
+});
 
 vi.mock("@/lib/server/whatsapp/whatsapp-completed-conversation-reconcile", () => ({
   reconcileCompletedWhatsAppConversation: (...args: unknown[]) =>
@@ -31,10 +46,12 @@ vi.mock("@/lib/server/whatsapp/whatsapp-completed-conversation-reconcile", () =>
 }));
 
 import { processWhatsAppRegistrationConversationTurnAsync } from "@/lib/server/whatsapp/whatsapp-registration-duplicate-flow";
+import { buildTestEventArtworkSeminarOptions } from "@/lib/server/whatsapp/whatsapp-seminar-test-fixtures";
 
 const seminarOptions: SeminarOption[] = [
   { id: "sem-001", title: "AI Careers" },
 ];
+const eventArtworkSeminarOptions = buildTestEventArtworkSeminarOptions();
 
 const emptySeminarDayCatalog = {
   day1: [],
@@ -87,8 +104,11 @@ function duplicatePayload(registration: typeof existingRegistration) {
 
 describe("whatsapp registration duplicate flow", () => {
   beforeEach(() => {
+    __setRegistrationAttemptStoreForTests([]);
     vi.clearAllMocks();
     generateQrMock.mockResolvedValue("qr-base64");
+    generatePassMock.mockResolvedValue("pass-base64");
+    getRegistrationMock.mockResolvedValue(existingRegistration);
     reconcileMock.mockImplementation(async (conversation) => conversation);
     resolveCompletedNumberMock.mockResolvedValue("CU-BLR-2026-00001");
     resolveDuplicateMock.mockResolvedValue({
@@ -107,6 +127,7 @@ describe("whatsapp registration duplicate flow", () => {
       conversation: null,
       message: { text: "hi" },
       seminarOptions,
+      eventArtworkSeminarOptions,
       seminarDayCatalog: emptySeminarDayCatalog,
       waId: "919876543210",
     });
@@ -121,7 +142,7 @@ describe("whatsapp registration duplicate flow", () => {
       result.actions.some(
         (action) =>
           action.type === "TEXT" &&
-          action.body === "You're already registered for Career Uttsav."
+          action.body.includes("already in!")
       )
     ).toBe(true);
     expect(
@@ -132,8 +153,47 @@ describe("whatsapp registration duplicate flow", () => {
       )
     ).toBe(true);
     expect(
-      result.actions.some((action) => action.type === "MEDIA")
-    ).toBe(true);
+      result.actions.filter((action) => action.type === "MEDIA")
+    ).toHaveLength(1);
+    expect(generatePassMock).toHaveBeenCalledWith({
+      registrationId: "CU-BLR-2026-00001",
+      seminarTitles: [],
+    });
+    expect(generateQrMock).not.toHaveBeenCalled();
+  });
+
+  it("resends the event pass using only stored seminar titles", async () => {
+    const storedTitles = [
+      "Do What You Love, Love What You Do",
+      "Careers in Commerce & Finance",
+      "How to Score Better in Board Exams?",
+    ];
+    getRegistrationMock.mockResolvedValue({
+      ...existingRegistration,
+      seminarInterests: storedTitles,
+    });
+    resolveDuplicateMock.mockResolvedValue({
+      resolution: { outcome: "phone", registration: existingRegistration },
+      registration: duplicatePayload(existingRegistration),
+    });
+
+    const result = await processWhatsAppRegistrationConversationTurnAsync({
+      conversation: null,
+      message: { text: "hi" },
+      seminarOptions,
+      eventArtworkSeminarOptions,
+      seminarDayCatalog: emptySeminarDayCatalog,
+      waId: "919876543210",
+    });
+
+    expect(resolveDuplicateMock).toHaveBeenCalledOnce();
+    expect(generatePassMock).toHaveBeenCalledWith({
+      registrationId: "CU-BLR-2026-00001",
+      seminarTitles: storedTitles,
+    });
+    expect(generateQrMock).not.toHaveBeenCalled();
+    expect(result.actions.filter((action) => action.type === "MEDIA")).toHaveLength(1);
+    expect(result.conversation.completedRegistrationId).toBe("reg-existing");
   });
 
   it("detects email duplicates immediately after email entry", async () => {
@@ -153,6 +213,7 @@ describe("whatsapp registration duplicate flow", () => {
       conversation,
       message: { text: "aarav@example.com" },
       seminarOptions,
+      eventArtworkSeminarOptions,
       seminarDayCatalog: emptySeminarDayCatalog,
       waId: "919876543210",
     });
@@ -194,6 +255,7 @@ describe("whatsapp registration duplicate flow", () => {
       conversation,
       message: { text: "newemail@example.com" },
       seminarOptions,
+      eventArtworkSeminarOptions,
       seminarDayCatalog: emptySeminarDayCatalog,
       waId: "919876543210",
     });
@@ -203,8 +265,7 @@ describe("whatsapp registration duplicate flow", () => {
       result.actions.some(
         (action) =>
           action.type === "TEXT" &&
-          action.body ===
-            "You're already registered for Career Uttsav with this WhatsApp number."
+          action.body.includes("already in!")
       )
     ).toBe(true);
   });
@@ -226,6 +287,7 @@ describe("whatsapp registration duplicate flow", () => {
       conversation,
       message: { text: "aarav@example.com" },
       seminarOptions,
+      eventArtworkSeminarOptions,
       seminarDayCatalog: emptySeminarDayCatalog,
       waId: "919876543210",
     });
@@ -252,6 +314,7 @@ describe("whatsapp registration duplicate flow", () => {
       conversation: completed,
       message: { text: "hello" },
       seminarOptions,
+      eventArtworkSeminarOptions,
       seminarDayCatalog: emptySeminarDayCatalog,
       waId: "919876543210",
       completedRegistrationNumber: "CU-BLR-2026-00001",
@@ -262,7 +325,7 @@ describe("whatsapp registration duplicate flow", () => {
       result.actions.some(
         (action) =>
           action.type === "TEXT" &&
-          action.body.includes("already registered")
+          action.body.includes("already in!")
       )
     ).toBe(true);
     expect(
@@ -288,6 +351,7 @@ describe("whatsapp registration duplicate flow", () => {
       conversation: staleCompleted,
       message: { text: "hi" },
       seminarOptions,
+      eventArtworkSeminarOptions,
       seminarDayCatalog: emptySeminarDayCatalog,
       waId: "919876543210",
     });
@@ -305,7 +369,7 @@ describe("whatsapp registration duplicate flow", () => {
       result.actions.some(
         (action) =>
           action.type === "TEXT" &&
-          action.body.includes("already registered")
+          action.body.includes("already in!")
       )
     ).toBe(false);
     expect(result.actions.some((action) => action.type === "MEDIA")).toBe(false);
@@ -327,6 +391,7 @@ describe("whatsapp registration duplicate flow", () => {
       conversation: staleCompleted,
       message: { text: "hello" },
       seminarOptions,
+      eventArtworkSeminarOptions,
       seminarDayCatalog: emptySeminarDayCatalog,
       waId: "919876543210",
     });
@@ -347,6 +412,7 @@ describe("whatsapp registration duplicate flow", () => {
       conversation,
       message: { text: "newuser@example.com" },
       seminarOptions,
+      eventArtworkSeminarOptions,
       seminarDayCatalog: emptySeminarDayCatalog,
       waId: "919876543210",
     });
@@ -365,6 +431,7 @@ describe("whatsapp registration duplicate flow", () => {
       conversation: createInitialConversationState("919876543210"),
       message: { interactiveId: REGISTRATION_INTERACTIVE_IDS.START },
       seminarOptions,
+      eventArtworkSeminarOptions,
       seminarDayCatalog: emptySeminarDayCatalog,
       waId: "919876543210",
     });
@@ -389,6 +456,7 @@ describe("whatsapp registration duplicate flow", () => {
         conversation,
         message: { text: "Aarav Sharma" },
         seminarOptions,
+        eventArtworkSeminarOptions,
         seminarDayCatalog: emptySeminarDayCatalog,
         waId: "919876543210",
       })
@@ -398,6 +466,7 @@ describe("whatsapp registration duplicate flow", () => {
       conversation,
       message: { text: "newuser@example.com" },
       seminarOptions,
+      eventArtworkSeminarOptions,
       seminarDayCatalog: emptySeminarDayCatalog,
       waId: "919876543210",
     });

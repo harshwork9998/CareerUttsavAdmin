@@ -28,6 +28,7 @@ import {
   createRegistrationApi,
   deleteRegistrationApi,
   fetchAllRegistrations,
+  fetchPartialRegistrations,
   fetchRegistrationById,
   updateRegistrationApi,
 } from "@/lib/registrations-api-client";
@@ -90,6 +91,7 @@ export const eventsService = {
 
 export const registrationsService = {
   getAll: () => simulate(fetchAllRegistrations()),
+  getPartial: () => simulate(fetchPartialRegistrations()),
   getById: (id: string) => simulate(fetchRegistrationById(id)),
   getByEvent: async (eventId: string) =>
     simulate(

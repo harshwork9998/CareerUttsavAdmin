@@ -1,4 +1,9 @@
 import type { Event } from "@/types";
+import {
+  CAREER_UTTSAV_2026_ARTWORK_EVENT_SEMINARS,
+  CAREER_UTTSAV_2026_EVENT_END_DATE,
+  CAREER_UTTSAV_2026_EVENT_START_DATE,
+} from "@/lib/server/career-uttsav-2026-artwork-event-seminars";
 
 export const mockEvents: Event[] = [
   {
@@ -14,50 +19,13 @@ export const mockEvents: Event[] = [
     city: "Bangalore",
     state: "Karnataka",
     pincode: "560052",
-    startDate: "2026-08-15",
-    endDate: "2026-08-16",
+    startDate: CAREER_UTTSAV_2026_EVENT_START_DATE,
+    endDate: CAREER_UTTSAV_2026_EVENT_END_DATE,
     startTime: "09:00",
     endTime: "18:00",
     hallCount: 3,
-    seminars: [
-      {
-        id: "sem-001-a",
-        title: "How to select a stream – Art – Science – Commerce?",
-        date: "2026-08-15",
-        startTime: "10:00",
-        endTime: "11:00",
-        panelistSlots: 3,
-        hall: 1,
-      },
-      {
-        id: "sem-001-b",
-        title: "Real Careers with Artificial Intelligence",
-        date: "2026-08-15",
-        startTime: "11:30",
-        endTime: "12:30",
-        panelistSlots: 2,
-        hall: 2,
-      },
-      {
-        id: "sem-001-c",
-        title: "All about Overseas Education",
-        date: "2026-08-16",
-        startTime: "10:00",
-        endTime: "11:00",
-        panelistSlots: 4,
-        hall: 1,
-      },
-      {
-        id: "sem-001-d",
-        title: "Medicine in the 21st century",
-        date: "2026-08-16",
-        startTime: "14:00",
-        endTime: "15:00",
-        panelistSlots: 3,
-        hall: 3,
-      },
-    ],
-    registrationDeadline: "2026-08-10T23:59:59+05:30",
+    seminars: [...CAREER_UTTSAV_2026_ARTWORK_EVENT_SEMINARS],
+    registrationDeadline: "2026-12-10T23:59:59+05:30",
     maxCapacity: 15000,
     registrationCount: 8420,
     checkInCount: 0,

@@ -27,8 +27,12 @@ vi.mock("@/lib/server/whatsapp/whatsapp-conversation-store", () => ({
     deleteExpiredMock(...args),
 }));
 
+const getEventArtworkSeminarsMock = vi.fn();
+
 vi.mock("@/lib/server/whatsapp/whatsapp-seminar-context", () => ({
   getWhatsAppSeminarOptions: (...args: unknown[]) => getSeminarsMock(...args),
+  getWhatsAppEventArtworkSeminarOptions: (...args: unknown[]) =>
+    getEventArtworkSeminarsMock(...args),
   getWhatsAppSeminarDayCatalog: (...args: unknown[]) => getCatalogMock(...args),
 }));
 
@@ -109,6 +113,9 @@ describe("whatsapp webhook processor", () => {
     saveConversationMock.mockImplementation(async (state: WhatsAppConversationState) => state);
     deleteExpiredMock.mockResolvedValue(false);
     getSeminarsMock.mockResolvedValue([{ id: "sem-001", title: "AI Careers" }]);
+    getEventArtworkSeminarsMock.mockResolvedValue([
+      { id: "sem-001", title: "AI Careers" },
+    ]);
     getCatalogMock.mockResolvedValue({
       day1: [],
       day2: [],

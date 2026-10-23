@@ -47,11 +47,6 @@ const EVENT_REQUIRED_FIELDS = [
 const SEMINAR_REQUIRED_FIELDS = [
   "id",
   "title",
-  "date",
-  "startTime",
-  "endTime",
-  "panelistSlots",
-  "hall",
 ] as const satisfies readonly (keyof EventSeminar)[];
 
 type ParsedArgs = {
@@ -192,11 +187,14 @@ function validateSeminars(seminars: EventSeminar[]): void {
     }
     seenIds.add(seminar.id);
 
-    if (!Number.isInteger(seminar.panelistSlots)) {
+    if (
+      seminar.panelistSlots != null &&
+      !Number.isInteger(seminar.panelistSlots)
+    ) {
       throw new Error(`Seminar ${seminar.id}: panelistSlots must be an integer`);
     }
 
-    if (!Number.isInteger(seminar.hall)) {
+    if (seminar.hall != null && !Number.isInteger(seminar.hall)) {
       throw new Error(`Seminar ${seminar.id}: hall must be an integer`);
     }
   }

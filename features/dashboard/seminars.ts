@@ -1,5 +1,35 @@
-/** Career Uttsav seminar catalogue — used for registration interest analytics. */
+/**
+ * Current Career Uttsav seminar catalogue.
+ * Website registration, WhatsApp artwork numbers, admin suggestions,
+ * and current dashboard buckets all use this list.
+ *
+ * Historical registrations may still store LEGACY_CAREER_UTTSAV_SEMINARS.
+ * Those titles stay readable and are not rewritten onto this list.
+ */
 export const CAREER_UTTSAV_SEMINARS = [
+  "Do What You Love, Love What You Do",
+  "Engineering Next: What’s Ahead?",
+  "Design, Architecture & Creative Careers",
+  "The Future of Management Careers",
+  "Liberal Arts: Careers Without Limits",
+  "Careers in Commerce & Finance",
+  "Your Journey to Study Abroad",
+  "Careers in Medicine & Health Sciences",
+  "Building a Successful Career in Law",
+  "Startups, Leadership & Entrepreneurship",
+  "How to Fund Your Higher Education",
+  "Engineering: Careers of the Future",
+  "Careers Beyond the Usual",
+  "How to Score Better in Board Exams?",
+] as const;
+
+export type CareerUttsavSeminar = (typeof CAREER_UTTSAV_SEMINARS)[number];
+
+/**
+ * Previous 20-title catalogue. Kept so historical registrations, events,
+ * and analytics remain readable. Not a current registration choice list.
+ */
+export const LEGACY_CAREER_UTTSAV_SEMINARS = [
   "How to select a stream – Art – Science – Commerce?",
   "All about Overseas Education",
   "How to Choose the right Boarding School?",
@@ -22,31 +52,33 @@ export const CAREER_UTTSAV_SEMINARS = [
   "In the Course of 'Law'",
 ] as const;
 
-export type CareerUttsavSeminar = (typeof CAREER_UTTSAV_SEMINARS)[number];
+const LEGACY_SEMINAR_TITLES = new Set<string>(LEGACY_CAREER_UTTSAV_SEMINARS);
+const CURRENT_SEMINAR_TITLES = new Set<string>(CAREER_UTTSAV_SEMINARS);
 
-/** Popularity weights for mock seminar registration counts (relative). */
-export const SEMINAR_POPULARITY: Record<string, number> = {
-  "Real Careers with Artificial Intelligence": 100,
-  "How to select a stream – Art – Science – Commerce?": 92,
-  "Cracking the codes to ace competitive exams": 88,
-  "Medicine in the 21st century": 84,
-  "New-age Engineering Careers": 80,
-  "All about Overseas Education": 76,
-  "Careers in Management & Entrepreneurship": 72,
-  "Is CA / CS My Cup of Tea?": 68,
-  "Design in the Digital World": 64,
-  "How to score well in Board Exams?": 60,
-  "In the Course of 'Law'": 56,
-  "Architecture - A Promising Creative Career": 52,
-  "Careers in Multimedia & Animation": 48,
-  "Liberated careers with liberal arts": 44,
-  "Designing a Career in world of fashion": 40,
-  "New age skills to build at 16": 38,
-  "How to Choose the right Boarding School?": 34,
-  "Offbeat Careers": 30,
-  "How sustainable are sustainable careers?": 28,
-  "If Career Plan A fails, remember there are 25 more letters": 26,
-};
+export function isLegacyCareerUttsavSeminarTitle(title: string): boolean {
+  return LEGACY_SEMINAR_TITLES.has(title.trim());
+}
+
+/**
+ * Exact membership in the current 14-title catalogue.
+ * An event seminar whose title is not in that list is legacy for
+ * current registration and current interest charts.
+ */
+export function isCurrentCareerUttsavSeminar(title: string): boolean {
+  return CURRENT_SEMINAR_TITLES.has(title.trim());
+}
+
+/** Relative weights for mock seminar registration counts. */
+const SEMINAR_POPULARITY_WEIGHTS = [
+  44, 100, 76, 72, 56, 68, 80, 92, 52, 60, 48, 64, 40, 88,
+] as const;
+
+export const SEMINAR_POPULARITY: Record<string, number> = Object.fromEntries(
+  CAREER_UTTSAV_SEMINARS.map((name, index) => [
+    name,
+    SEMINAR_POPULARITY_WEIGHTS[index] ?? 20,
+  ])
+);
 
 export function buildSeminarChartData(totalRegistrations: number) {
   const weightSum = Object.values(SEMINAR_POPULARITY).reduce((a, b) => a + b, 0);
@@ -90,19 +122,16 @@ export function buildEventSeminarRegistrationItems(
   return counts.sort((a, b) => b.value - a.value);
 }
 
-/** Seminar tracks — registration interest grouped for dashboard analytics. */
+/** Current seminar tracks for dashboard career-interest analytics. */
 export const CAREER_INTEREST_CATEGORIES = [
   {
     id: "science-tech",
     label: "Science & Technology",
     emoji: "🧪",
     seminars: [
-      "Real Careers with Artificial Intelligence",
-      "New-age Engineering Careers",
-      "Medicine in the 21st century",
-      "Architecture - A Promising Creative Career",
-      "How sustainable are sustainable careers?",
-      "Cracking the codes to ace competitive exams",
+      CAREER_UTTSAV_SEMINARS[1],
+      CAREER_UTTSAV_SEMINARS[7],
+      CAREER_UTTSAV_SEMINARS[11],
     ],
   },
   {
@@ -110,8 +139,10 @@ export const CAREER_INTEREST_CATEGORIES = [
     label: "Commerce & Management",
     emoji: "💼",
     seminars: [
-      "Careers in Management & Entrepreneurship",
-      "Is CA / CS My Cup of Tea?",
+      CAREER_UTTSAV_SEMINARS[3],
+      CAREER_UTTSAV_SEMINARS[5],
+      CAREER_UTTSAV_SEMINARS[9],
+      CAREER_UTTSAV_SEMINARS[10],
     ],
   },
   {
@@ -119,12 +150,10 @@ export const CAREER_INTEREST_CATEGORIES = [
     label: "Humanities, Arts & Creative Careers",
     emoji: "🎨",
     seminars: [
-      "Liberated careers with liberal arts",
-      "In the Course of 'Law'",
-      "Careers in Multimedia & Animation",
-      "Design in the Digital World",
-      "Designing a Career in world of fashion",
-      "Offbeat Careers",
+      CAREER_UTTSAV_SEMINARS[2],
+      CAREER_UTTSAV_SEMINARS[4],
+      CAREER_UTTSAV_SEMINARS[8],
+      CAREER_UTTSAV_SEMINARS[12],
     ],
   },
   {
@@ -132,12 +161,9 @@ export const CAREER_INTEREST_CATEGORIES = [
     label: "General Career Guidance",
     emoji: "🌍",
     seminars: [
-      "How to select a stream – Art – Science – Commerce?",
-      "All about Overseas Education",
-      "How to Choose the right Boarding School?",
-      "How to score well in Board Exams?",
-      "If Career Plan A fails, remember there are 25 more letters",
-      "New age skills to build at 16",
+      CAREER_UTTSAV_SEMINARS[0],
+      CAREER_UTTSAV_SEMINARS[6],
+      CAREER_UTTSAV_SEMINARS[13],
     ],
   },
 ] as const;
@@ -154,13 +180,14 @@ export type CareerInterestRow = {
 };
 
 /**
- * Loose key so website/admin title variants match the same seminar
- * (quotes, dashes vs colons, Art/Arts, extra words like "or"/"the").
+ * Loose key so punctuation variants of the same current title match
+ * (straight vs curly apostrophes, dashes, extra articles).
+ * Legacy catalogue titles are never folded into the current 14.
  */
 export function seminarMatchKey(title: string): string {
   return title
     .toLowerCase()
-    .replace(/[''`´"]/g, "")
+    .replace(/[''‘’`´"]/g, "")
     .replace(/[–—−‑-]/g, " ")
     .replace(/[:;,./!?()]/g, " ")
     .replace(/\barts\b/g, "art")
@@ -169,7 +196,7 @@ export function seminarMatchKey(title: string): string {
     .trim();
 }
 
-/** Map a stored/website title onto the closest catalogue title when possible. */
+/** Map a stored title onto a catalogue title only when it is the same seminar. */
 export function canonicalizeSeminarTitle(
   title: string,
   catalog: readonly string[] = CAREER_UTTSAV_SEMINARS
@@ -179,6 +206,10 @@ export function canonicalizeSeminarTitle(
 
   const exact = catalog.find((entry) => entry === trimmed);
   if (exact) return exact;
+
+  if (isLegacyCareerUttsavSeminarTitle(trimmed)) {
+    return trimmed;
+  }
 
   const key = seminarMatchKey(trimmed);
   if (!key) return trimmed;

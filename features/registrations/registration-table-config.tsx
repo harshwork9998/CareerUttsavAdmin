@@ -9,6 +9,8 @@ import {
   isStudentRegistration,
 } from "@/lib/registration-kinds";
 import { canonicalizeClassLabel } from "@/lib/registration-validation";
+import { registrationSourceLabel } from "@/lib/registration-source";
+import { registrationSourceSearchText } from "@/lib/registration-attempt";
 import { formatDateTime } from "@/lib/utils";
 import type { ColumnDef } from "@/components/shared";
 import type { Registration, RegistrationKind } from "@/types";
@@ -47,6 +49,20 @@ const passIdColumn: ColumnDef<Registration, unknown> = {
   ),
 };
 
+const sourceColumn: ColumnDef<Registration, unknown> = {
+  id: "source",
+  header: "Source",
+  accessorFn: (row) =>
+    isStudentRegistration(row) ? registrationSourceLabel(row.source) : "",
+  cell: ({ row }) => (
+    <span className="inline-flex items-center rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-medium text-foreground">
+      {isStudentRegistration(row.original)
+        ? registrationSourceLabel(row.original.source)
+        : "—"}
+    </span>
+  ),
+};
+
 const statusColumn: ColumnDef<Registration, unknown> = {
   accessorKey: "status",
   header: "Status",
@@ -75,6 +91,7 @@ export function buildRegistrationColumns(
     return [
       registeredAtColumn,
       passIdColumn,
+      sourceColumn,
       {
         accessorKey: "studentName",
         header: "Student Name",
@@ -384,6 +401,7 @@ export function exportHeadersForKind(kind: RegistrationKind): string[] {
       return [
         "Registration Date",
         "Pass ID",
+        "Source",
         "Student Name",
         "School/College",
         "Event",
@@ -454,6 +472,7 @@ export function exportRowForKind(
     return [
       registeredAt,
       passId,
+      registrationSourceLabel(registration.source),
       registration.studentName,
       registration.college,
       eventTitle,
@@ -522,6 +541,9 @@ export function registrationMatchesSearch(
     getRegistrationDisplayName(registration),
     registration.registrationNumber ?? "",
     registration.status ?? "",
+    isStudentRegistration(registration)
+      ? registrationSourceSearchText(registration.source)
+      : "",
     eventTitle,
   ];
 

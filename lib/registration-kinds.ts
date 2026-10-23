@@ -1,4 +1,5 @@
 import { REGISTRATION_STATUSES } from "@/constants";
+import { isRegistrationSource } from "@/lib/registration-source";
 import { canonicalizeClassLabel } from "@/lib/registration-validation";
 import type {
   PartnerRegistrationEntry,
@@ -91,6 +92,9 @@ export function migrateLegacyRegistration(
     };
     if (registration.kind === "student") {
       registration.classLabel = canonicalizeClassLabel(registration.classLabel);
+      if (!isRegistrationSource(registration.source)) {
+        registration.source = "UNKNOWN";
+      }
     }
     if (registration.kind === "student_ambassador") {
       registration.ambassadorClass = canonicalizeClassLabel(
@@ -114,6 +118,7 @@ export function migrateLegacyRegistration(
     amount: typeof raw.amount === "number" ? raw.amount : 0,
     checkInTime:
       typeof raw.checkInTime === "string" ? raw.checkInTime : undefined,
+    source: "UNKNOWN",
     studentName: String(raw.studentName ?? ""),
     email: String(raw.email ?? ""),
     phone: String(raw.phone ?? ""),

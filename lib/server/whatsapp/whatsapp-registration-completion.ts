@@ -1,5 +1,8 @@
 import { CURRENT_EVENT_ID } from "@/lib/current-events";
-import { generateRegistrationQrPngBase64 } from "@/lib/email";
+import {
+  generateWhatsAppEntryPassPngBase64,
+  seminarTitlesForEventPass,
+} from "@/lib/server/whatsapp/event-pass";
 import { requireIndianMobile } from "@/lib/indian-mobile";
 import {
   normalizeRegistrationEmail,
@@ -7,6 +10,7 @@ import {
 } from "@/lib/registration-duplicates";
 import { isStudentRegistration } from "@/lib/registration-kinds";
 import type { CreateStudentRegistrationInput } from "@/lib/registration-validation";
+import { findInProgressWhatsAppRegistrationAttempt } from "@/lib/server/registration-attempt-store";
 import {
   createStudentRegistration,
   getRegistrationForApi,
@@ -24,6 +28,7 @@ import {
 import {
   buildWhatsAppAlreadyRegisteredActions,
   buildWhatsAppCompletionFailureActions,
+  WHATSAPP_REGISTRATION_FAILURE_MESSAGE,
   buildWhatsAppEmailDuplicatePrivacyActions,
   buildWhatsAppRegistrationConflictActions,
   buildWhatsAppRegistrationSuccessActions,
@@ -36,11 +41,12 @@ import {
   loadWhatsAppConversationRecordByWaId,
 } from "@/lib/server/whatsapp/whatsapp-conversation-store";
 import { reconcileCompletedWhatsAppConversation } from "@/lib/server/whatsapp/whatsapp-completed-conversation-reconcile";
+import { schedulePostRegistrationGrowthTriggers } from "@/lib/server/whatsapp/whatsapp-post-registration-schedule";
 import {
-  getWhatsAppSeminarDayCatalog,
+  getWhatsAppEventArtworkSeminarOptions,
   getWhatsAppSeminarOptions,
 } from "@/lib/server/whatsapp/whatsapp-seminar-context";
-import { selectedSeminarsStillValidInCatalog } from "@/lib/server/whatsapp/whatsapp-seminar-day-catalog";
+import { resolveArtworkSeminarSelection, selectedArtworkSeminarIdsStillValid } from "@/lib/server/whatsapp/whatsapp-artwork-seminar-catalog";
 import type { Registration } from "@/types";
 
 export type WhatsAppRegistrationCompletionStatus =
@@ -140,11 +146,30 @@ export function duplicateAllowsRegistrationNumberReveal(
   );
 }
 
+async function storedSeminarTitlesForRegistration(
+  registrationId: string
+): Promise<string[]> {
+  try {
+    const registration = await getRegistrationForApi(registrationId);
+    return seminarTitlesForEventPass(registration);
+  } catch (error) {
+    console.error(
+      "[event-pass] stored seminar lookup failed",
+      error instanceof Error ? error.message : "unknown"
+    );
+    return [];
+  }
+}
+
 async function buildVerifiedAlreadyRegisteredActions(
-  registrationNumber?: string
+  registrationNumber?: string,
+  seminarTitles: readonly string[] = []
 ): Promise<WhatsAppBotAction[]> {
   const qrPngBase64 = registrationNumber
-    ? await generateRegistrationQrPngBase64(registrationNumber)
+    ? await generateWhatsAppEntryPassPngBase64({
+        registrationId: registrationNumber,
+        seminarTitles,
+      })
     : undefined;
   return buildWhatsAppAlreadyRegisteredActions({
     registrationNumber,
@@ -162,7 +187,10 @@ async function buildAlreadyCompletedResult(
     registrationId,
     registrationNumber,
     revealRegistrationNumber: true,
-    actions: await buildVerifiedAlreadyRegisteredActions(registrationNumber),
+    actions: await buildVerifiedAlreadyRegisteredActions(
+      registrationNumber,
+      seminarTitlesForEventPass(registration)
+    ),
   };
 }
 
@@ -200,9 +228,10 @@ async function healConversationWithExistingRegistration(
     registrationId: registration.id,
   });
 
-  const qrPngBase64 = await generateRegistrationQrPngBase64(
-    registration.registrationNumber
-  );
+  const qrPngBase64 = await generateWhatsAppEntryPassPngBase64({
+    registrationId: registration.registrationNumber,
+    seminarTitles: await storedSeminarTitlesForRegistration(registration.id),
+  });
   const builder =
     options.variant === "same_mobile_different_email"
       ? buildWhatsAppSameMobileAlreadyRegisteredActions
@@ -312,7 +341,7 @@ async function handleResolvedDuplicateRegistration(
     status: "FAILED",
     conversation: record,
     actions: buildWhatsAppCompletionFailureActions(
-      "We could not complete your registration right now. Please try again shortly."
+      WHATSAPP_REGISTRATION_FAILURE_MESSAGE
     ),
   };
 }
@@ -417,25 +446,35 @@ export async function completeWhatsAppRegistrationForConversation(
     };
   }
 
-  const [seminarOptions, seminarDayCatalog] = await Promise.all([
-    getWhatsAppSeminarOptions(),
-    getWhatsAppSeminarDayCatalog(),
-  ]);
+  const seminarOptions = await getWhatsAppSeminarOptions();
+  const eventArtworkSeminarOptions =
+    await getWhatsAppEventArtworkSeminarOptions();
   const seminarResolution = resolveSeminarTitlesFromIds(
     record.selectedSeminarIds,
     seminarOptions
   );
+  let artworkResolution;
+  try {
+    artworkResolution = resolveArtworkSeminarSelection(
+      eventArtworkSeminarOptions
+    );
+  } catch (error) {
+    safeLogCompletion({ waId, status: "SEMINAR_RECOVERY" });
+    const recovery = buildInvalidSeminarRecoveryResult(record);
+    return {
+      status: "SEMINAR_RECOVERY",
+      conversation: recovery.conversation,
+      actions: recovery.actions,
+    };
+  }
   if (
     !seminarResolution.ok ||
-    !selectedSeminarsStillValidInCatalog(
+    !selectedArtworkSeminarIdsStillValid(
       record.selectedSeminarIds,
-      seminarDayCatalog
+      artworkResolution
     )
   ) {
-    const recovery = buildInvalidSeminarRecoveryResult(
-      record,
-      seminarDayCatalog
-    );
+    const recovery = buildInvalidSeminarRecoveryResult(record);
     safeLogCompletion({ waId, status: "SEMINAR_RECOVERY" });
     return {
       status: "SEMINAR_RECOVERY",
@@ -458,13 +497,26 @@ export async function completeWhatsAppRegistrationForConversation(
     );
   }
 
+  const linkedAttemptId =
+    record.registrationAttemptId ??
+    (
+      await findInProgressWhatsAppRegistrationAttempt({
+        eventId: CURRENT_EVENT_ID,
+        waId,
+      })
+    )?.id ??
+    null;
+
   const createResult = await createStudentRegistration(
     buildStudentRegistrationInput(
       record,
       phoneResult.mobile,
       seminarResolution.titles
     ),
-    { trustedInternalRegistration: true }
+    {
+      trustedInternalRegistration: true,
+      attemptId: linkedAttemptId,
+    }
   );
 
   if (!createResult.ok) {
@@ -492,7 +544,7 @@ export async function completeWhatsAppRegistrationForConversation(
       status: "FAILED",
       conversation: record,
       actions: buildWhatsAppCompletionFailureActions(
-        "We could not complete your registration right now. Please try again shortly."
+        WHATSAPP_REGISTRATION_FAILURE_MESSAGE
       ),
     };
   }
@@ -504,7 +556,7 @@ export async function completeWhatsAppRegistrationForConversation(
       status: "FAILED",
       conversation: record,
       actions: buildWhatsAppCompletionFailureActions(
-        "We could not complete your registration right now. Please try again shortly."
+        WHATSAPP_REGISTRATION_FAILURE_MESSAGE
       ),
     };
   }
@@ -534,15 +586,34 @@ export async function completeWhatsAppRegistrationForConversation(
     });
   }
 
-  const qrPngBase64 = await generateRegistrationQrPngBase64(
-    registration.registrationNumber
-  );
+  const storedTitles = seminarTitlesForEventPass(registration);
+  const seminarTitles =
+    storedTitles.length > 0 ? storedTitles : seminarResolution.titles;
+  const qrPngBase64 = await generateWhatsAppEntryPassPngBase64({
+    registrationId: registration.registrationNumber,
+    seminarTitles,
+  });
 
   safeLogCompletion({
     waId,
     status: "SUCCESS",
     registrationId: registration.id,
   });
+
+  const completedAt = new Date();
+  try {
+    await schedulePostRegistrationGrowthTriggers({
+      waId,
+      registrationId: registration.id,
+      completedAt,
+      conversation: finalized,
+    });
+  } catch (error) {
+    console.error(
+      "[whatsapp-growth] schedule failed",
+      error instanceof Error ? error.message : "unknown"
+    );
+  }
 
   return {
     status: "SUCCESS",
@@ -554,6 +625,7 @@ export async function completeWhatsAppRegistrationForConversation(
     actions: buildWhatsAppRegistrationSuccessActions({
       registrationNumber: registration.registrationNumber,
       qrPngBase64,
+      studentName: record.studentName,
     }),
   };
 }

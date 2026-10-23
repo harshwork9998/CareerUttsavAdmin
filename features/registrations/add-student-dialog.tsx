@@ -6,6 +6,7 @@ import { Loader2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
 import { registrationsService } from "@/services/api";
+import { isCurrentCareerUttsavSeminar } from "@/features/dashboard/seminars";
 import { CURRENT_EVENT_ID, getCurrentEvent } from "@/lib/current-events";
 import { cn } from "@/lib/utils";
 import {
@@ -82,8 +83,8 @@ export function AddStudentDialog({
 
   const seminarOptions = useMemo(() => {
     return (currentEvent?.seminars ?? [])
-      .map((seminar) => seminar.title?.trim())
-      .filter(Boolean) as string[];
+      .map((seminar) => seminar.title?.trim() ?? "")
+      .filter((title) => title && isCurrentCareerUttsavSeminar(title));
   }, [currentEvent]);
 
   useEffect(() => {
@@ -264,8 +265,8 @@ export function AddStudentDialog({
                   </p>
                 ) : seminarOptions.length === 0 ? (
                   <p className="rounded-lg border border-dashed px-3 py-4 text-sm text-muted-foreground">
-                    This event has no seminars yet. Add them in Events → edit
-                    event.
+                    This event has no current seminars yet. Add the canonical
+                    seminars in Events → edit event.
                   </p>
                 ) : (
                   <div className="max-h-48 space-y-2 overflow-y-auto rounded-lg border p-3">

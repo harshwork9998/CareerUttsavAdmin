@@ -498,7 +498,8 @@ export function buildRegistrationFromInput(
   event: Event,
   existing: Registration[],
   id: string,
-  now: string
+  now: string,
+  source: import("@/lib/registration-source").RegistrationSource = "UNKNOWN"
 ): Registration {
   const base = baseRegistrationFields(input.kind, event, existing, id, now);
 
@@ -507,6 +508,7 @@ export function buildRegistrationFromInput(
       const student: StudentRegistration = {
         ...base,
         kind: "student",
+        source,
         studentName: input.studentName,
         email: input.email,
         phone: input.phone,

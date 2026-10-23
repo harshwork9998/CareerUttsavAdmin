@@ -37,6 +37,42 @@ enum PaymentStatus {
   Waived
 }
 
+enum RegistrationSource {
+  WHATSAPP
+  WEBSITE
+  DIRECT_ENTRY
+  UNKNOWN
+}
+
+enum RegistrationAttemptSource {
+  WHATSAPP
+  WEBSITE
+}
+
+enum RegistrationAttemptStatus {
+  IN_PROGRESS
+  COMPLETED
+  ABANDONED
+}
+
+enum RegistrationAttemptStep {
+  WELCOME
+  STARTED
+  NAME
+  EMAIL
+  CLASS
+  GENDER
+  BOARD
+  STREAM
+  SCHOOL_COLLEGE
+  CITY
+  SEMINAR_SELECTION
+  FINISH_REGISTRATION
+  YOU
+  ACADEMICS
+  INTERESTS
+}
+
 enum Gender {
   Male
   Female
@@ -80,6 +116,7 @@ model Event {
   partnerEventLinks        PartnerEventLink[]
   partnerEventPartnerships PartnerEventPartnership[]
   seminarSessionRosters    SeminarSessionRoster[]
+  registrationAttempts     RegistrationAttempt[]
 
   @@map("events")
 }
@@ -90,11 +127,11 @@ model Seminar {
   id            String @id
   eventId       String
   title         String
-  date          String
-  startTime     String
-  endTime       String
-  panelistSlots Int
-  hall          Int
+  date          String?
+  startTime     String?
+  endTime       String?
+  panelistSlots Int?
+  hall          Int?
 
   event                         Event                          @relation(fields: [eventId], references: [id], onDelete: Cascade)
   registrationSeminars          RegistrationSeminar[]
@@ -134,6 +171,8 @@ model Registration {
   id                 String             @id
   registrationNumber String             @unique
   kind               RegistrationKind
+  /// Where the student registration was completed. Non-students stay UNKNOWN.
+  source             RegistrationSource @default(UNKNOWN)
   eventId            String
   eventTitle         String
   status             RegistrationStatus
@@ -182,9 +221,10 @@ model Registration {
   ambassadorPhone         String?
   ambassadorEmail         String?
 
-  event                Event                 @relation(fields: [eventId], references: [id], onDelete: Restrict)
-  registrationSeminars RegistrationSeminar[]
-  whatsAppConversation WhatsAppRegistrationConversation?
+  event                 Event                              @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  registrationSeminars  RegistrationSeminar[]
+  whatsAppConversation  WhatsAppRegistrationConversation?
+  registrationAttempts  RegistrationAttempt[]
 
   @@unique([eventId, emailNormalized])
   @@unique([eventId, phoneLast10])
@@ -212,6 +252,49 @@ model RegistrationSeminar {
 }
 
 // ─── Registration number counters (global by prefix) ─────────────────────────
+
+// Partial registration progress. Completed registrations stay in Registration.
+// One current IN_PROGRESS row per event + source + phone is enforced by a
+// partial unique index in SQL and by the attempt service. Historical
+// ABANDONED / COMPLETED rows for the same phone are allowed.
+
+model RegistrationAttempt {
+  id                       String                      @id
+  eventId                  String
+  source                   RegistrationAttemptSource
+  status                   RegistrationAttemptStatus
+  phone                    String
+  phoneLast10              String?
+  email                    String?
+  emailNormalized          String?
+  name                     String?
+  classLabel               String?
+  gender                   Gender?
+  board                    String?
+  interestedStream         String?
+  college                  String?
+  city                     String?
+  seminarInterests         String[]                    @default([])
+  lastStep                 RegistrationAttemptStep
+  startedAt                DateTime
+  lastActivityAt           DateTime
+  completedAt              DateTime?
+  completedRegistrationId  String?
+  whatsappWaId             String?
+  createdAt                DateTime                    @default(now())
+  updatedAt                DateTime                    @updatedAt
+
+  event                  Event           @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  completedRegistration  Registration?   @relation(fields: [completedRegistrationId], references: [id], onDelete: SetNull)
+  whatsappConversation   WhatsAppRegistrationConversation?
+
+  @@index([eventId, status])
+  @@index([eventId, source, phoneLast10])
+  @@index([emailNormalized])
+  @@index([whatsappWaId])
+  @@index([completedRegistrationId])
+  @@map("registration_attempts")
+}
 
 model RegistrationNumberCounter {
   prefix    String   @id
@@ -432,6 +515,19 @@ enum WhatsAppConversationStep {
   CANCELLED
 }
 
+enum WhatsAppPostRegistrationTriggerKind {
+  INSTAGRAM
+  PARENT_INVITE
+  FRIEND_INVITE
+}
+
+enum WhatsAppPostRegistrationTriggerStatus {
+  PENDING
+  CLAIMED
+  SENT
+  CANCELLED
+}
+
 model WhatsAppRegistrationConversation {
   id                 String                     @id @default(cuid())
   waId               String                     @unique
@@ -447,6 +543,7 @@ model WhatsAppRegistrationConversation {
   city               String?
   selectedSeminarIds Json                       @default("[]")
   completedRegistrationId String?               @unique
+  registrationAttemptId  String?               @unique
   lastInboundAt          DateTime?
   highestReminderStageSent Int                @default(0)
   lastReminderAttemptAt  DateTime?
@@ -454,11 +551,31 @@ model WhatsAppRegistrationConversation {
   updatedAt          DateTime                   @updatedAt
   expiresAt          DateTime
 
-  completedRegistration Registration? @relation(fields: [completedRegistrationId], references: [id], onDelete: SetNull)
+  completedRegistration Registration?       @relation(fields: [completedRegistrationId], references: [id], onDelete: SetNull)
+  registrationAttempt   RegistrationAttempt? @relation(fields: [registrationAttemptId], references: [id], onDelete: SetNull)
 
   @@index([status])
   @@index([expiresAt])
   @@map("whatsapp_registration_conversations")
+}
+
+model WhatsAppPostRegistrationTrigger {
+  id             String                                 @id @default(cuid())
+  waId           String
+  registrationId String
+  kind           WhatsAppPostRegistrationTriggerKind
+  dueAt          DateTime
+  status         WhatsAppPostRegistrationTriggerStatus @default(PENDING)
+  claimedAt      DateTime?
+  sentAt         DateTime?
+  attemptCount   Int                                    @default(0)
+  lastError      String?
+  createdAt      DateTime                               @default(now())
+  updatedAt      DateTime                               @updatedAt
+
+  @@unique([registrationId, kind])
+  @@index([status, dueAt])
+  @@map("whatsapp_post_registration_triggers")
 }
 
 model WhatsAppInboundMessage {

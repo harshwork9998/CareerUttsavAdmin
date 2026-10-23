@@ -18,6 +18,13 @@ import {
 } from "@/lib/registration-validation";
 import { listEventsForApi } from "@/lib/server/event-service";
 import { loadEvents, saveEvents } from "@/lib/server/events-persistence";
+import type { RegistrationAttemptStep } from "@/lib/registration-attempt";
+import { normalizeAttemptPhone } from "@/lib/registration-attempt";
+import type { RegistrationSource } from "@/lib/registration-source";
+import {
+  finalizeRegistrationAttempts,
+  getRegistrationAttempt,
+} from "@/lib/server/registration-attempt-store";
 import { isPrismaRegistrationPersistence } from "@/lib/server/registration-persistence-mode";
 import {
   createPrismaRegistration,
@@ -224,7 +231,25 @@ export type StudentRegistrationCreateOptions = {
   /** Trusted server-side callers (e.g. WhatsApp completion) — never from HTTP. */
   trustedInternalRegistration?: boolean;
   phoneVerificationToken?: string;
+  /** Server-owned attempt id. Public callers cannot choose the source. */
+  attemptId?: string | null;
 };
+
+function resolveCompletedStudentSource(
+  options: StudentRegistrationCreateOptions
+): RegistrationSource {
+  if (options.trustedInternalRegistration) return "WHATSAPP";
+  if (options.isAdminRequest) return "DIRECT_ENTRY";
+  return "WEBSITE";
+}
+
+function attemptLastStepForSource(
+  source: RegistrationSource
+): RegistrationAttemptStep | undefined {
+  if (source === "WHATSAPP") return "FINISH_REGISTRATION";
+  if (source === "WEBSITE") return "INTERESTS";
+  return undefined;
+}
 
 export async function createStudentRegistration(
   body: Partial<CreateStudentRegistrationInput>,
@@ -310,9 +335,43 @@ export async function createStudentRegistration(
     };
   }
 
+  const source = resolveCompletedStudentSource(options);
+  const attemptId = options.isAdminRequest
+    ? null
+    : options.attemptId?.trim() || null;
+  const attemptLastStep = attemptLastStepForSource(source);
+  if (attemptId) {
+    const attempt = await getRegistrationAttempt(attemptId);
+    const expectedSource = source === "WHATSAPP" ? "WHATSAPP" : "WEBSITE";
+    const phoneLast10 = normalizeAttemptPhone(validated.data.phone).phoneLast10;
+    if (
+      !attempt ||
+      attempt.status !== "IN_PROGRESS" ||
+      attempt.source !== expectedSource ||
+      attempt.eventId !== event.id ||
+      (attempt.phoneLast10 &&
+        phoneLast10 &&
+        attempt.phoneLast10 !== phoneLast10)
+    ) {
+      return {
+        ok: false,
+        error: {
+          status: 400,
+          body: {
+            error: "Registration attempt is not open for this mobile number.",
+          },
+        },
+      };
+    }
+  }
+
   if (isPrismaRegistrationPersistence()) {
     try {
-      const created = await createPrismaRegistration(validated.data, event);
+      const created = await createPrismaRegistration(validated.data, event, {
+        source,
+        attemptId,
+        attemptLastStep,
+      });
       scheduleStudentWelcomeEmail(created);
       return { ok: true, registration: created };
     } catch (error) {
@@ -328,6 +387,20 @@ export async function createStudentRegistration(
           },
         };
       }
+      if (
+        error instanceof Error &&
+        error.message === "Registration attempt could not be completed"
+      ) {
+        return {
+          ok: false,
+          error: {
+            status: 400,
+            body: {
+              error: "Registration attempt is not open for this mobile number.",
+            },
+          },
+        };
+      }
       throw error;
     }
   }
@@ -339,10 +412,40 @@ export async function createStudentRegistration(
     event,
     registrations,
     `reg-${generateId()}`,
-    now
+    now,
+    source
   );
 
   saveRegistrations([created, ...registrations]);
+  try {
+    await finalizeRegistrationAttempts({
+      attemptId,
+      eventId: event.id,
+      registrationId: created.id,
+      phone: validated.data.phone,
+      email: validated.data.email,
+      lastStep: attemptLastStep,
+      seminarInterests: validated.data.seminarInterests,
+      completedAt: new Date(now),
+    });
+  } catch (error) {
+    saveRegistrations(registrations);
+    if (
+      error instanceof Error &&
+      error.message === "Registration attempt could not be completed"
+    ) {
+      return {
+        ok: false,
+        error: {
+          status: 400,
+          body: {
+            error: "Registration attempt is not open for this mobile number.",
+          },
+        },
+      };
+    }
+    throw error;
+  }
 
   const nextEvents = events.map((item) =>
     item.id === event.id
@@ -364,6 +467,8 @@ export async function createRegistrationForApi(
   body: Partial<CreateRegistrationInput> & {
     kind?: CreateRegistrationInput["kind"];
     client?: string;
+    source?: string;
+    attemptId?: string;
   },
   request: Request,
   options: { isAdminRequest?: boolean } = {}
@@ -391,6 +496,7 @@ export async function createRegistrationForApi(
     return createStudentRegistration(validated.data, {
       isAdminRequest: options.isAdminRequest,
       phoneVerificationToken: token,
+      attemptId: options.isAdminRequest ? null : body.attemptId,
     });
   }
 

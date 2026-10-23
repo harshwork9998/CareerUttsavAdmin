@@ -18,6 +18,8 @@ import {
   savePartners,
 } from "@/lib/server/partners-persistence";
 import { validatePartnerContactPhones } from "@/lib/partner-validation";
+import { seminarAllocationIncreaseError } from "@/lib/seminar-schedule";
+import { listEventsForApi } from "@/lib/server/event-service";
 import type { Event, Partner } from "@/types";
 
 export type PartnerWriteResult =
@@ -63,6 +65,16 @@ export async function findPartnersByPortalLoginForApi(
 export async function createPartnerForApi(
   partner: Partner
 ): Promise<PartnerWriteResult> {
+  const events = await listEventsForApi();
+  const allocationError = seminarAllocationIncreaseError({
+    existing: [],
+    next: partner.seminarSlotAssignments ?? [],
+    seminars: events.flatMap((event) => event.seminars ?? []),
+  });
+  if (allocationError) {
+    return { ok: false, status: 400, error: allocationError };
+  }
+
   if (isPrismaPartnerPersistence()) {
     try {
       const created = await createPrismaPartner(partner);
@@ -94,6 +106,16 @@ export async function updatePartnerForApi(
   const phones = validatePartnerContactPhones(patch, existing);
   if (!phones.ok) {
     return { ok: false, status: 400, error: phones.error };
+  }
+
+  const events = await listEventsForApi();
+  const allocationError = seminarAllocationIncreaseError({
+    existing: existing.seminarSlotAssignments ?? [],
+    next: phones.patch.seminarSlotAssignments ?? existing.seminarSlotAssignments ?? [],
+    seminars: events.flatMap((event) => event.seminars ?? []),
+  });
+  if (allocationError) {
+    return { ok: false, status: 400, error: allocationError };
   }
 
   const updated = applyPartnerCredentialFields(existing, {

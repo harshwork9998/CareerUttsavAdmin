@@ -3,6 +3,7 @@ import {
   RegistrationStatus as PrismaRegistrationStatus,
   type PaymentStatus as PrismaPaymentStatus,
 } from "@/lib/generated/prisma/client";
+import { isRegistrationSource } from "@/lib/registration-source";
 import type {
   PartnerRegistrationEntry,
   Registration,
@@ -93,6 +94,7 @@ export function mapPrismaRegistrationToApi(
         course: optionalString(record.course),
         year: optionalString(record.year) as StudentRegistration["year"],
         seminarInterests: seminarInterestsFromRecord(record),
+        source: isRegistrationSource(record.source) ? record.source : "UNKNOWN",
       };
       return student;
     }

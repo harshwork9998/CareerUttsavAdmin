@@ -4,7 +4,7 @@ import type { SeminarSessionRoster, SeminarSpeaker } from "@/types";
 export type SeminarCatalogEntry = {
   id: string;
   eventId: string;
-  panelistSlots: number;
+  panelistSlots: number | null;
 };
 
 export type SeminarRosterPreflightIssue = {
@@ -268,7 +268,11 @@ export function validateSeminarRosterSources(input: {
         }
         seatIndexes.add(panelist.seatIndex);
 
-        if (seminar && (panelist.seatIndex < 0 || panelist.seatIndex >= seminar.panelistSlots)) {
+        if (
+          seminar &&
+          seminar.panelistSlots != null &&
+          (panelist.seatIndex < 0 || panelist.seatIndex >= seminar.panelistSlots)
+        ) {
           errors.push({
             code: "seat_index_out_of_range",
             rosterKey: key,

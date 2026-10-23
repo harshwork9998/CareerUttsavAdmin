@@ -55,6 +55,7 @@ function baseRecord(
     ambassadorAge: null,
     ambassadorPhone: null,
     ambassadorEmail: null,
+    source: "UNKNOWN",
     registrationSeminars: [
       {
         id: "rsem-1",
@@ -68,6 +69,16 @@ function baseRecord(
 }
 
 describe("registration prisma map", () => {
+  it("preserves student registration source", () => {
+    const mapped = mapPrismaRegistrationToApi(
+      baseRecord({ source: "WEBSITE" })
+    );
+    expect(mapped.kind).toBe("student");
+    if (mapped.kind === "student") {
+      expect(mapped.source).toBe("WEBSITE");
+    }
+  });
+
   it("maps CheckedIn to Checked In and decimals to numbers", () => {
     const record = baseRecord({
       status: PrismaRegistrationStatus.CheckedIn,

@@ -47,6 +47,18 @@ vi.mock("@/lib/server/whatsapp/whatsapp-bot-dispatcher", () => ({
   dispatchWhatsAppBotActions: (...args: unknown[]) => dispatchMock(...args),
 }));
 
+vi.mock("@/lib/server/whatsapp/whatsapp-post-registration-processor", () => ({
+  processPostRegistrationGrowthTriggers: async () => ({
+    checked: 0,
+    sentInstagram: 0,
+    sentParentInvite: 0,
+    sentFriendInvite: 0,
+    skipped: 0,
+    failed: 0,
+    cancelled: 0,
+  }),
+}));
+
 import { saveWhatsAppConversationState } from "@/lib/server/whatsapp/whatsapp-conversation-store";
 import { processWhatsAppRegistrationReminders } from "@/lib/server/whatsapp/whatsapp-registration-reminder-processor";
 import { POST as registrationRemindersPost } from "@/app/api/internal/whatsapp/registration-reminders/route";
@@ -353,6 +365,7 @@ describe("WhatsApp registration reminder Stage 2A", () => {
       conversation: buildEligibleConversation(),
       message: { interactiveId: REGISTRATION_INTERACTIVE_IDS.RESTART },
       seminarOptions: [],
+      eventArtworkSeminarOptions: [],
       seminarDayCatalog: {
         day1: [],
         day2: [],
@@ -419,6 +432,15 @@ describe("WhatsApp registration reminder Stage 2A", () => {
       sent12h: 0,
       skipped: 0,
       failed: 0,
+      growth: {
+        checked: 0,
+        sentInstagram: 0,
+        sentParentInvite: 0,
+        sentFriendInvite: 0,
+        skipped: 0,
+        failed: 0,
+        cancelled: 0,
+      },
     });
   });
 

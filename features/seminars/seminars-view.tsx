@@ -27,6 +27,13 @@ import {
 import { applySeminarSpeakerMobileValidation } from "@/lib/seminar-roster-mobile";
 import { rosterSessionKey } from "@/lib/seminar-roster-links";
 import {
+  compareScheduledSeminars,
+  seminarCapacityLabel,
+  seminarDayLabel,
+  seminarHallLabel,
+  seminarTimeLabel,
+} from "@/lib/seminar-schedule";
+import {
   blockedPartnerForSeat,
   buildPartnerSeatBlocks,
   createSpeakerFromPartnerBlock,
@@ -85,26 +92,12 @@ type SeminarRow = {
   roster: SeminarSessionRoster | null;
 };
 
-function formatTime(time: string) {
-  const [h, m] = time.split(":").map(Number);
-  if (Number.isNaN(h)) return time;
-  const d = new Date();
-  d.setHours(h, m || 0, 0, 0);
-  return d.toLocaleTimeString("en-IN", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
+function formatTime(time: string | null | undefined) {
+  return seminarTimeLabel(time);
 }
 
-function formatDay(date: string) {
-  const d = new Date(`${date}T12:00:00`);
-  if (Number.isNaN(d.getTime())) return date;
-  return d.toLocaleDateString("en-IN", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-  });
+function formatDay(date: string | null | undefined) {
+  return seminarDayLabel(date);
 }
 
 function emptyRoster(eventId: string, seminarId: string): SeminarSessionRoster {
@@ -199,7 +192,9 @@ export function SeminarsView() {
         });
       }
     }
-    return list;
+    return list.sort((left, right) =>
+      compareScheduledSeminars(left.seminar, right.seminar)
+    );
   }, [events, rosters]);
 
   const filteredRows = useMemo(() => {
@@ -222,7 +217,10 @@ export function SeminarsView() {
   const activeSessionKey = active?.key ?? null;
   const activeEventId = active?.event.id;
   const activeSeminarId = active?.seminar.id;
-  const activePanelistSlots = active?.seminar.panelistSlots ?? 0;
+  const activePanelistSlots =
+    active?.seminar.panelistSlots ??
+    active?.roster?.panelists.length ??
+    0;
   const activeRoster = active?.roster ?? null;
   const activeRosterUpdatedAt = active?.roster?.updatedAt ?? null;
 
@@ -591,8 +589,8 @@ export function SeminarsView() {
                         {row.seminar.title}
                       </p>
                       <p className="mt-1 text-xs" style={{ color: INK.muted }}>
-                        {row.event.city} · {formatDay(row.seminar.date)} · Audi{" "}
-                        {row.seminar.hall}
+                        {row.event.city} · {formatDay(row.seminar.date)} ·{" "}
+                        {seminarHallLabel(row.seminar.hall)}
                       </p>
                     </button>
                   );
@@ -663,11 +661,15 @@ export function SeminarsView() {
                             />
                             <Meta
                               icon={MapPin}
-                              label={`Audi ${active.seminar.hall} · ${active.event.city}`}
+                              label={`${seminarHallLabel(active.seminar.hall)} · ${active.event.city}`}
                             />
                             <Meta
                               icon={Users}
-                              label={`${active.seminar.panelistSlots} panel seats`}
+                              label={
+                                active.seminar.panelistSlots == null
+                                  ? seminarCapacityLabel(null)
+                                  : `${active.seminar.panelistSlots} panel seats`
+                              }
                             />
                           </div>
                         </div>
@@ -734,7 +736,7 @@ export function SeminarsView() {
                         <SeminarRoundTable
                           moderator={draft.moderator}
                           panelistSeats={panelistSeats}
-                          totalSlots={active.seminar.panelistSlots}
+                          totalSlots={activePanelistSlots}
                           selectedId={selectedSpeakerId}
                           seatMeta={seatMeta}
                           onSeatClick={handleSeatClick}

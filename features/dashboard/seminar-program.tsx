@@ -373,7 +373,8 @@ function SeminarDetailDialog({
   const seminarSlot = matchingSlots[0];
   const cityOrder = eventCities.length > 0 ? eventCities : [fixedCity];
 
-  function formatSlotTime(time: string): string {
+  function formatSlotTime(time: string | null | undefined): string {
+    if (!time) return "TBD";
     const [h, m] = time.split(":").map(Number);
     if (!Number.isFinite(h)) return time;
     return new Date(2000, 0, 1, h, m || 0).toLocaleTimeString("en-IN", {
@@ -439,8 +440,8 @@ function SeminarDetailDialog({
               {matchingSlots
                 .map(
                   (slot) =>
-                    `${formatSlotTime(slot.startTime)}${
-                      slot.hall ? ` · Audi ${slot.hall}` : ""
+                    `${formatSlotTime(slot.startTime)} · ${
+                      slot.hall ? `Audi ${slot.hall}` : "TBD"
                     }`
                 )
                 .join(" · ")}
@@ -595,14 +596,9 @@ export function SeminarProgram({
 }) {
   const uniformCards = uniformCardsProp ?? Boolean(seminarTitles);
   const catalog = useMemo(
-    () => seminarTitles ?? CAREER_UTTSAV_SEMINARS,
+    () => seminarTitles ?? [...CAREER_UTTSAV_SEMINARS],
     [seminarTitles]
   );
-  const catalogLabel =
-    subtitle ??
-    (catalog.length === CAREER_UTTSAV_SEMINARS.length
-      ? "All 20 seminars · tap for registration breakdown"
-      : `${catalog.length} seminar${catalog.length === 1 ? "" : "s"} · tap for registration breakdown`);
   const byName = useMemo(() => {
     const map = new Map<string, number>();
     for (const item of items) {
@@ -613,11 +609,22 @@ export function SeminarProgram({
   }, [items, catalog]);
 
   const seminars = useMemo(() => {
-    return catalog.map((name) => ({
+    const rows = catalog.map((name) => ({
       name,
       value: byName.get(name) ?? 0,
-    })).sort((a, b) => b.value - a.value);
-  }, [byName, catalog]);
+    }));
+    if (!seminarTitles) {
+      for (const [name, value] of byName) {
+        if (value > 0 && !catalog.includes(name)) {
+          rows.push({ name, value });
+        }
+      }
+    }
+    return rows.sort((a, b) => b.value - a.value);
+  }, [byName, catalog, seminarTitles]);
+  const catalogLabel =
+    subtitle ??
+    `${seminars.length} seminar${seminars.length === 1 ? "" : "s"} · tap for registration breakdown`;
 
   const total = seminars.reduce((s, i) => s + i.value, 0) || 1;
   const [selectedName, setSelectedName] = useState<string | null>(null);

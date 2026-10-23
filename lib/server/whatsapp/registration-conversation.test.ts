@@ -32,7 +32,7 @@ import {
 import {
   WHATSAPP_SEMINAR_LIST_DESCRIPTION_LIMIT,
 } from "@/lib/server/whatsapp/seminar-list-display";
-import { CAREER_UTTSAV_SEMINARS } from "@/features/dashboard/seminars";
+import { LEGACY_CAREER_UTTSAV_SEMINARS } from "@/features/dashboard/seminars";
 
 const seminarOptions: SeminarOption[] = buildTestSeminarOptions();
 const seminarDayCatalog = buildTestSeminarDayCatalog(seminarOptions);
@@ -172,6 +172,7 @@ function turn(
     conversation,
     message,
     seminarOptions: options,
+    eventArtworkSeminarOptions: buildTestSeminarOptions(),
     seminarDayCatalog: buildTestSeminarDayCatalog(options),
     waId,
     completedRegistrationNumber,
@@ -191,36 +192,23 @@ function expectWelcomeActions(actions: ReturnType<typeof turn>["actions"]) {
   const welcome = actions[0];
   expect(welcome?.type).toBe("BUTTONS");
   if (welcome?.type !== "BUTTONS") return;
-  expect(welcome.body).toContain("Welcome to Career Uttsav");
-  expect(welcome.body).toContain(
-    "Career Uttsav is a career discovery platform for students after 10th & 12th"
-  );
-  expect(welcome.body).toContain(
-    "Let's get you registered for the event. It'll only take a minute."
-  );
+  expect(welcome.body).toContain("Welcome to Career Uttsav 2026");
+  expect(welcome.body).toContain("Entry is FREE");
   expect(welcome.buttons).toEqual([
     {
       id: REGISTRATION_INTERACTIVE_IDS.START,
-      title: "Start Registration",
+      title: "Let\u2019s Go \u2192",
     },
   ]);
 }
 
 function expectNameStepActions(actions: ReturnType<typeof turn>["actions"]) {
-  expect(actions).toHaveLength(2);
-  const guidance = actions[0];
-  const namePrompt = actions[1];
-  expect(guidance?.type).toBe("TEXT");
+  expect(actions).toHaveLength(1);
+  const namePrompt = actions[0];
   expect(namePrompt?.type).toBe("TEXT");
-  if (guidance?.type !== "TEXT" || namePrompt?.type !== "TEXT") return;
-  expect(guidance.body).toBe(
-    `Before we begin, if you make a mistake while entering your details, just type *cancel*.
-
-We'll pause this registration and you can start afresh by sending *Hi*.`
-  );
-  expect(guidance.body).not.toContain("Registration ID");
-  expect(guidance.body).not.toContain("QR");
-  expect(namePrompt.body).toBe("*What is your full name?*");
+  if (namePrompt?.type !== "TEXT") return;
+  expect(namePrompt.body).toContain("First things first");
+  expect(namePrompt.body).toContain("What should I call you?");
 }
 
 function expectNoFullNamePrompt(actions: ReturnType<typeof turn>["actions"]) {
@@ -239,9 +227,9 @@ function expectCancelledActions(actions: ReturnType<typeof turn>["actions"]) {
   expect(message?.type).toBe("TEXT");
   if (message?.type !== "TEXT") return;
   expect(message.body).toBe(
-    `Your registration has been paused.
+    `No problem — I’ve paused your registration.
 
-To start afresh, please send *Hi*.`
+Whenever you’re ready, send Hi and we’ll pick it up again.`
   );
 }
 
@@ -406,7 +394,7 @@ describe("whatsapp registration conversation engine", () => {
       result.actions.some(
         (action) =>
           action.type === "TEXT" &&
-          action.body.includes("cannot select the same seminar twice")
+          action.body.includes("same session more than once")
       )
     ).toBe(true);
   });
@@ -437,16 +425,16 @@ describe("whatsapp registration conversation engine", () => {
 
   it("reaches READY_TO_REGISTER after Finish Registration", () => {
     let conversation = advanceToSeminarsStep();
-    conversation = turn(conversation, { text: "1,2,b" }).conversation;
+    conversation = turn(conversation, { text: "1,2,8" }).conversation;
     const result = turn(conversation, {
       interactiveId: REGISTRATION_INTERACTIVE_IDS.FINISH,
     });
     expect(result.conversation.status).toBe("READY_TO_REGISTER");
     expect(result.conversation.currentStep).toBe("READY_TO_REGISTER");
     expect(result.conversation.selectedSeminarIds).toEqual([
-      "sem-d1-1",
-      "sem-d1-2",
-      "sem-d2-2",
+      "sem-2026-01",
+      "sem-2026-02",
+      "sem-2026-08",
     ]);
     expect(
       result.actions.some(
@@ -506,7 +494,7 @@ describe("whatsapp registration conversation engine", () => {
       result.actions.some(
         (action) =>
           action.type === "BUTTONS" &&
-          action.body.includes("Next step: Email")
+          action.body.includes("saved your Career Uttsav registration progress")
       )
     ).toBe(true);
   });
@@ -527,7 +515,7 @@ describe("whatsapp registration conversation engine", () => {
       result.actions.some(
         (action) =>
           action.type === "TEXT" &&
-          action.body.includes("Please enter your email address")
+          action.body.includes("What’s your email ID?")
       )
     ).toBe(true);
     expect(
@@ -690,7 +678,7 @@ describe("whatsapp registration conversation engine", () => {
   });
 
   it("keeps global numbering across paginated pages for 20 seminars", () => {
-    const twentySeminars: SeminarOption[] = CAREER_UTTSAV_SEMINARS.map(
+    const twentySeminars: SeminarOption[] = LEGACY_CAREER_UTTSAV_SEMINARS.map(
       (title, index) => ({
         id: `sem-${String(index + 1).padStart(3, "0")}`,
         title,
@@ -724,7 +712,7 @@ describe("whatsapp registration conversation engine", () => {
     conversation = turn(conversation, { text: "1" }).conversation;
     const result = turn(conversation, { text: "cancel" });
     expect(result.conversation.status).toBe("CANCELLED");
-    expect(result.conversation.selectedSeminarIds).toEqual(["sem-d1-1"]);
+    expect(result.conversation.selectedSeminarIds).toEqual(["sem-2026-01"]);
     expectCancelledActions(result.actions);
   });
 
@@ -734,8 +722,8 @@ describe("whatsapp registration conversation engine", () => {
     const result = turn(conversation, { text: "cancel" });
     expect(result.conversation.status).toBe("CANCELLED");
     expect(result.conversation.selectedSeminarIds).toEqual([
-      "sem-d1-1",
-      "sem-d1-2",
+      "sem-2026-01",
+      "sem-2026-02",
     ]);
     expectCancelledActions(result.actions);
   });

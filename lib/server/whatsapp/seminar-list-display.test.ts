@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { CAREER_UTTSAV_SEMINARS } from "@/features/dashboard/seminars";
+import {
+  CAREER_UTTSAV_SEMINARS,
+  LEGACY_CAREER_UTTSAV_SEMINARS,
+} from "@/features/dashboard/seminars";
 import { mockEvents } from "@/lib/mock-data/events";
 import {
   WHATSAPP_SEMINAR_LIST_DESCRIPTION_LIMIT,
@@ -46,7 +49,11 @@ describe("numbered seminar list display", () => {
 describe("current event seminar fixture", () => {
   it("documents the JSON seed seminar count used when event reads stay on JSON", () => {
     const currentEvent = mockEvents.find((event) => event.id === "evt-001");
-    expect(currentEvent?.seminars).toHaveLength(4);
-    expect(CAREER_UTTSAV_SEMINARS).toHaveLength(20);
+    expect(currentEvent?.seminars).toHaveLength(14);
+    expect(currentEvent?.seminars.map((seminar) => seminar.title)).toEqual([
+      ...CAREER_UTTSAV_SEMINARS,
+    ]);
+    expect(CAREER_UTTSAV_SEMINARS).toHaveLength(14);
+    expect(LEGACY_CAREER_UTTSAV_SEMINARS).toHaveLength(20);
   });
 });

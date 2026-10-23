@@ -19,7 +19,17 @@ import {
   TimeField,
   toISODate,
 } from "@/features/events/event-datetime-fields";
+import { isCurrentCareerUttsavSeminar } from "@/features/dashboard/seminars";
 import { SeminarTitleCombobox } from "@/features/events/seminar-title-combobox";
+import {
+  seminarDraftsFromEvent,
+  seminarSavePayload,
+  type SeminarDraft,
+} from "@/lib/event-seminar-drafts";
+import {
+  SEMINAR_SCHEDULE_UNSET_LABEL,
+  seminarDraftScheduleErrors,
+} from "@/lib/seminar-schedule";
 import type { Event, EventSeminar } from "@/types";
 import { generateId } from "@/lib/utils";
 import {
@@ -105,16 +115,6 @@ function OptionPills({
   );
 }
 
-type SeminarDraft = {
-  key: string;
-  title: string;
-  date: string;
-  startTime: string;
-  endTime: string;
-  panelistSlots: number;
-  hall: number;
-};
-
 function slugify(text: string): string {
   return text
     .toLowerCase()
@@ -139,15 +139,15 @@ function eachDayInclusive(start: string, end: string): string[] {
   return days;
 }
 
-function emptySeminar(date: string, hall = 1): SeminarDraft {
+function emptySeminar(): SeminarDraft {
   return {
     key: generateId(),
     title: "",
-    date,
-    startTime: "10:00",
-    endTime: "11:00",
-    panelistSlots: 2,
-    hall,
+    date: "",
+    startTime: "",
+    endTime: "",
+    panelistSlots: null,
+    hall: null,
   };
 }
 
@@ -155,18 +155,6 @@ function toDateOnly(value: string): string {
   if (!value) return "";
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   return value.slice(0, 10);
-}
-
-function seminarDraftsFromEvent(event: Event): SeminarDraft[] {
-  return (event.seminars ?? []).map((s) => ({
-    key: s.id || generateId(),
-    title: s.title,
-    date: toDateOnly(s.date),
-    startTime: s.startTime,
-    endTime: s.endTime,
-    panelistSlots: s.panelistSlots,
-    hall: s.hall || 1,
-  }));
 }
 
 export interface CreateEventDialogProps {
@@ -266,7 +254,9 @@ export function CreateEventDialog({
   useEffect(() => {
     setSeminars((prev) =>
       prev.map((row) =>
-        row.hall > hallCount ? { ...row, hall: hallCount } : row
+        row.hall != null && row.hall > hallCount
+          ? { ...row, hall: hallCount }
+          : row
       )
     );
   }, [hallCount]);
@@ -277,9 +267,8 @@ export function CreateEventDialog({
     setSeminars((prev) => {
       if (n === prev.length) return prev;
       if (n < prev.length) return prev.slice(0, n);
-      const defaultDay = dayOptions[0] || startDate || "";
       const added = Array.from({ length: n - prev.length }, () =>
-        emptySeminar(defaultDay, 1)
+        emptySeminar()
       );
       return [...prev, ...added];
     });
@@ -311,19 +300,17 @@ export function CreateEventDialog({
 
     seminars.forEach((row, i) => {
       if (!row.title) next[`sem-${i}-title`] = "Select a seminar";
-      if (!row.date || !dayOptions.includes(row.date)) {
-        next[`sem-${i}-date`] = "Select a day";
-      }
-      if (!row.hall || row.hall < 1 || row.hall > hallCount) {
-        next[`sem-${i}-hall`] = "Select an audi";
-      }
-      if (!row.startTime) next[`sem-${i}-start`] = "Required";
-      if (!row.endTime) next[`sem-${i}-end`] = "Required";
-      if (row.startTime && row.endTime && row.endTime <= row.startTime) {
-        next[`sem-${i}-end`] = "Must be after start";
-      }
-      if (!row.panelistSlots || row.panelistSlots < 1) {
-        next[`sem-${i}-slots`] = "At least 1 slot";
+      const scheduleErrors = seminarDraftScheduleErrors({
+        ...row,
+        allowedDates: dayOptions,
+        hallCount,
+      });
+      if (scheduleErrors.date) next[`sem-${i}-date`] = scheduleErrors.date;
+      if (scheduleErrors.hall) next[`sem-${i}-hall`] = scheduleErrors.hall;
+      if (scheduleErrors.startTime) next[`sem-${i}-start`] = scheduleErrors.startTime;
+      if (scheduleErrors.endTime) next[`sem-${i}-end`] = scheduleErrors.endTime;
+      if (scheduleErrors.panelistSlots) {
+        next[`sem-${i}-slots`] = scheduleErrors.panelistSlots;
       }
     });
 
@@ -337,15 +324,7 @@ export function CreateEventDialog({
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const seminarPayload: EventSeminar[] = seminars.map((row) => ({
-        id: row.key,
-        title: row.title,
-        date: row.date,
-        startTime: row.startTime,
-        endTime: row.endTime,
-        panelistSlots: row.panelistSlots,
-        hall: row.hall,
-      }));
+      const seminarPayload: EventSeminar[] = seminarSavePayload(seminars);
 
       if (event) {
         const cityValue = city.trim();
@@ -613,12 +592,26 @@ export function CreateEventDialog({
                       }
                       data-field-error={seminarHasError(index) ? "true" : undefined}
                     >
-                      <p
-                        className="mb-3 text-xs font-medium"
-                        style={{ color: INK.secondary }}
-                      >
-                        Seminar {index + 1}
-                      </p>
+                      <div className="mb-3 flex flex-wrap items-center gap-2">
+                        <p
+                          className="text-xs font-medium"
+                          style={{ color: INK.secondary }}
+                        >
+                          Seminar {index + 1}
+                        </p>
+                        {row.title.trim() &&
+                        !isCurrentCareerUttsavSeminar(row.title) ? (
+                          <span
+                            className="rounded-md border px-2 py-0.5 text-[11px] font-medium"
+                            style={{
+                              borderColor: LINE.subtle,
+                              color: INK.secondary,
+                            }}
+                          >
+                            Legacy seminar
+                          </span>
+                        ) : null}
+                      </div>
                       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                         <div className="space-y-2 sm:col-span-2 lg:col-span-3">
                           <Label>Seminar title</Label>
@@ -637,10 +630,12 @@ export function CreateEventDialog({
                           <div className="space-y-2">
                             <Label>Day</Label>
                             <Select
-                              value={row.date || undefined}
-                              onValueChange={(v) =>
-                                updateSeminar(index, { date: v })
-                              }
+                              value={row.date || "__unset__"}
+                            onValueChange={(v) =>
+                              updateSeminar(index, {
+                                date: v === "__unset__" ? "" : v,
+                              })
+                            }
                               disabled={!dayOptions.length}
                             >
                               <SelectTrigger
@@ -651,6 +646,9 @@ export function CreateEventDialog({
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
+                                <SelectItem value="__unset__">
+                                  {SEMINAR_SCHEDULE_UNSET_LABEL}
+                                </SelectItem>
                                 {dayOptions.map((d, dayIndex) => (
                                   <SelectItem key={d} value={d}>
                                     Day {dayIndex + 1}
@@ -665,9 +663,11 @@ export function CreateEventDialog({
                         <div className="space-y-2">
                           <Label>Audi</Label>
                           <Select
-                            value={String(row.hall)}
+                            value={row.hall == null ? "__unset__" : String(row.hall)}
                             onValueChange={(v) =>
-                              updateSeminar(index, { hall: Number(v) })
+                              updateSeminar(index, {
+                                hall: v === "__unset__" ? null : Number(v),
+                              })
                             }
                           >
                             <SelectTrigger
@@ -677,7 +677,10 @@ export function CreateEventDialog({
                             >
                               <SelectValue />
                             </SelectTrigger>
-                            <SelectContent>
+                              <SelectContent>
+                              <SelectItem value="__unset__">
+                                {SEMINAR_SCHEDULE_UNSET_LABEL}
+                              </SelectItem>
                               {hallOptions.map((h) => (
                                 <SelectItem key={h} value={String(h)}>
                                   Audi {h}
@@ -692,6 +695,7 @@ export function CreateEventDialog({
                           <Label>Start time</Label>
                           <TimeField
                             value={row.startTime}
+                            placeholder={SEMINAR_SCHEDULE_UNSET_LABEL}
                             onChange={(v) => {
                               const [h, m] = v.split(":").map(Number);
                               const endH = Math.min(22, h + 1);
@@ -712,6 +716,7 @@ export function CreateEventDialog({
                           <Label>End time</Label>
                           <TimeField
                             value={row.endTime}
+                            placeholder={SEMINAR_SCHEDULE_UNSET_LABEL}
                             min={row.startTime || undefined}
                             onChange={(v) =>
                               updateSeminar(index, { endTime: v })
@@ -731,20 +736,15 @@ export function CreateEventDialog({
                               "h-10 w-14 text-center tabular-nums"
                             )}
                             aria-invalid={Boolean(errors[`sem-${index}-slots`])}
-                            value={row.panelistSlots || ""}
+                            value={row.panelistSlots ?? ""}
                             onChange={(e) => {
                               const raw = e.target.value.replace(/\D/g, "");
                               if (raw === "") {
-                                updateSeminar(index, { panelistSlots: 0 });
+                                updateSeminar(index, { panelistSlots: null });
                                 return;
                               }
                               const n = Math.min(20, Number(raw));
                               updateSeminar(index, { panelistSlots: n });
-                            }}
-                            onBlur={() => {
-                              if (row.panelistSlots < 1) {
-                                updateSeminar(index, { panelistSlots: 1 });
-                              }
                             }}
                           />
                           <FieldError message={errors[`sem-${index}-slots`]} />

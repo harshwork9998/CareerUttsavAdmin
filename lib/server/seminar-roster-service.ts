@@ -26,7 +26,7 @@ export type SeminarRosterWriteResult =
   | { ok: false; status: number; error: string };
 
 export type SeminarSessionValidationResult =
-  | { ok: true; panelistSlots: number }
+  | { ok: true; panelistSlots: number | null }
   | { ok: false; status: number; error: string };
 
 const SESSION_NOT_LINKED_ERROR =
@@ -93,7 +93,7 @@ export async function validateSeminarSessionForRoster(
       };
     }
 
-    return { ok: true, panelistSlots: seminar.panelistSlots };
+    return { ok: true, panelistSlots: seminar.panelistSlots ?? null };
   }
 
   const events = loadEvents();
@@ -108,7 +108,7 @@ export async function validateSeminarSessionForRoster(
 
   const event = events.find((entry) => entry.id === eventId);
   const seminar = event?.seminars?.find((entry) => entry.id === seminarId);
-  return { ok: true, panelistSlots: seminar?.panelistSlots ?? 0 };
+  return { ok: true, panelistSlots: seminar?.panelistSlots ?? null };
 }
 
 export async function upsertSeminarRosterForApi(

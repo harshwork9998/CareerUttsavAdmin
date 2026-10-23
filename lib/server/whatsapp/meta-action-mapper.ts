@@ -4,11 +4,14 @@ import {
   sendWhatsAppImage,
   sendWhatsAppList,
   sendWhatsAppText,
+  sendWhatsAppUrlCta,
   uploadWhatsAppMedia,
 } from "@/lib/server/whatsapp/meta-client";
 
 export const META_REPLY_BUTTON_LIMIT = 3;
 export const META_BUTTON_TITLE_LIMIT = 20;
+/** Cloud API interactive cta_url display_text maximum. */
+export const META_CTA_URL_DISPLAY_TEXT_LIMIT = 20;
 export const META_LIST_BUTTON_TEXT_LIMIT = 24;
 export const META_LIST_ROW_TITLE_LIMIT = 24;
 export const META_LIST_ROW_DESCRIPTION_LIMIT = 72;
@@ -82,6 +85,39 @@ export function validateWhatsAppButtonAction(
     }
   }
 
+  return { ok: true };
+}
+
+export function validateWhatsAppUrlCtaAction(
+  action: Extract<WhatsAppBotAction, { type: "URL_CTA" }>
+): MetaActionValidationResult {
+  if (!action.body.trim()) {
+    return validationError(
+      "META_CTA_URL_BODY_MISSING",
+      "URL CTA actions require body text"
+    );
+  }
+  if (!action.displayText.trim()) {
+    return validationError(
+      "META_CTA_URL_DISPLAY_TEXT_MISSING",
+      "URL CTA actions require button text"
+    );
+  }
+  if (action.displayText.length > META_CTA_URL_DISPLAY_TEXT_LIMIT) {
+    return validationError(
+      "META_CTA_URL_DISPLAY_TEXT_TOO_LONG",
+      `URL CTA labels must be at most ${META_CTA_URL_DISPLAY_TEXT_LIMIT} characters`
+    );
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(action.url);
+  } catch {
+    return validationError("META_CTA_URL_INVALID", "URL CTA actions require an http(s) URL");
+  }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    return validationError("META_CTA_URL_INVALID", "URL CTA actions require an http(s) URL");
+  }
   return { ok: true };
 }
 
@@ -177,6 +213,31 @@ export async function dispatchWhatsAppBotActionToMeta(
       }
       return {
         actionType: "TEXT",
+        success: true,
+        messageId: result.messageId,
+      };
+    }
+    case "URL_CTA": {
+      const validation = validateWhatsAppUrlCtaAction(action);
+      if (!validation.ok) {
+        return {
+          actionType: "URL_CTA",
+          success: false,
+          errorCode: validation.errorCode,
+          retryable: false,
+        };
+      }
+      const result = await sendWhatsAppUrlCta({
+        to,
+        body: action.body,
+        displayText: action.displayText,
+        url: action.url,
+      });
+      if (!result.success) {
+        return toDispatchFailure("URL_CTA", result);
+      }
+      return {
+        actionType: "URL_CTA",
         success: true,
         messageId: result.messageId,
       };

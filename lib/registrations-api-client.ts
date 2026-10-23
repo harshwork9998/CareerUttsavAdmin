@@ -1,3 +1,4 @@
+import type { RegistrationAttemptRecord } from "@/lib/registration-attempt";
 import type { CreateRegistrationInput } from "@/lib/registration-validation";
 import type { Registration } from "@/types";
 
@@ -9,6 +10,13 @@ async function parseJson<T>(res: Response): Promise<T> {
     );
   }
   return res.json() as Promise<T>;
+}
+
+export async function fetchPartialRegistrations(): Promise<
+  RegistrationAttemptRecord[]
+> {
+  const res = await fetch("/api/registration-attempts", { cache: "no-store" });
+  return parseJson<RegistrationAttemptRecord[]>(res);
 }
 
 export async function fetchAllRegistrations(): Promise<Registration[]> {

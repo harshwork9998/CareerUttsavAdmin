@@ -52,9 +52,9 @@ describe("whatsapp bot dispatcher", () => {
 
     const summary = await dispatchWhatsAppBotActions(WA_ID, actions);
 
-    expect(summary.dispatched).toBe(2);
+    expect(summary.dispatched).toBe(3);
     expect(summary.failed).toBe(0);
-    expect(actionTypes).toEqual(["text", "MEDIA_UPLOAD", "image"]);
+    expect(actionTypes).toEqual(["text", "MEDIA_UPLOAD", "image", "text"]);
   });
 
   it("uses waId international digits as the Meta recipient", async () => {
@@ -100,8 +100,8 @@ describe("whatsapp bot dispatcher", () => {
 
     const summary = await dispatchWhatsAppBotActions(WA_ID, actions);
     expect(summary.failed).toBe(1);
-    expect(summary.dispatched).toBe(1);
-    expect(summary.results).toHaveLength(2);
+    expect(summary.dispatched).toBe(2);
+    expect(summary.results).toHaveLength(3);
     expect(summary.results[0].success).toBe(false);
     expect(summary.results[1].success).toBe(true);
   });

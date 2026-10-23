@@ -45,6 +45,13 @@ export type SendWhatsAppButtonsInput = {
   buttons: Array<{ id: string; title: string }>;
 };
 
+export type SendWhatsAppUrlCtaInput = {
+  to: string;
+  body: string;
+  displayText: string;
+  url: string;
+};
+
 export type SendWhatsAppListInput = {
   to: string;
   body: string;
@@ -305,6 +312,40 @@ export async function sendWhatsAppButtons(
               title: button.title,
             },
           })),
+        },
+      },
+    },
+  });
+}
+
+export async function sendWhatsAppUrlCta(
+  input: SendWhatsAppUrlCtaInput
+): Promise<MetaSendResult> {
+  const configResult = getMetaClientConfig();
+  if (!configResult.ok) {
+    return {
+      success: false,
+      errorCode: configResult.errorCode,
+      retryable: false,
+    };
+  }
+
+  return sendMetaMessagePayload({
+    config: configResult.config,
+    to: input.to,
+    actionType: "URL_CTA",
+    payload: {
+      ...buildBaseMessagePayload(input.to),
+      type: "interactive",
+      interactive: {
+        type: "cta_url",
+        body: { text: input.body },
+        action: {
+          name: "cta_url",
+          parameters: {
+            display_text: input.displayText,
+            url: input.url,
+          },
         },
       },
     },

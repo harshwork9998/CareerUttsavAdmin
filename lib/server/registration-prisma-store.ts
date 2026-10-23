@@ -21,6 +21,9 @@ import {
   studentNormalizedFields,
   type PrismaRegistrationRecord,
 } from "@/lib/server/registration-prisma-map";
+import type { RegistrationSource } from "@/lib/registration-source";
+import { finalizeRegistrationAttemptsWithClient } from "@/lib/server/registration-attempt-store";
+import type { RegistrationAttemptStep } from "@/lib/registration-attempt";
 import { generateId } from "@/lib/utils";
 import { resetWhatsAppConversationsForDeletedRegistration } from "@/lib/server/whatsapp/whatsapp-conversation-store";
 import type {
@@ -89,12 +92,14 @@ function buildCreateData(
   event: Event,
   id: string,
   registrationNumber: string,
-  now: Date
+  now: Date,
+  source: RegistrationSource
 ): Prisma.RegistrationUncheckedCreateInput {
   const base = {
     id,
     registrationNumber,
     kind: input.kind,
+    source,
     eventId: event.id,
     eventTitle: event.title,
     status: mapApiStatusToPrisma("Confirmed"),
@@ -270,7 +275,12 @@ export async function findPrismaStudentDuplicate(input: {
 
 export async function createPrismaRegistration(
   input: CreateRegistrationInput,
-  event: Event
+  event: Event,
+  options?: {
+    source?: RegistrationSource;
+    attemptId?: string | null;
+    attemptLastStep?: RegistrationAttemptStep;
+  }
 ): Promise<Registration> {
   const now = new Date();
   const id = `reg-${generateId()}`;
@@ -291,8 +301,9 @@ export async function createPrismaRegistration(
         ? buildSeminarRows(id, input.seminarInterests, seminarTitleToId)
         : [];
 
+    const source = input.kind === "student" ? (options?.source ?? "UNKNOWN") : "UNKNOWN";
     const record = await tx.registration.create({
-      data: buildCreateData(input, event, id, registrationNumber, now),
+      data: buildCreateData(input, event, id, registrationNumber, now, source),
       include: registrationInclude,
     });
 
@@ -307,6 +318,19 @@ export async function createPrismaRegistration(
         updatedAt: now,
       },
     });
+
+    if (input.kind === "student") {
+      await finalizeRegistrationAttemptsWithClient(tx, {
+        attemptId: options?.attemptId,
+        eventId: event.id,
+        registrationId: id,
+        phone: input.phone,
+        email: input.email,
+        lastStep: options?.attemptLastStep,
+        seminarInterests: input.seminarInterests,
+        completedAt: now,
+      });
+    }
 
     if (seminarRows.length > 0) {
       return tx.registration.findUniqueOrThrow({

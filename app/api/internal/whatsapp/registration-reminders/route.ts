@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { processPostRegistrationGrowthTriggers } from "@/lib/server/whatsapp/whatsapp-post-registration-processor";
 import { processWhatsAppRegistrationReminders } from "@/lib/server/whatsapp/whatsapp-registration-reminder-processor";
 import { requireWhatsAppReminderCronAuth } from "@/lib/server/whatsapp/whatsapp-reminder-cron-auth";
 
@@ -11,6 +12,7 @@ export async function POST(request: Request) {
     return authError;
   }
 
-  const result = await processWhatsAppRegistrationReminders();
-  return NextResponse.json(result);
+  const reminders = await processWhatsAppRegistrationReminders();
+  const growth = await processPostRegistrationGrowthTriggers();
+  return NextResponse.json({ ...reminders, growth });
 }

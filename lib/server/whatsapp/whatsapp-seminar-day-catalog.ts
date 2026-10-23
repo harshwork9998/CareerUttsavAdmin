@@ -90,7 +90,8 @@ function eachDayInclusive(startDate: string, endDate: string): string[] {
 }
 
 function compareSeminarOrder(a: SeminarOption, b: SeminarOption): number {
-  const timeCompare = (a.startTime ?? "").localeCompare(b.startTime ?? "");
+  const rank = (time?: string | null) => (time?.trim() ? time : "\uffff");
+  const timeCompare = rank(a.startTime).localeCompare(rank(b.startTime));
   if (timeCompare !== 0) {
     return timeCompare;
   }

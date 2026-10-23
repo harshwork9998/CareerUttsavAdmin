@@ -5,6 +5,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, Download, Plus, Users } from "lucide-react";
 import { toast } from "sonner";
 
+import {
+  countVisiblePartialAttempts,
+  partialRegistrationMatchesSearch,
+  toPartialRegistrationView,
+} from "@/lib/registration-attempt";
 import { eventsService, registrationsService } from "@/services/api";
 import { getPrimarySeminar } from "@/lib/enrich-registration";
 import {
@@ -22,6 +27,7 @@ import {
 } from "@/lib/registration-event-links";
 import { getCurrentEvents } from "@/lib/current-events";
 import {
+  buildRegistrationSeminarFilterOptions,
   registrationMatchesAllSeminars,
   slugifySeminarFilters,
 } from "@/lib/registration-seminar-filters";
@@ -61,6 +67,12 @@ import {
   getRegistrationDisplayName,
   registrationMatchesSearch,
 } from "./registration-table-config";
+import {
+  buildPartialRegistrationColumns,
+  PARTIAL_REGISTRATION_EXPORT_HEADERS,
+  PARTIAL_REGISTRATIONS_TAB,
+  partialRegistrationExportRow,
+} from "./partial-registrations";
 
 const PAGE_SIZE = 10;
 
@@ -120,6 +132,7 @@ function searchPlaceholderForKind(kind: RegistrationKind): string {
 export function RegistrationsList() {
   const queryClient = useQueryClient();
   const [activeKind, setActiveKind] = useState<RegistrationKind>("student");
+  const [partialTab, setPartialTab] = useState(false);
   const [search, setSearch] = useState("");
   const [eventFilter, setEventFilter] = useState<string[]>([]);
   const [classFilter, setClassFilter] = useState("all");
@@ -141,6 +154,14 @@ export function RegistrationsList() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["registrations"],
     queryFn: () => registrationsService.getAll(),
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+  });
+
+  const partialQuery = useQuery({
+    queryKey: ["registration-attempts"],
+    queryFn: () => registrationsService.getPartial(),
     staleTime: 0,
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
@@ -263,24 +284,18 @@ export function RegistrationsList() {
     [studentRegistrations]
   );
   const seminarOptions = useMemo(() => {
-    const titles = new Set<string>();
-    for (const registration of studentRegistrations) {
-      for (const seminar of registration.seminarInterests ?? []) {
-        const trimmed = seminar.trim();
-        if (trimmed) titles.add(trimmed);
-      }
+    const registrationTitles = studentRegistrations.flatMap((registration) => {
+      const interests = registration.seminarInterests ?? [];
       const primary = getPrimarySeminar(registration);
-      if (primary !== "—") titles.add(primary);
-    }
-    for (const event of currentEvents) {
-      for (const seminar of event.seminars ?? []) {
-        const trimmed = seminar.title?.trim();
-        if (trimmed) titles.add(trimmed);
-      }
-    }
-    return [...titles]
-      .sort((a, b) => a.localeCompare(b))
-      .map((value) => ({ label: value, value }));
+      return primary === "—" ? interests : [...interests, primary];
+    });
+    const eventTitles = currentEvents.flatMap((event) =>
+      (event.seminars ?? []).map((seminar) => seminar.title)
+    );
+    return buildRegistrationSeminarFilterOptions({
+      registrationTitles,
+      eventTitles,
+    });
   }, [studentRegistrations, currentEvents]);
 
   useEffect(() => {
@@ -346,6 +361,43 @@ export function RegistrationsList() {
   const handleView = (registration: Registration) => {
     setSelectedRegistration(registration);
     setDrawerOpen(true);
+  };
+
+  const partialAttempts = partialQuery.data ?? [];
+  const partialCount = countVisiblePartialAttempts(partialAttempts);
+  const partialRows = useMemo(() => {
+    return partialAttempts
+      .filter((attempt) => partialRegistrationMatchesSearch(attempt, search))
+      .map((attempt) => toPartialRegistrationView(attempt));
+  }, [partialAttempts, search]);
+  const partialColumns = useMemo(() => buildPartialRegistrationColumns(), []);
+  const partialPages = Math.max(1, Math.ceil(partialRows.length / PAGE_SIZE));
+  const paginatedPartial = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return partialRows.slice(start, start + PAGE_SIZE);
+  }, [partialRows, page]);
+
+  const handleExportPartial = () => {
+    if (partialRows.length === 0) {
+      toast.error("No registrations to export");
+      return;
+    }
+    const date = new Date().toISOString().slice(0, 10);
+    const headers = [...PARTIAL_REGISTRATION_EXPORT_HEADERS];
+    const rows = partialRows.map((row) => partialRegistrationExportRow(row));
+    const csv = [headers, ...rows]
+      .map((line) =>
+        line.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(",")
+      )
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `partial-registrations-${date}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${partialRows.length} registration(s)`);
   };
 
   const handleExport = (items: Registration[]) => {
@@ -561,7 +613,9 @@ export function RegistrationsList() {
             </DropdownMenu>
             <Button
               variant="outline"
-              onClick={() => handleExport(filtered)}
+              onClick={() =>
+                partialTab ? handleExportPartial() : handleExport(filtered)
+              }
               className="gap-2"
             >
               <Download className="h-4 w-4" />
@@ -572,8 +626,17 @@ export function RegistrationsList() {
       />
 
       <Tabs
-        value={activeKind}
-        onValueChange={(value) => setActiveKind(value as RegistrationKind)}
+        value={partialTab ? PARTIAL_REGISTRATIONS_TAB.id : activeKind}
+        onValueChange={(value) => {
+          setPage(1);
+          setSearch("");
+          if (value === PARTIAL_REGISTRATIONS_TAB.id) {
+            setPartialTab(true);
+            return;
+          }
+          setPartialTab(false);
+          setActiveKind(value as RegistrationKind);
+        }}
       >
         <TabsList className="h-auto flex-wrap justify-start gap-1 bg-transparent p-0">
           {REGISTRATION_KINDS.map((kind) => (
@@ -590,6 +653,17 @@ export function RegistrationsList() {
               </span>
             </TabsTrigger>
           ))}
+          <TabsTrigger
+            value={PARTIAL_REGISTRATIONS_TAB.id}
+            className={cn(
+              "rounded-lg border border-transparent px-3 py-2 data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:shadow-sm"
+            )}
+          >
+            {PARTIAL_REGISTRATIONS_TAB.label}
+            <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs tabular-nums text-muted-foreground">
+              {formatNumber(partialCount)}
+            </span>
+          </TabsTrigger>
         </TabsList>
       </Tabs>
 
@@ -600,17 +674,23 @@ export function RegistrationsList() {
             setSearch(value);
             setPage(1);
           }}
-          placeholder={searchPlaceholderForKind(activeKind)}
+          placeholder={
+            partialTab
+              ? "Search by name, mobile, email, class, city, source, or step…"
+              : searchPlaceholderForKind(activeKind)
+          }
           containerClassName="max-w-xl"
         />
         <p className="text-sm text-muted-foreground">
-          {formatNumber(filtered.length)} {REGISTRATION_KIND_SHORT_LABELS[activeKind].toLowerCase()}
-          {filtered.length !== 1 ? "" : ""} registration
-          {filtered.length !== 1 ? "s" : ""}
+          {partialTab
+            ? `${formatNumber(partialRows.length)} partial registration${partialRows.length === 1 ? "" : "s"}`
+            : `${formatNumber(filtered.length)} ${REGISTRATION_KIND_SHORT_LABELS[activeKind].toLowerCase()} registration${filtered.length === 1 ? "" : "s"}`}
         </p>
       </div>
 
-      <FiltersBar filters={filterConfig} onClearAll={clearFilters} />
+      {partialTab ? null : (
+        <FiltersBar filters={filterConfig} onClearAll={clearFilters} />
+      )}
 
       {activeKind === "student" && seminarFilter.length >= 2 ? (
         <div className="rounded-xl border border-brand-700/15 bg-brand-50/50 px-4 py-3 text-sm text-brand-950">
@@ -626,7 +706,38 @@ export function RegistrationsList() {
         </div>
       ) : null}
 
-      {filtered.length === 0 ? (
+      {partialTab ? (
+        partialQuery.isError ? (
+          <ErrorState onRetry={() => void partialQuery.refetch()} />
+        ) : partialRows.length === 0 ? (
+          <EmptyState
+            icon={Users}
+            title="No partial registrations found"
+            description={
+              search.trim()
+                ? "Try adjusting your search."
+                : "Partial registrations appear here after a student starts on WhatsApp or verifies their mobile number on the website."
+            }
+          />
+        ) : (
+          <>
+            <DataTable
+              columns={partialColumns}
+              data={paginatedPartial}
+              getRowId={(row) => row.id}
+              emptyMessage="No partial registrations on this page."
+            />
+            <Pagination
+              page={page}
+              totalPages={partialPages}
+              onPageChange={setPage}
+              showPageInfo
+              totalItems={partialRows.length}
+              pageSize={PAGE_SIZE}
+            />
+          </>
+        )
+      ) : filtered.length === 0 ? (
         <EmptyState
           icon={Users}
           title={`No ${REGISTRATION_KIND_SHORT_LABELS[activeKind].toLowerCase()} found`}

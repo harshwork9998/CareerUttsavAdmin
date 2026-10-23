@@ -51,6 +51,7 @@ function turn(
     conversation,
     message,
     seminarOptions,
+    eventArtworkSeminarOptions: seminarOptions,
     seminarDayCatalog,
     waId: "919876543210",
   });
@@ -142,7 +143,7 @@ describe("registration conversation Meta button validation", () => {
       },
       {
         id: REGISTRATION_INTERACTIVE_IDS.RESTART,
-        title: "Start over",
+        title: "Start Over",
       },
     ]);
   });

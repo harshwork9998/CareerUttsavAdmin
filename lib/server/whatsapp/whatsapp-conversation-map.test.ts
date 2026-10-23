@@ -123,6 +123,7 @@ describe("whatsapp conversation step persistence", () => {
       conversation: legacy,
       message: { text: "1" },
       seminarOptions,
+      eventArtworkSeminarOptions: seminarOptions,
       seminarDayCatalog,
       waId: legacy.waId,
     });

@@ -46,18 +46,20 @@ function formatSeminarSlot(seminar?: EventSeminar): {
   seminarHall?: string;
 } {
   if (!seminar) return {};
-  const [h, m] = seminar.startTime.split(":").map(Number);
+  const [hourText, minuteText] = (seminar.startTime ?? "").split(":");
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
   const time =
-    Number.isFinite(h) && Number.isFinite(m)
-      ? new Date(2000, 0, 1, h, m).toLocaleTimeString("en-IN", {
+    seminar.startTime && Number.isFinite(hour) && Number.isFinite(minute)
+      ? new Date(2000, 0, 1, hour, minute).toLocaleTimeString("en-IN", {
           hour: "numeric",
           minute: "2-digit",
           hour12: true,
         })
-      : seminar.startTime;
+      : "TBD";
   return {
     seminarTime: time,
-    seminarHall: String(seminar.hall),
+    seminarHall: seminar.hall == null ? "TBD" : String(seminar.hall),
   };
 }
 

@@ -10,10 +10,10 @@ export type PartnerPortalEventCatalogItem = {
   seminars: Array<{
     id: string;
     title: string;
-    date: string;
-    startTime: string;
-    endTime: string;
-    hall: number;
+    date: string | null;
+    startTime: string | null;
+    endTime: string | null;
+    hall: number | null;
   }>;
 };
 

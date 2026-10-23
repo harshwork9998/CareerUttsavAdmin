@@ -14,6 +14,15 @@ import {
   Users,
 } from "lucide-react";
 
+import { isCurrentCareerUttsavSeminar } from "@/features/dashboard/seminars";
+import {
+  isSeminarCapacityDecided,
+  SEMINAR_SCHEDULE_UNSET_LABEL,
+  seminarDayLabel,
+  seminarHallLabel,
+  seminarTimeLabel,
+} from "@/lib/seminar-schedule";
+import { seminarsAvailableForPartnerSlots } from "@/lib/current-event-seminars";
 import {
   BRAND,
   BRASS,
@@ -122,6 +131,22 @@ export function ChapterSeminarSlots(props: {
     );
   }, [props.eventIds, props.slotBudgetByEvent]);
 
+  const assignedSeminarIds = useMemo(() => {
+    const ids = new Set<string>();
+    const consider = (
+      rows: PartnerSeminarSlotAssignment[] | undefined
+    ) => {
+      for (const row of rows ?? []) {
+        if (row.slots > 0 && row.seminarId) ids.add(row.seminarId);
+      }
+    };
+    consider(props.assignments);
+    for (const partner of props.allPartners) {
+      consider(partner.seminarSlotAssignments);
+    }
+    return ids;
+  }, [props.assignments, props.allPartners]);
+
   const setSlots = (eventId: string, seminarId: string, slots: number) => {
     props.setAssignments((prev) => {
       const others = prev.filter((a) => a.seminarId !== seminarId);
@@ -216,7 +241,11 @@ export function ChapterSeminarSlots(props: {
           .reduce((s, a) => s + a.slots, 0);
         const eventBudget = props.slotBudgetByEvent?.[event.id] ?? 0;
         const eventError = props.errors[`event-${event.id}`];
-        const seminarCount = event.seminars?.length ?? 0;
+        const visibleSeminars = seminarsAvailableForPartnerSlots(
+          event.seminars ?? [],
+          assignedSeminarIds
+        );
+        const seminarCount = visibleSeminars.length;
 
         return (
           <motion.section
@@ -312,8 +341,14 @@ export function ChapterSeminarSlots(props: {
             </div>
 
             <div className="space-y-3">
-              {event.seminars.map((seminar, seminarIndex) => {
-                const total = seminar.panelistSlots;
+              {visibleSeminars.map((seminar, seminarIndex) => {
+                const decidedSlots = isSeminarCapacityDecided(
+                  seminar.panelistSlots
+                )
+                  ? seminar.panelistSlots
+                  : null;
+                const capacityDecided = decidedSlots != null;
+                const total = decidedSlots ?? 0;
                 const mine = slotsForSeminar(props.assignments, seminar.id);
                 const others = occupantsForSeminar(
                   props.allPartners,
@@ -321,14 +356,21 @@ export function ChapterSeminarSlots(props: {
                   props.partnerId
                 );
                 const taken = others.reduce((s, o) => s + o.slots, 0);
-                const open = Math.max(0, total - taken - mine);
-                const capacityMax = Math.max(0, total - taken);
+                const open = capacityDecided
+                  ? Math.max(0, total - taken - mine)
+                  : 0;
+                const capacityMax = capacityDecided
+                  ? Math.max(0, total - taken)
+                  : mine;
                 const budgetMax = seatPickMode
                   ? Math.max(0, eventBudget - mineOnEvent + mine)
                   : capacityMax;
-                const maxMine = Math.min(capacityMax, budgetMax);
+                const maxMine = capacityDecided
+                  ? Math.min(capacityMax, budgetMax)
+                  : mine;
                 const canPickMore =
-                  !seatPickMode || mineOnEvent < eventBudget || mine > 0;
+                  capacityDecided &&
+                  (!seatPickMode || mineOnEvent < eventBudget || mine > 0);
 
                 return (
                   <SeminarCard
@@ -346,6 +388,7 @@ export function ChapterSeminarSlots(props: {
                     maxMine={maxMine}
                     others={others}
                     seatPickMode={seatPickMode}
+                    capacityDecided={capacityDecided}
                     canPickSeat={canPickMore && maxMine > 0}
                     onAssign={(next) =>
                       setSlots(
@@ -384,14 +427,15 @@ function SeminarCard({
   others,
   seatPickMode = false,
   canPickSeat = true,
+  capacityDecided = true,
   onAssign,
 }: {
   index: number;
   title: string;
-  date: string;
-  startTime: string;
-  endTime: string;
-  hall: number;
+  date: string | null;
+  startTime: string | null;
+  endTime: string | null;
+  hall: number | null;
   total: number;
   mine: number;
   taken: number;
@@ -400,6 +444,7 @@ function SeminarCard({
   others: Occupant[];
   seatPickMode?: boolean;
   canPickSeat?: boolean;
+  capacityDecided?: boolean;
   onAssign: (slots: number) => void;
 }) {
   const [showPartners, setShowPartners] = useState(false);
@@ -461,13 +506,25 @@ function SeminarCard({
               >
                 {title}
               </p>
+              {!isCurrentCareerUttsavSeminar(title) ? (
+                <p
+                  className="mt-1 text-[11px] font-medium uppercase tracking-wide"
+                  style={{ color: INK.muted }}
+                >
+                  Legacy seminar
+                </p>
+              ) : null}
               <div className="mt-2.5 flex flex-wrap gap-2">
-                <MetaChip icon={CalendarDays} label={formatDayLabel(date)} />
+                <MetaChip icon={CalendarDays} label={seminarDayLabel(date)} />
                 <MetaChip
                   icon={Clock3}
-                  label={`${formatTimeLabel(startTime)} – ${formatTimeLabel(endTime)}`}
+                  label={
+                    startTime || endTime
+                      ? `${seminarTimeLabel(startTime)} – ${seminarTimeLabel(endTime)}`
+                      : SEMINAR_SCHEDULE_UNSET_LABEL
+                  }
                 />
-                <MetaChip icon={MapPin} label={`Audi ${hall}`} />
+                <MetaChip icon={MapPin} label={seminarHallLabel(hall)} />
               </div>
             </div>
           </div>
@@ -478,7 +535,9 @@ function SeminarCard({
                 className="text-[11px] font-semibold tracking-[0.14em] uppercase"
                 style={{ color: INK.muted }}
               >
-                Seat map · {total} total
+                {capacityDecided
+                  ? `Seat map · ${total} total`
+                  : "Capacity not decided"}
               </p>
               <div className="flex flex-wrap items-center gap-3 text-[11px] font-medium">
                 <LegendDot tone="mine" label={`${mine} yours`} />

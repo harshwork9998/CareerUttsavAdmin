@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/server/prisma";
+import { abandonWhatsAppRegistrationAttempt } from "@/lib/server/registration-attempt-store";
+import { CURRENT_EVENT_ID } from "@/lib/current-events";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import {
   WHATSAPP_CONVERSATION_TTL_MS,
@@ -213,6 +215,11 @@ export async function deleteExpiredWhatsAppConversation(
   });
   if (!record) return false;
   if (!isExpired(record)) return false;
+  await abandonWhatsAppRegistrationAttempt({
+    attemptId: record.registrationAttemptId,
+    waId: record.waId,
+    eventId: CURRENT_EVENT_ID,
+  });
   await prisma.whatsAppRegistrationConversation.delete({ where: { waId } });
   return true;
 }

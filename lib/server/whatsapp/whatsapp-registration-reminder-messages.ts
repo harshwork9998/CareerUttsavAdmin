@@ -1,38 +1,35 @@
 import { REGISTRATION_INTERACTIVE_IDS } from "@/lib/server/whatsapp/registration-interactive-ids";
-import type {
-  WhatsAppBotAction,
-  WhatsAppConversationState,
+import {
+  exportWhatsAppFirstName,
+  type WhatsAppBotAction,
+  type WhatsAppConversationState,
 } from "@/lib/server/whatsapp/registration-conversation";
 
-function reminderDisplayName(studentName: string | null): string {
-  const trimmed = studentName?.trim();
-  if (!trimmed) {
-    return "there";
-  }
-  return trimmed.split(/\s+/)[0] ?? "there";
-}
+export const WHATSAPP_REMINDER_2H_BUTTON_TITLE = "Continue";
+export const WHATSAPP_REMINDER_6H_BUTTON_TITLE = "Get My Free Pass \u2192";
 
 export function buildWhatsAppRegistrationReminder2hActions(
   conversation: WhatsAppConversationState
 ): WhatsAppBotAction[] {
-  const name = reminderDisplayName(conversation.studentName);
+  const name = exportWhatsAppFirstName(conversation.studentName);
   return [
     {
       type: "BUTTONS",
-      body: `Hi ${name} 👋
+      body: `Hey ${name} 👋
 
-Your Career Uttsav registration is still incomplete.
-We've saved your progress.
+You were almost there!
 
-Continue whenever you're ready.`,
+I’ve saved your Career Uttsav registration, so you won’t have to start again.
+
+Takes less than a minute to finish.`,
       buttons: [
         {
           id: REGISTRATION_INTERACTIVE_IDS.CONTINUE,
-          title: "Continue",
+          title: WHATSAPP_REMINDER_2H_BUTTON_TITLE,
         },
         {
           id: REGISTRATION_INTERACTIVE_IDS.RESTART,
-          title: "Start over",
+          title: "Start Over",
         },
       ],
     },
@@ -40,24 +37,26 @@ Continue whenever you're ready.`,
 }
 
 export function buildWhatsAppRegistrationReminder6hActions(
-  conversation: WhatsAppConversationState
+  _conversation: WhatsAppConversationState
 ): WhatsAppBotAction[] {
   return [
     {
       type: "BUTTONS",
-      body: `Just a reminder 👋
+      body: `Still thinking about it? 👀
 
-Your Career Uttsav registration is still incomplete and your progress is saved.
+Your FREE Career Uttsav pass is waiting.
 
-Would you like to continue?`,
+Universities. Career experts. Seminars. New-age careers. Scholarships — there’s plenty to explore.
+
+And your details are already saved.`,
       buttons: [
         {
           id: REGISTRATION_INTERACTIVE_IDS.CONTINUE,
-          title: "Continue",
+          title: WHATSAPP_REMINDER_6H_BUTTON_TITLE,
         },
         {
           id: REGISTRATION_INTERACTIVE_IDS.RESTART,
-          title: "Start over",
+          title: "Start Over",
         },
       ],
     },
@@ -80,7 +79,7 @@ Your details are saved, so you can continue from where you left off.`,
         },
         {
           id: REGISTRATION_INTERACTIVE_IDS.RESTART,
-          title: "Start over",
+          title: "Start Over",
         },
       ],
     },

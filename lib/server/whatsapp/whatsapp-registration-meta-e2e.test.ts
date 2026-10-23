@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CURRENT_EVENT_ID } from "@/lib/current-events";
+import { __setRegistrationAttemptStoreForTests } from "@/lib/server/registration-attempt-store";
 import {
   REGISTRATION_BOARD_OPTIONS,
   REGISTRATION_CLASS_OPTIONS,
@@ -30,6 +31,7 @@ const loadConversationMock = vi.fn();
 const getSeminarsMock = vi.fn();
 const getCatalogMock = vi.fn();
 const generateQrMock = vi.fn();
+const generatePassMock = vi.fn();
 
 vi.mock("@/lib/server/registration-service", () => ({
   createStudentRegistration: (...args: unknown[]) =>
@@ -49,11 +51,28 @@ vi.mock("@/lib/server/whatsapp/whatsapp-conversation-store", () => ({
 
 vi.mock("@/lib/server/whatsapp/whatsapp-seminar-context", () => ({
   getWhatsAppSeminarOptions: (...args: unknown[]) => getSeminarsMock(...args),
+  getWhatsAppEventArtworkSeminarOptions: (...args: unknown[]) =>
+    getSeminarsMock(...args),
   getWhatsAppSeminarDayCatalog: (...args: unknown[]) => getCatalogMock(...args),
 }));
 
 vi.mock("@/lib/email", () => ({
   generateRegistrationQrPngBase64: (...args: unknown[]) => generateQrMock(...args),
+}));
+
+vi.mock("@/lib/server/whatsapp/event-pass", async () => {
+  const actual = await vi.importActual<
+    typeof import("@/lib/server/whatsapp/event-pass")
+  >("@/lib/server/whatsapp/event-pass");
+  return {
+    ...actual,
+    generateWhatsAppEntryPassPngBase64: (...args: unknown[]) =>
+      generatePassMock(...args),
+  };
+});
+
+vi.mock("@/lib/server/whatsapp/whatsapp-post-registration-schedule", () => ({
+  schedulePostRegistrationGrowthTriggers: vi.fn(async () => ({ scheduled: true })),
 }));
 
 import { completeWhatsAppRegistrationForConversation } from "@/lib/server/whatsapp/whatsapp-registration-completion";
@@ -83,6 +102,7 @@ function turn(
   message: { text?: string; interactiveId?: string }
 ) {
   return processRegistrationConversationTurn({
+    eventArtworkSeminarOptions: seminarOptions,
     conversation,
     message,
     seminarOptions,
@@ -120,6 +140,7 @@ describe("whatsapp registration meta e2e (mocked)", () => {
   const outboundTypes: string[] = [];
 
   beforeEach(() => {
+    __setRegistrationAttemptStoreForTests([]);
     outboundTypes.length = 0;
     vi.clearAllMocks();
 
@@ -139,6 +160,7 @@ describe("whatsapp registration meta e2e (mocked)", () => {
       registration: createdRegistration,
     });
     generateQrMock.mockResolvedValue(QR_BASE64);
+    generatePassMock.mockResolvedValue(QR_BASE64);
     finalizeMock.mockImplementation(async () => ({
       waId: WA_ID,
       status: "COMPLETED" as const,
@@ -151,7 +173,7 @@ describe("whatsapp registration meta e2e (mocked)", () => {
       interestedStream: REGISTRATION_STREAM_OPTIONS[0]!,
       college: "National Public School",
       city: "Bangalore",
-      selectedSeminarIds: ["sem-d1-1", "sem-d1-2", "sem-d2-2"],
+      selectedSeminarIds: ["sem-2026-01", "sem-2026-02", "sem-2026-08"],
       completedRegistrationId: "reg-001",
     }));
 
@@ -195,7 +217,7 @@ describe("whatsapp registration meta e2e (mocked)", () => {
       },
       { text: "National Public School" },
       { text: "Bangalore" },
-      { text: "1,2,b" },
+      { text: "1,2,8" },
       { interactiveId: REGISTRATION_INTERACTIVE_IDS.FINISH },
     ];
 
@@ -221,8 +243,13 @@ describe("whatsapp registration meta e2e (mocked)", () => {
     expect(createStudentRegistrationMock).toHaveBeenCalledOnce();
     expect(createStudentRegistrationMock.mock.calls[0]?.[1]).toEqual({
       trustedInternalRegistration: true,
+      attemptId: null,
     });
-    expect(generateQrMock).toHaveBeenCalledWith(REGISTRATION_NUMBER);
+    expect(generatePassMock).toHaveBeenCalledWith({
+      registrationId: REGISTRATION_NUMBER,
+      seminarTitles: ["AI Careers"],
+    });
+    expect(generateQrMock).not.toHaveBeenCalled();
     expect(completion.status).toBe("SUCCESS");
     expect(completion.registrationNumber).toBe(REGISTRATION_NUMBER);
     expect(
@@ -257,11 +284,12 @@ describe("whatsapp registration meta e2e (mocked)", () => {
     expect(completion.conversation?.completedRegistrationId).toBe("reg-001");
     expect(outboundTypes).toContain("interactive");
     expect(outboundTypes).toContain("text");
-    expect(outboundTypes.at(-3)).toBe("text");
-    expect(outboundTypes.at(-2)).toBe("MEDIA_UPLOAD");
-    expect(outboundTypes.at(-1)).toBe("image");
+    expect(outboundTypes.at(-4)).toBe("text");
+    expect(outboundTypes.at(-3)).toBe("MEDIA_UPLOAD");
+    expect(outboundTypes.at(-2)).toBe("image");
+    expect(outboundTypes.at(-1)).toBe("text");
     expect(outboundTypes.filter((type) => type === "MEDIA_UPLOAD")).toHaveLength(
-      1
+      2
     );
   });
 
@@ -311,7 +339,7 @@ describe("whatsapp registration meta e2e (mocked)", () => {
       completion.actions.some(
         (action) =>
           action.type === "TEXT" &&
-          action.body.includes("Registration Successful")
+          action.body.includes("YOU\u2019RE IN")
       )
     ).toBe(true);
   });
@@ -321,6 +349,7 @@ describe("whatsapp registration completion delivery failures (mocked)", () => {
   const originalEnv = { ...process.env };
 
   beforeEach(() => {
+    __setRegistrationAttemptStoreForTests([]);
     process.env.WHATSAPP_ACCESS_TOKEN = "test-access-token-local-only";
     process.env.WHATSAPP_PHONE_NUMBER_ID = "123456789012345";
     process.env.WHATSAPP_GRAPH_API_VERSION = "v22.0";
@@ -346,7 +375,7 @@ describe("whatsapp registration completion delivery failures (mocked)", () => {
       interestedStream: REGISTRATION_STREAM_OPTIONS[0]!,
       college: "National Public School",
       city: "Bangalore",
-      selectedSeminarIds: ["sem-d1-1", "sem-d1-2", "sem-d2-2"],
+      selectedSeminarIds: ["sem-2026-01", "sem-2026-02", "sem-2026-08"],
       completedRegistrationId: null,
     };
     const completedConversation = {
@@ -368,6 +397,7 @@ describe("whatsapp registration completion delivery failures (mocked)", () => {
       registration: createdRegistration,
     });
     generateQrMock.mockResolvedValue(QR_BASE64);
+    generatePassMock.mockResolvedValue(QR_BASE64);
     finalizeMock.mockResolvedValue(completedConversation);
     loadConversationMock
       .mockResolvedValueOnce(readyConversation)
@@ -403,6 +433,7 @@ describe("whatsapp registration completion delivery failures (mocked)", () => {
       registration: createdRegistration,
     });
     generateQrMock.mockResolvedValue(QR_BASE64);
+    generatePassMock.mockResolvedValue(QR_BASE64);
     finalizeMock.mockResolvedValue({
       waId: WA_ID,
       status: "COMPLETED",
@@ -415,7 +446,7 @@ describe("whatsapp registration completion delivery failures (mocked)", () => {
       interestedStream: REGISTRATION_STREAM_OPTIONS[0]!,
       college: "National Public School",
       city: "Bangalore",
-      selectedSeminarIds: ["sem-d1-1", "sem-d1-2", "sem-d2-2"],
+      selectedSeminarIds: ["sem-2026-01", "sem-2026-02", "sem-2026-08"],
       completedRegistrationId: "reg-001",
     });
     loadConversationMock.mockResolvedValue({
@@ -430,7 +461,7 @@ describe("whatsapp registration completion delivery failures (mocked)", () => {
       interestedStream: REGISTRATION_STREAM_OPTIONS[0]!,
       college: "National Public School",
       city: "Bangalore",
-      selectedSeminarIds: ["sem-d1-1", "sem-d1-2", "sem-d2-2"],
+      selectedSeminarIds: ["sem-2026-01", "sem-2026-02", "sem-2026-08"],
       completedRegistrationId: null,
     });
 
@@ -451,9 +482,10 @@ describe("whatsapp registration completion delivery failures (mocked)", () => {
     const summary = await dispatchWhatsAppBotActions(WA_ID, completion.actions);
 
     expect(createStudentRegistrationMock).toHaveBeenCalledOnce();
-    expect(summary.results).toHaveLength(2);
+    expect(summary.results).toHaveLength(3);
     expect(summary.results[0].success).toBe(true);
     expect(summary.results[1].success).toBe(false);
+    expect(summary.results[2]?.success).toBe(true);
   });
 
   it("keeps a completed conversation completed after delivery failure", async () => {
@@ -469,7 +501,7 @@ describe("whatsapp registration completion delivery failures (mocked)", () => {
       interestedStream: "Science",
       college: "National Public School",
       city: "Bangalore",
-      selectedSeminarIds: ["sem-d1-1", "sem-d1-2", "sem-d2-2"],
+      selectedSeminarIds: ["sem-2026-01", "sem-2026-02", "sem-2026-08"],
       completedRegistrationId: "reg-001",
     };
 

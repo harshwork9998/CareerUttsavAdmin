@@ -26,6 +26,7 @@ import {
 import { completeWhatsAppRegistrationForConversation } from "@/lib/server/whatsapp/whatsapp-registration-completion";
 import { resolveCompletedRegistrationNumberForConversation } from "@/lib/server/whatsapp/whatsapp-completed-conversation-reconcile";
 import {
+  getWhatsAppEventArtworkSeminarOptions,
   getWhatsAppSeminarDayCatalog,
   getWhatsAppSeminarOptions,
 } from "@/lib/server/whatsapp/whatsapp-seminar-context";
@@ -105,10 +106,12 @@ async function processInboundUserMessageSerialized(
   const sessionExpired = await deleteExpiredWhatsAppConversation(waId);
   const { conversation: existingConversation, previousActivityAt } =
     await loadWhatsAppConversationTurnContext(waId);
-  const [seminarOptions, seminarDayCatalog] = await Promise.all([
-    getWhatsAppSeminarOptions(),
-    getWhatsAppSeminarDayCatalog(),
-  ]);
+  const [seminarOptions, eventArtworkSeminarOptions, seminarDayCatalog] =
+    await Promise.all([
+      getWhatsAppSeminarOptions(),
+      getWhatsAppEventArtworkSeminarOptions(),
+      getWhatsAppSeminarDayCatalog(),
+    ]);
   const completedRegistrationNumber = await resolveCompletedRegistrationNumber(
     existingConversation
   );
@@ -117,6 +120,7 @@ async function processInboundUserMessageSerialized(
     conversation: existingConversation,
     message: toIncomingMessage(message),
     seminarOptions,
+    eventArtworkSeminarOptions,
     seminarDayCatalog,
     waId,
     completedRegistrationNumber,

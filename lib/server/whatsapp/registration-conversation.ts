@@ -22,15 +22,20 @@ import {
 } from "@/lib/server/whatsapp/registration-interactive-ids";
 import { formatNumberedSeminarListRow } from "@/lib/server/whatsapp/seminar-list-display";
 import {
+  artworkSeminarSelectionErrorActions,
+  buildSeminarArtworkSummaryBody,
+  parseArtworkSeminarSelectionInput,
+  resolveArtworkSeminarSelection,
+  selectedArtworkSeminarIdsStillValid,
+  seminarFinishAcknowledgementBody,
+  WHATSAPP_SEMINAR_FINISH_BUTTON_TITLE,
+  WHATSAPP_SEMINAR_FINISH_REMINDER_PROMPT,
+  whatsAppSeminarPickerActions,
+  type ArtworkSeminarResolution,
+} from "@/lib/server/whatsapp/whatsapp-artwork-seminar-catalog";
+import {
   WHATSAPP_LEGACY_SEMINAR_MIGRATION_MESSAGE,
-  WHATSAPP_SEMINAR_FINISH_ALREADY_SAVED_PROMPT,
-  WHATSAPP_SEMINAR_FINISH_PROMPT,
   WHATSAPP_STALE_SEMINAR_RECOVERY_MESSAGE,
-  buildSeminarFinishSummaryBody,
-  combinedSeminarSelectionActions,
-  parseSeminarSelectionInput,
-  seminarSelectionErrorActions,
-  selectedSeminarsStillValidInCatalog,
   type WhatsAppSeminarDayCatalog,
 } from "@/lib/server/whatsapp/whatsapp-seminar-day-catalog";
 
@@ -40,7 +45,17 @@ export const WHATSAPP_SEMINAR_LIST_ROW_LIMIT = 10;
 export const WHATSAPP_SEMINAR_LIST_PAGE_SIZE = 8;
 export const WHATSAPP_SEMINAR_SELECTION_MIN = 1;
 export const WHATSAPP_SEMINAR_SELECTION_MAX = 3;
-export const WHATSAPP_CITY_PROMPT = "Please enter your city of residence.";
+export const WHATSAPP_CITY_PROMPT = "And which city are you coming from? 📍";
+
+export const WHATSAPP_WELCOME_BUTTON_TITLE = "Let\u2019s Go \u2192";
+
+export function exportWhatsAppFirstName(studentName: string | null): string {
+  const trimmed = studentName?.trim();
+  if (!trimmed) {
+    return "there";
+  }
+  return trimmed.split(/\s+/)[0] ?? "there";
+}
 /** @deprecated Use WHATSAPP_SEMINAR_SELECTION_MAX */
 export const WHATSAPP_SEMINAR_SELECTION_TARGET = WHATSAPP_SEMINAR_SELECTION_MAX;
 
@@ -80,6 +95,7 @@ export type WhatsAppConversationState = {
   city: string | null;
   selectedSeminarIds: string[];
   completedRegistrationId: string | null;
+  registrationAttemptId?: string | null;
 };
 
 export type SeminarOption = {
@@ -119,6 +135,12 @@ export type WhatsAppBotAction =
       filename: string;
       contentBase64: string;
       caption?: string;
+    }
+  | {
+      type: "URL_CTA";
+      body: string;
+      displayText: string;
+      url: string;
     };
 
 export type IncomingConversationMessage = {
@@ -194,6 +216,7 @@ export function createInitialConversationState(waId: string): WhatsAppConversati
     city: null,
     selectedSeminarIds: [],
     completedRegistrationId: null,
+    registrationAttemptId: null,
   };
 }
 
@@ -205,6 +228,7 @@ export function resetConversationAnswers(
     status: "ACTIVE",
     currentStep: "AWAITING_NAME",
     completedRegistrationId: null,
+    registrationAttemptId: conversation.registrationAttemptId ?? null,
   };
 }
 
@@ -308,15 +332,20 @@ function welcomeActions(): WhatsAppBotAction[] {
   return [
     {
       type: "BUTTONS",
-      body: `👋 Welcome to Career Uttsav!
+      body: `👋 Hey! Welcome to Career Uttsav 2026.
 
-Career Uttsav is a career discovery platform for students after 10th & 12th, helping you explore the right courses, careers, institutions, and opportunities for your future.
+Still figuring out what comes after Class 12?
+Already know? Or somewhere in between? 😄
+You’re in the right place.
 
-Let's get you registered for the event. It'll only take a minute.`,
+Meet universities, explore careers, attend expert sessions and get answers to your questions — all under one roof.
+
+🎟️ Entry is FREE.
+I’ll get your pass ready. Takes about 2 minutes.`,
       buttons: [
         {
           id: REGISTRATION_INTERACTIVE_IDS.START,
-          title: "Start Registration",
+          title: WHATSAPP_WELCOME_BUTTON_TITLE,
         },
       ],
     },
@@ -327,13 +356,11 @@ function nameStepActions(): WhatsAppBotAction[] {
   return [
     {
       type: "TEXT",
-      body: `Before we begin, if you make a mistake while entering your details, just type *cancel*.
+      body: `First things first 👋
 
-We'll pause this registration and you can start afresh by sending *Hi*.`,
-    },
-    {
-      type: "TEXT",
-      body: "*What is your full name?*",
+What should I call you?
+
+Type your full name as you’d like it on your event pass.`,
     },
   ];
 }
@@ -342,9 +369,9 @@ function cancelledActions(): WhatsAppBotAction[] {
   return [
     {
       type: "TEXT",
-      body: `Your registration has been paused.
+      body: `No problem — I’ve paused your registration.
 
-To start afresh, please send *Hi*.`,
+Whenever you’re ready, send Hi and we’ll pick it up again.`,
     },
   ];
 }
@@ -374,18 +401,16 @@ function beginNameStep(
 }
 
 export function buildWelcomeBackPromptActions(
-  conversation: WhatsAppConversationState
+  _conversation: WhatsAppConversationState
 ): WhatsAppBotAction[] {
   return [
     {
       type: "BUTTONS",
       body: `Welcome back 👋
 
-We've saved your Career Uttsav registration progress.
+I’ve saved your Career Uttsav registration progress.
 
-${resumeProgressContextLine(conversation)}
-
-Would you like to continue where you left off?`,
+You can continue right where you left off.`,
       buttons: [
         {
           id: REGISTRATION_INTERACTIVE_IDS.CONTINUE,
@@ -393,7 +418,7 @@ Would you like to continue where you left off?`,
         },
         {
           id: REGISTRATION_INTERACTIVE_IDS.RESTART,
-          title: "Start over",
+          title: "Start Over",
         },
       ],
     },
@@ -403,16 +428,17 @@ Would you like to continue where you left off?`,
 function recentGreetingRepromptResult(
   conversation: WhatsAppConversationState,
   seminarOptions: SeminarOption[],
+  eventArtworkSeminarOptions: SeminarOption[],
   seminarDayCatalog: WhatsAppSeminarDayCatalog,
   completedRegistrationNumber?: string | null
 ): ConversationTurnResult {
   if (isLegacySeminarSelectionState(conversation)) {
-    return migrateLegacySeminarFlow(conversation, seminarDayCatalog);
+    return migrateLegacySeminarFlow(conversation);
   }
 
   const staleRecovery = recoverIfStaleSeminarSelections(
     conversation,
-    seminarDayCatalog
+    eventArtworkSeminarOptions
   );
   if (staleRecovery) {
     return staleRecovery;
@@ -430,6 +456,9 @@ function recentGreetingRepromptResult(
     refreshExpiry: true,
   };
 }
+
+const CONTROLLED_FIELD_RETRY_MESSAGE =
+  "Please choose one of the options below so I can save it correctly.";
 
 function isGreetingOrStartResumeMessage(
   text: string,
@@ -515,7 +544,11 @@ function performRegistrationRestart(
     actions: [
       {
         type: "TEXT",
-        body: "Let's start again. Please enter your full name.",
+        body: `First things first 👋
+
+What should I call you?
+
+Type your full name as you’d like it on your event pass.`,
       },
     ],
     refreshExpiry: true,
@@ -524,8 +557,7 @@ function performRegistrationRestart(
 }
 
 export function buildInvalidSeminarRecoveryResult(
-  conversation: WhatsAppConversationState,
-  seminarDayCatalog: WhatsAppSeminarDayCatalog
+  conversation: WhatsAppConversationState
 ): ConversationTurnResult {
   return {
     conversation: {
@@ -536,7 +568,7 @@ export function buildInvalidSeminarRecoveryResult(
     },
     actions: [
       { type: "TEXT", body: WHATSAPP_STALE_SEMINAR_RECOVERY_MESSAGE },
-      ...combinedSeminarSelectionActions(seminarDayCatalog),
+      ...whatsAppSeminarPickerActions(),
     ],
     refreshExpiry: true,
   };
@@ -544,7 +576,7 @@ export function buildInvalidSeminarRecoveryResult(
 
 function recoverIfStaleSeminarSelections(
   conversation: WhatsAppConversationState,
-  seminarDayCatalog: WhatsAppSeminarDayCatalog
+  eventArtworkSeminarOptions: SeminarOption[]
 ): ConversationTurnResult | null {
   if (
     conversation.currentStep !== "AWAITING_SEMINAR_FINISH" &&
@@ -557,22 +589,25 @@ function recoverIfStaleSeminarSelections(
     return null;
   }
 
+  const resolution = resolveArtworkSeminarSelection(eventArtworkSeminarOptions);
   if (
-    selectedSeminarsStillValidInCatalog(
+    selectedArtworkSeminarIdsStillValid(
       conversation.selectedSeminarIds,
-      seminarDayCatalog
+      resolution
     )
   ) {
     return null;
   }
 
-  return buildInvalidSeminarRecoveryResult(conversation, seminarDayCatalog);
+  return buildInvalidSeminarRecoveryResult(conversation);
 }
 
 export function expiredSessionNoticeAction(): WhatsAppBotAction {
   return {
     type: "TEXT",
-    body: "Your previous registration session expired, so we'll start a fresh one.",
+    body: `Looks like your earlier session has expired.
+
+No worries — let’s get your Career Uttsav pass started again.`,
   };
 }
 
@@ -580,7 +615,7 @@ function classListActions(): WhatsAppBotAction[] {
   return [
     {
       type: "LIST",
-      body: "Please select your class.",
+      body: "Now tell me a little about you.\n\nWhich class are you currently studying in? 👇",
       buttonText: "Select Class",
       sections: [
         {
@@ -612,7 +647,7 @@ function boardListActions(): WhatsAppBotAction[] {
   return [
     {
       type: "LIST",
-      body: "Please select your board.",
+      body: "Which board are you studying under?",
       buttonText: "Select Board",
       sections: [
         {
@@ -631,7 +666,7 @@ function streamButtonActions(): WhatsAppBotAction[] {
   return [
     {
       type: "BUTTONS",
-      body: "Please select your stream / interest.",
+      body: "And what’s your current stream?",
       buttons: REGISTRATION_STREAM_OPTIONS.map((stream) => ({
         id: streamInteractiveId(stream),
         title: stream,
@@ -731,9 +766,7 @@ function seminarTitlesForIds(
   );
 }
 
-function seminarFinishButtonActions(
-  body: string = WHATSAPP_SEMINAR_FINISH_PROMPT
-): WhatsAppBotAction[] {
+function seminarFinishButtonActions(body: string): WhatsAppBotAction[] {
   return [
     {
       type: "BUTTONS",
@@ -741,7 +774,7 @@ function seminarFinishButtonActions(
       buttons: [
         {
           id: REGISTRATION_INTERACTIVE_IDS.FINISH,
-          title: "Finish registration",
+          title: WHATSAPP_SEMINAR_FINISH_BUTTON_TITLE,
         },
       ],
     },
@@ -749,7 +782,7 @@ function seminarFinishButtonActions(
 }
 
 function seminarFinishReminderButtonActions(): WhatsAppBotAction[] {
-  return seminarFinishButtonActions(WHATSAPP_SEMINAR_FINISH_ALREADY_SAVED_PROMPT);
+  return seminarFinishButtonActions(WHATSAPP_SEMINAR_FINISH_REMINDER_PROMPT);
 }
 
 function isLegacySeminarSelectionState(
@@ -762,8 +795,7 @@ function isLegacySeminarSelectionState(
 }
 
 function migrateLegacySeminarFlow(
-  conversation: WhatsAppConversationState,
-  seminarDayCatalog: WhatsAppSeminarDayCatalog
+  conversation: WhatsAppConversationState
 ): ConversationTurnResult {
   return {
     conversation: {
@@ -777,7 +809,7 @@ function migrateLegacySeminarFlow(
         type: "TEXT",
         body: WHATSAPP_LEGACY_SEMINAR_MIGRATION_MESSAGE,
       },
-      ...combinedSeminarSelectionActions(seminarDayCatalog),
+      ...whatsAppSeminarPickerActions(),
     ],
     refreshExpiry: true,
   };
@@ -794,16 +826,18 @@ function transitionToSeminarFinish(
       currentStep: "AWAITING_SEMINAR_FINISH",
       selectedSeminarIds: seminarIds,
     },
-    actions: seminarFinishButtonActions(),
+    actions: seminarFinishButtonActions(
+      seminarFinishAcknowledgementBody(seminarIds.length)
+    ),
     refreshExpiry: true,
   };
 }
 
 function transitionToReadyToRegisterAfterFinish(
   conversation: WhatsAppConversationState,
-  seminarOptions: SeminarOption[],
-  seminarDayCatalog: WhatsAppSeminarDayCatalog
+  eventArtworkSeminarOptions: SeminarOption[]
 ): ConversationTurnResult {
+  const resolution = resolveArtworkSeminarSelection(eventArtworkSeminarOptions);
   return {
     conversation: {
       ...conversation,
@@ -813,10 +847,9 @@ function transitionToReadyToRegisterAfterFinish(
     actions: [
       {
         type: "TEXT",
-        body: buildSeminarFinishSummaryBody(
-          seminarDayCatalog,
+        body: buildSeminarArtworkSummaryBody(
           conversation.selectedSeminarIds,
-          seminarOptions
+          resolution
         ),
       },
     ],
@@ -853,12 +886,14 @@ function promptForStep(
     case "AWAITING_START":
       return welcomeActions();
     case "AWAITING_NAME":
-      return [{ type: "TEXT", body: "*What is your full name?*" }];
+      return nameStepActions();
     case "AWAITING_EMAIL":
       return [
         {
           type: "TEXT",
-          body: "Please enter your email address.",
+          body: `What’s your email ID?
+
+I’ll send your registration confirmation and important event updates there too.`,
         },
       ];
     case "AWAITING_CLASS":
@@ -873,17 +908,17 @@ function promptForStep(
       return [
         {
           type: "TEXT",
-          body: "Please enter your school or college name.",
+          body: `Almost getting to the fun part 😄
+
+What’s the name of your school / PU college?`,
         },
       ];
     case "AWAITING_CITY":
       return [{ type: "TEXT", body: WHATSAPP_CITY_PROMPT }];
     case "AWAITING_SEMINARS":
-      return seminarDayCatalog
-        ? combinedSeminarSelectionActions(seminarDayCatalog)
-        : [];
+      return whatsAppSeminarPickerActions();
     case "AWAITING_SEMINAR_FINISH":
-      return seminarFinishButtonActions();
+      return seminarFinishReminderButtonActions();
     case "READY_TO_REGISTER":
       return [];
     case "COMPLETED":
@@ -932,6 +967,7 @@ function handleGlobalControls(
   conversation: WhatsAppConversationState,
   message: IncomingConversationMessage,
   seminarOptions: SeminarOption[],
+  eventArtworkSeminarOptions: SeminarOption[],
   seminarDayCatalog: WhatsAppSeminarDayCatalog,
   completedRegistrationNumber?: string | null,
   previousActivityAt?: Date | null
@@ -987,12 +1023,12 @@ function handleGlobalControls(
 
   if (interactiveId === REGISTRATION_INTERACTIVE_IDS.CONTINUE) {
     if (isLegacySeminarSelectionState(conversation)) {
-      return migrateLegacySeminarFlow(conversation, seminarDayCatalog);
+      return migrateLegacySeminarFlow(conversation);
     }
 
     const staleRecovery = recoverIfStaleSeminarSelections(
       conversation,
-      seminarDayCatalog
+      eventArtworkSeminarOptions
     );
     if (staleRecovery) {
       return staleRecovery;
@@ -1013,11 +1049,17 @@ function handleGlobalControls(
 
   if (conversation.status === "CANCELLED") {
     if (interactiveId === REGISTRATION_INTERACTIVE_IDS.START) {
-      const reset = createInitialConversationState(conversation.waId);
+      const reset = {
+        ...createInitialConversationState(conversation.waId),
+        registrationAttemptId: conversation.registrationAttemptId ?? null,
+      };
       return beginNameStep(reset, seminarOptions);
     }
     if (text && isGreetingText(text)) {
-      const reset = createInitialConversationState(conversation.waId);
+      const reset = {
+        ...createInitialConversationState(conversation.waId),
+        registrationAttemptId: conversation.registrationAttemptId ?? null,
+      };
       return {
         conversation: reset,
         actions: welcomeActions(),
@@ -1038,7 +1080,7 @@ function handleGlobalControls(
   ) {
     const staleRecovery = recoverIfStaleSeminarSelections(
       conversation,
-      seminarDayCatalog
+      eventArtworkSeminarOptions
     );
     if (staleRecovery) {
       return staleRecovery;
@@ -1062,6 +1104,7 @@ function handleGlobalControls(
     return recentGreetingRepromptResult(
       conversation,
       seminarOptions,
+      eventArtworkSeminarOptions,
       seminarDayCatalog,
       completedRegistrationNumber
     );
@@ -1074,7 +1117,7 @@ function handleGlobalControls(
     if (conversation.status === "READY_TO_REGISTER") {
       const staleRecovery = recoverIfStaleSeminarSelections(
         conversation,
-        seminarDayCatalog
+        eventArtworkSeminarOptions
       );
       if (staleRecovery) {
         return staleRecovery;
@@ -1124,6 +1167,7 @@ export function processRegistrationConversationTurn(input: {
   conversation: WhatsAppConversationState | null;
   message: IncomingConversationMessage;
   seminarOptions: SeminarOption[];
+  eventArtworkSeminarOptions: SeminarOption[];
   seminarDayCatalog: WhatsAppSeminarDayCatalog;
   waId: string;
   completedRegistrationNumber?: string | null;
@@ -1146,6 +1190,7 @@ export function processRegistrationConversationTurn(input: {
     conversation,
     input.message,
     input.seminarOptions,
+    input.eventArtworkSeminarOptions,
     input.seminarDayCatalog,
     input.completedRegistrationNumber,
     input.previousActivityAt
@@ -1159,7 +1204,10 @@ export function processRegistrationConversationTurn(input: {
       return beginNameStep(conversation, input.seminarOptions);
     }
     if (text && isGreetingText(text)) {
-      const reset = createInitialConversationState(conversation.waId);
+      const reset = {
+        ...createInitialConversationState(conversation.waId),
+        registrationAttemptId: conversation.registrationAttemptId ?? null,
+      };
       const actions = welcomeActions();
       if (sessionExpired) {
         actions.unshift(expiredSessionNoticeAction());
@@ -1188,17 +1236,32 @@ export function processRegistrationConversationTurn(input: {
         actions: [
           {
             type: "TEXT",
-            body: "Please enter a valid name (at least 2 characters).",
+            body: "That name doesn’t look complete. Please enter your full name as you’d like it on your event pass.",
           },
         ],
         refreshExpiry: false,
       };
     }
-    return withStep(
-      { ...conversation, studentName: text.trim() },
-      "AWAITING_EMAIL",
-      input.seminarOptions
-    );
+    const studentName = text.trim();
+    return {
+      conversation: {
+        ...conversation,
+        studentName,
+        currentStep: "AWAITING_EMAIL",
+        status: "ACTIVE",
+      },
+      actions: [
+        {
+          type: "TEXT",
+          body: `Nice to meet you, ${exportWhatsAppFirstName(studentName)}! 🙌`,
+        },
+        ...promptForStep("AWAITING_EMAIL", input.seminarOptions, {
+          ...conversation,
+          studentName,
+        }),
+      ],
+      refreshExpiry: true,
+    };
   }
 
   if (conversation.currentStep === "AWAITING_EMAIL") {
@@ -1208,17 +1271,29 @@ export function processRegistrationConversationTurn(input: {
         actions: [
           {
             type: "TEXT",
-            body: "Please enter a valid email address.",
+            body: "That email doesn’t look quite right. Please check it once and enter a valid email ID.",
           },
         ],
         refreshExpiry: false,
       };
     }
-    return withStep(
-      { ...conversation, email: text.trim().toLowerCase() },
-      "AWAITING_CLASS",
-      input.seminarOptions
-    );
+    const email = text.trim().toLowerCase();
+    return {
+      conversation: {
+        ...conversation,
+        email,
+        currentStep: "AWAITING_CLASS",
+        status: "ACTIVE",
+      },
+      actions: [
+        { type: "TEXT", body: "Got it ✓" },
+        ...promptForStep("AWAITING_CLASS", input.seminarOptions, {
+          ...conversation,
+          email,
+        }),
+      ],
+      refreshExpiry: true,
+    };
   }
 
   if (conversation.currentStep === "AWAITING_CLASS") {
@@ -1229,20 +1304,32 @@ export function processRegistrationConversationTurn(input: {
       return {
         conversation,
         actions: [
-          {
-            type: "TEXT",
-            body: "Please choose your class from the list.",
-          },
+          { type: "TEXT", body: CONTROLLED_FIELD_RETRY_MESSAGE },
           ...classListActions(),
         ],
         refreshExpiry: false,
       };
     }
-    return withStep(
-      { ...conversation, classLabel },
-      "AWAITING_GENDER",
-      input.seminarOptions
-    );
+    return {
+      conversation: {
+        ...conversation,
+        classLabel,
+        currentStep: "AWAITING_GENDER",
+        status: "ACTIVE",
+      },
+      actions: [
+        {
+          type: "TEXT",
+          body: `Ah, big decision time 😄
+Let’s make Career Uttsav useful for you.`,
+        },
+        ...promptForStep("AWAITING_GENDER", input.seminarOptions, {
+          ...conversation,
+          classLabel,
+        }),
+      ],
+      refreshExpiry: true,
+    };
   }
 
   if (conversation.currentStep === "AWAITING_GENDER") {
@@ -1251,10 +1338,7 @@ export function processRegistrationConversationTurn(input: {
       return {
         conversation,
         actions: [
-          {
-            type: "TEXT",
-            body: "Please choose Male or Female.",
-          },
+          { type: "TEXT", body: CONTROLLED_FIELD_RETRY_MESSAGE },
           ...genderButtonActions(),
         ],
         refreshExpiry: false,
@@ -1273,10 +1357,7 @@ export function processRegistrationConversationTurn(input: {
       return {
         conversation,
         actions: [
-          {
-            type: "TEXT",
-            body: "Please choose your board from the list.",
-          },
+          { type: "TEXT", body: CONTROLLED_FIELD_RETRY_MESSAGE },
           ...boardListActions(),
         ],
         refreshExpiry: false,
@@ -1295,10 +1376,7 @@ export function processRegistrationConversationTurn(input: {
       return {
         conversation,
         actions: [
-          {
-            type: "TEXT",
-            body: "Please choose Science, Commerce, or Arts.",
-          },
+          { type: "TEXT", body: CONTROLLED_FIELD_RETRY_MESSAGE },
           ...streamButtonActions(),
         ],
         refreshExpiry: false,
@@ -1318,7 +1396,9 @@ export function processRegistrationConversationTurn(input: {
         actions: [
           {
             type: "TEXT",
-            body: "Please enter your school or college name.",
+            body: `Almost getting to the fun part 😄
+
+What’s the name of your school / PU college?`,
           },
         ],
         refreshExpiry: false,
@@ -1346,20 +1426,27 @@ export function processRegistrationConversationTurn(input: {
         status: "ACTIVE",
         currentStep: "AWAITING_SEMINARS",
       },
-      actions: combinedSeminarSelectionActions(input.seminarDayCatalog),
+      actions: [
+        { type: "TEXT", body: "Perfect 👍" },
+        ...whatsAppSeminarPickerActions(),
+      ],
       refreshExpiry: true,
     };
   }
 
   if (conversation.currentStep === "AWAITING_SEMINARS") {
     if (isLegacySeminarSelectionState(conversation)) {
-      return migrateLegacySeminarFlow(conversation, input.seminarDayCatalog);
+      return migrateLegacySeminarFlow(conversation);
     }
+
+    const resolution = resolveArtworkSeminarSelection(
+      input.eventArtworkSeminarOptions
+    );
 
     if (interactiveId && !text) {
       return {
         conversation,
-        actions: seminarSelectionErrorActions("EMPTY_OR_MALFORMED"),
+        actions: artworkSeminarSelectionErrorActions("MALFORMED"),
         refreshExpiry: false,
       };
     }
@@ -1367,16 +1454,16 @@ export function processRegistrationConversationTurn(input: {
     if (!text) {
       return {
         conversation,
-        actions: combinedSeminarSelectionActions(input.seminarDayCatalog),
+        actions: whatsAppSeminarPickerActions(),
         refreshExpiry: false,
       };
     }
 
-    const parsed = parseSeminarSelectionInput(text, input.seminarDayCatalog);
+    const parsed = parseArtworkSeminarSelectionInput(text, resolution);
     if (!parsed.ok) {
       return {
         conversation,
-        actions: seminarSelectionErrorActions(parsed.error),
+        actions: artworkSeminarSelectionErrorActions(parsed.error),
         refreshExpiry: false,
       };
     }
@@ -1387,7 +1474,7 @@ export function processRegistrationConversationTurn(input: {
   if (conversation.currentStep === "AWAITING_SEMINAR_FINISH") {
     const staleRecovery = recoverIfStaleSeminarSelections(
       conversation,
-      input.seminarDayCatalog
+      input.eventArtworkSeminarOptions
     );
     if (staleRecovery) {
       return staleRecovery;
@@ -1399,8 +1486,7 @@ export function processRegistrationConversationTurn(input: {
     ) {
       return transitionToReadyToRegisterAfterFinish(
         conversation,
-        input.seminarOptions,
-        input.seminarDayCatalog
+        input.eventArtworkSeminarOptions
       );
     }
 

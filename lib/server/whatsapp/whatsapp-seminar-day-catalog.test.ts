@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { CAREER_UTTSAV_SEMINARS } from "@/features/dashboard/seminars";
 import type { SeminarOption } from "@/lib/server/whatsapp/registration-conversation";
 import {
   buildSeminarFinishSummaryBody,
@@ -42,35 +43,59 @@ function buildLargeCatalog(): {
   };
 }
 
+function scheduledCanonicalOptions(): SeminarOption[] {
+  return CAREER_UTTSAV_SEMINARS.map((title, index) => ({
+    id: `sem-2026-${String(index + 1).padStart(2, "0")}`,
+    title,
+    date: index < 7 ? TEST_EVENT_START_DATE : TEST_EVENT_END_DATE,
+    startTime: `${String(10 + (index % 7)).padStart(2, "0")}:00`,
+  }));
+}
+
 describe("whatsapp seminar day catalog", () => {
-  const options = buildTestSeminarOptions();
+  const options = scheduledCanonicalOptions();
   const catalog = buildTestSeminarDayCatalog(options);
+
+  it("leaves undecided canonical seminars out of the day list", () => {
+    const undecided = buildTestSeminarDayCatalog();
+    expect(undecided.day1).toEqual([]);
+    expect(undecided.day2).toEqual([]);
+  });
 
   it("groups Day 1 from actual Day 1 seminar data", () => {
     expect(catalog.day1.map((seminar) => seminar.id)).toEqual([
-      "sem-d1-1",
-      "sem-d1-2",
-      "sem-d1-3",
+      "sem-2026-01",
+      "sem-2026-02",
+      "sem-2026-03",
+      "sem-2026-04",
+      "sem-2026-05",
+      "sem-2026-06",
+      "sem-2026-07",
     ]);
   });
 
   it("groups Day 2 from actual Day 2 seminar data", () => {
     expect(catalog.day2.map((seminar) => seminar.id)).toEqual([
-      "sem-d2-1",
-      "sem-d2-2",
+      "sem-2026-08",
+      "sem-2026-09",
+      "sem-2026-10",
+      "sem-2026-11",
+      "sem-2026-12",
+      "sem-2026-13",
+      "sem-2026-14",
     ]);
   });
 
   it("uses numeric keys for Day 1 display", () => {
     const message = formatCombinedSeminarSelectionMessage(catalog);
-    expect(message).toContain("1. Day 1 Seminar 1");
-    expect(message).toContain("3. Day 1 Seminar 3");
+    expect(message).toContain(`1. ${CAREER_UTTSAV_SEMINARS[0]}`);
+    expect(message).toContain(`3. ${CAREER_UTTSAV_SEMINARS[2]}`);
   });
 
   it("uses alphabetic keys for Day 2 display", () => {
     const message = formatCombinedSeminarSelectionMessage(catalog);
-    expect(message).toContain("a. Day 2 Seminar 1");
-    expect(message).toContain("b. Day 2 Seminar 2");
+    expect(message).toContain(`a. ${CAREER_UTTSAV_SEMINARS[7]}`);
+    expect(message).toContain(`b. ${CAREER_UTTSAV_SEMINARS[8]}`);
   });
 
   it("includes both days in one message", () => {
@@ -101,18 +126,28 @@ describe("whatsapp seminar day catalog", () => {
       TEST_EVENT_END_DATE
     );
     expect(ordered.day1.map((seminar) => seminar.id)).toEqual(["early", "late"]);
+    const withUnscheduled = buildWhatsAppSeminarDayCatalog(
+      [...shuffled, { id: "later", title: "Undecided" }],
+      TEST_EVENT_START_DATE,
+      TEST_EVENT_END_DATE
+    );
+    expect(withUnscheduled.day1.map((seminar) => seminar.id)).toEqual([
+      "early",
+      "late",
+    ]);
+    expect(withUnscheduled.day2).toEqual([]);
   });
 });
 
 describe("parseSeminarSelectionInput", () => {
-  const catalog = buildTestSeminarDayCatalog();
+  const catalog = buildLargeCatalog().catalog;
 
   it.each([
-    ["2", ["sem-d1-2"]],
-    ["b", ["sem-d2-2"]],
-    ["2,3", ["sem-d1-2", "sem-d1-3"]],
-    ["2,b", ["sem-d1-2", "sem-d2-2"]],
-    ["1,2,b", ["sem-d1-1", "sem-d1-2", "sem-d2-2"]],
+    ["2", ["d1-2"]],
+    ["b", ["d2-2"]],
+    ["2,3", ["d1-2", "d1-3"]],
+    ["2,b", ["d1-2", "d2-2"]],
+    ["1,2,b", ["d1-1", "d1-2", "d2-2"]],
   ])("accepts valid input %s", (input, expectedIds) => {
     const parsed = parseSeminarSelectionInput(input, catalog);
     expect(parsed).toEqual({ ok: true, seminarIds: expectedIds });
@@ -121,14 +156,14 @@ describe("parseSeminarSelectionInput", () => {
   it("accepts uppercase Day 2 letters", () => {
     expect(parseSeminarSelectionInput("A", catalog)).toEqual({
       ok: true,
-      seminarIds: ["sem-d2-1"],
+      seminarIds: ["d2-1"],
     });
   });
 
   it("accepts whitespace variants", () => {
     expect(parseSeminarSelectionInput("2 , 3", catalog)).toEqual({
       ok: true,
-      seminarIds: ["sem-d1-2", "sem-d1-3"],
+      seminarIds: ["d1-2", "d1-3"],
     });
   });
 
@@ -152,12 +187,12 @@ describe("parseSeminarSelectionInput", () => {
 
   it("maps numeric keys to Day 1 seminar IDs", () => {
     const parsed = parseSeminarSelectionInput("1", catalog);
-    expect(parsed).toEqual({ ok: true, seminarIds: ["sem-d1-1"] });
+    expect(parsed).toEqual({ ok: true, seminarIds: ["d1-1"] });
   });
 
   it("maps letter keys to Day 2 seminar IDs", () => {
     const parsed = parseSeminarSelectionInput("a", catalog);
-    expect(parsed).toEqual({ ok: true, seminarIds: ["sem-d2-1"] });
+    expect(parsed).toEqual({ ok: true, seminarIds: ["d2-1"] });
   });
 
   it("supports 1, 2, and 3 selections only", () => {
@@ -169,26 +204,26 @@ describe("parseSeminarSelectionInput", () => {
 });
 
 describe("buildSeminarFinishSummaryBody", () => {
-  const catalog = buildTestSeminarDayCatalog();
+  const { catalog, options } = buildLargeCatalog();
 
   it("groups selected seminars by day and omits empty day headings", () => {
     const body = buildSeminarFinishSummaryBody(
       catalog,
-      ["sem-d1-1", "sem-d1-2", "sem-d2-1"],
-      buildTestSeminarOptions()
+      ["d1-1", "d1-2", "d2-1"],
+      options
     );
     expect(body).toContain("Day 1");
-    expect(body).toContain("• Day 1 Seminar 1");
+    expect(body).toContain("• Day One Topic 1");
     expect(body).toContain("Day 2");
-    expect(body).toContain("• Day 2 Seminar 1");
+    expect(body).toContain("• Day Two Topic 1");
     expect(body).toContain("Completing your registration");
   });
 
   it("omits Day 2 when only Day 1 seminars are selected", () => {
     const body = buildSeminarFinishSummaryBody(
       catalog,
-      ["sem-d1-1"],
-      buildTestSeminarOptions()
+      ["d1-1"],
+      options
     );
     expect(body).toContain("Day 1");
     expect(body).not.toContain("Day 2");

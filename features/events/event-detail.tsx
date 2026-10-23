@@ -23,14 +23,18 @@ import {
   registrationsService,
 } from "@/services/api";
 import { getPartnerTierForEvent } from "@/lib/partner-event-config";
-import { isStudentRegistration } from "@/lib/registration-kinds";
 import { cn, formatDate, formatDateTime, formatNumber } from "@/lib/utils";
 import { CreateEventDialog } from "@/features/events/create-event-dialog";
 import { SeminarProgram } from "@/features/dashboard/seminar-program";
+import { isCurrentCareerUttsavSeminar } from "@/features/dashboard/seminars";
 import {
-  canonicalizeSeminarTitle,
-  seminarTitlesMatch,
-} from "@/features/dashboard/seminars";
+  compareScheduledSeminars,
+  SEMINAR_SCHEDULE_UNSET_LABEL,
+  seminarCapacityLabel,
+  seminarHallLabel,
+  seminarTimeLabel,
+} from "@/lib/seminar-schedule";
+import { buildCurrentSeminarInterestItems } from "@/lib/current-event-seminars";
 import {
   BRAND,
   INK,
@@ -57,53 +61,15 @@ function isCheckedIn(registration: Registration): boolean {
   );
 }
 
-function buildLiveSeminarInterestItems(
-  registrations: Registration[],
-  seminarTitles: readonly string[]
-): Array<{ name: string; value: number }> {
-  if (seminarTitles.length === 0) return [];
-
-  const map = new Map<string, number>();
-  for (const title of seminarTitles) {
-    map.set(title, 0);
-  }
-
-  for (const registration of registrations) {
-    if (!isStudentRegistration(registration)) continue;
-    for (const interest of registration.seminarInterests ?? []) {
-      const canonical = canonicalizeSeminarTitle(interest, seminarTitles);
-      const matched =
-        seminarTitles.find((title) => seminarTitlesMatch(title, canonical)) ??
-        null;
-      if (!matched) continue;
-      map.set(matched, (map.get(matched) ?? 0) + 1);
-    }
-  }
-
-  return seminarTitles.map((name) => ({
-    name,
-    value: map.get(name) ?? 0,
-  }));
-}
-
-function formatSeminarTime(time: string): string {
-  if (!time) return "—";
-  const [h, m] = time.split(":").map(Number);
-  if (Number.isNaN(h)) return time;
-  const d = new Date();
-  d.setHours(h, m || 0, 0, 0);
-  return d.toLocaleTimeString("en-IN", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
+function formatSeminarTime(time: string | null | undefined): string {
+  return seminarTimeLabel(time);
 }
 
 function eventOperatingCity(city: string): OperatingCity {
   return city.trim() === "Bangalore" ? "Bangalore" : "Bangalore";
 }
 
-function toDateOnly(value: string): string {
+function toDateOnly(value: string | null | undefined): string {
   if (!value) return "";
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   return value.slice(0, 10);
@@ -182,28 +148,50 @@ export function EventDetail({ eventId }: EventDetailProps) {
     const days = eachDayInclusive(event.startDate, event.endDate);
     const byDate = new Map<string, EventSeminar[]>();
     for (const day of days) byDate.set(day, []);
+    const unscheduled: EventSeminar[] = [];
     for (const seminar of event.seminars ?? []) {
       const key = toDateOnly(seminar.date);
+      if (!key) {
+        unscheduled.push(seminar);
+        continue;
+      }
       if (!byDate.has(key)) byDate.set(key, []);
       byDate.get(key)!.push(seminar);
     }
-    return Array.from(byDate.entries()).map(([date, seminars], index) => ({
-      date,
-      dayLabel: `Day ${index + 1}`,
-      seminars: [...seminars].sort((a, b) =>
-        a.startTime.localeCompare(b.startTime)
-      ),
-    }));
+    const scheduledDays = Array.from(byDate.entries()).map(
+      ([date, seminars], index) => ({
+        date,
+        dayLabel: `Day ${index + 1}`,
+        seminars: [...seminars].sort(compareScheduledSeminars),
+      })
+    );
+    if (unscheduled.length === 0) return scheduledDays;
+    return [
+      ...scheduledDays,
+      {
+        date: "",
+        dayLabel: SEMINAR_SCHEDULE_UNSET_LABEL,
+        seminars: [...unscheduled].sort(compareScheduledSeminars),
+      },
+    ];
   }, [event]);
 
-  const eventSeminarTitles = useMemo(
-    () => (event?.seminars ?? []).map((seminar) => seminar.title),
+  const currentEventSeminars = useMemo(
+    () =>
+      (event?.seminars ?? []).filter((seminar) =>
+        isCurrentCareerUttsavSeminar(seminar.title)
+      ),
     [event?.seminars]
+  );
+  const currentSeminarTitles = useMemo(
+    () => currentEventSeminars.map((seminar) => seminar.title),
+    [currentEventSeminars]
   );
 
   const seminarRegistrationItems = useMemo(
-    () => buildLiveSeminarInterestItems(registrations, eventSeminarTitles),
-    [registrations, eventSeminarTitles]
+    () =>
+      buildCurrentSeminarInterestItems(registrations, currentSeminarTitles),
+    [registrations, currentSeminarTitles]
   );
 
   if (eventQuery.isLoading) {
@@ -511,7 +499,7 @@ export function EventDetail({ eventId }: EventDetailProps) {
                           {day.dayLabel}
                         </h4>
                         <span className="text-xs" style={{ color: INK.muted }}>
-                          {formatDate(day.date)}
+                          {day.date ? formatDate(day.date) : SEMINAR_SCHEDULE_UNSET_LABEL}
                         </span>
                       </div>
                       {day.seminars.length === 0 ? (
@@ -558,6 +546,14 @@ export function EventDetail({ eventId }: EventDetailProps) {
                                   >
                                     {seminar.title}
                                   </p>
+                                  {!isCurrentCareerUttsavSeminar(seminar.title) ? (
+                                    <p
+                                      className="text-[11px] font-medium uppercase tracking-wide"
+                                      style={{ color: INK.muted }}
+                                    >
+                                      Legacy seminar
+                                    </p>
+                                  ) : null}
                                   <div className="flex flex-wrap gap-2 text-xs">
                                     <span
                                       className="inline-flex items-center rounded-md border bg-white px-2 py-0.5"
@@ -566,7 +562,7 @@ export function EventDetail({ eventId }: EventDetailProps) {
                                         color: INK.secondary,
                                       }}
                                     >
-                                      Audi {seminar.hall}
+                                      {seminarHallLabel(seminar.hall)}
                                     </span>
                                     <span
                                       className="inline-flex items-center rounded-md border bg-white px-2 py-0.5"
@@ -575,8 +571,7 @@ export function EventDetail({ eventId }: EventDetailProps) {
                                         color: INK.secondary,
                                       }}
                                     >
-                                      {seminar.panelistSlots} panelist
-                                      {seminar.panelistSlots === 1 ? "" : "s"}
+                                      {seminarCapacityLabel(seminar.panelistSlots)}
                                     </span>
                                   </div>
                                 </div>
@@ -594,12 +589,12 @@ export function EventDetail({ eventId }: EventDetailProps) {
         </TabsContent>
 
         <TabsContent value="registrations" className="mt-6">
-          {eventSeminarTitles.length === 0 ? (
+          {currentSeminarTitles.length === 0 ? (
             <div className={cn(surface.opening, "p-6 sm:p-8")}>
               <EmptyState
                 icon={Presentation}
-                title="No seminars scheduled"
-                description="Add seminars to this event to see seminar-wise registration interest."
+                title="No current seminars"
+                description="Seminar interest here uses the current catalogue. Earlier seminars stay on the schedule and on existing registrations."
               />
             </div>
           ) : (
@@ -610,12 +605,12 @@ export function EventDetail({ eventId }: EventDetailProps) {
               eventCities={[eventOperatingCity(event.city)]}
               registrations={registrations}
               events={[event]}
-              seminarTitles={eventSeminarTitles}
+              seminarTitles={currentSeminarTitles}
               uniformCards
               eventId={event.id}
               eventTitle={event.title}
-              eventSeminars={event.seminars ?? []}
-              subtitle={`${eventSeminarTitles.length} scheduled seminar${eventSeminarTitles.length === 1 ? "" : "s"} · live interest from registrations`}
+              eventSeminars={currentEventSeminars}
+              subtitle={`${currentSeminarTitles.length} current seminar${currentSeminarTitles.length === 1 ? "" : "s"} · live interest from registrations`}
             />
           )}
         </TabsContent>
