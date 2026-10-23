@@ -336,6 +336,101 @@ describe("event prisma write store", () => {
     expect(transaction).not.toHaveBeenCalled();
   });
 
+  it("does not delete assigned seminars when the payload still contains them", async () => {
+    const seminars = [
+      baseSeminar(),
+      baseSeminar({
+        id: SEM_B,
+        title: "Real Careers with Artificial Intelligence",
+        startTime: "11:30",
+        endTime: "12:30",
+        hall: 2,
+        panelistSlots: 2,
+      }),
+      baseSeminar({
+        id: "zyhwu550q",
+        title: "Architecture - A Promising Creative Career",
+        date: "2026-12-20",
+        hall: 1,
+        panelistSlots: 2,
+      }),
+    ];
+    const record = prismaEventRecord({
+      seminars: seminars.map((seminar) => ({
+        ...seminar,
+        eventId: EVENT_ID,
+      })),
+    });
+    eventFindUnique.mockResolvedValueOnce(record).mockResolvedValueOnce(record);
+    partnerAssignmentCount.mockResolvedValue(1);
+
+    await patchPrismaEventForApi(EVENT_ID, {
+      venue: "Palace Grounds",
+      seminars,
+    });
+
+    expect(seminarDeleteMany).not.toHaveBeenCalled();
+    expect(seminarCreate).not.toHaveBeenCalled();
+    expect(partnerAssignmentCount).not.toHaveBeenCalled();
+    for (const seminar of seminars) {
+      expect(seminarUpdate).toHaveBeenCalledWith({
+        where: { id: seminar.id },
+        data: {
+          title: seminar.title,
+          date: seminar.date,
+          startTime: seminar.startTime,
+          endTime: seminar.endTime,
+          panelistSlots: seminar.panelistSlots,
+          hall: seminar.hall,
+        },
+      });
+    }
+  });
+
+  it("still returns 409 when an assigned seminar is removed from the payload", async () => {
+    partnerAssignmentCount.mockResolvedValue(1);
+    await expect(
+      patchPrismaEventForApi(EVENT_ID, {
+        venue: "Palace Grounds",
+        seminars: [],
+      })
+    ).rejects.toMatchObject({
+      status: 409,
+      message: "Cannot remove seminar with active partner slot assignments",
+    });
+    expect(transaction).not.toHaveBeenCalled();
+    expect(seminarDeleteMany).not.toHaveBeenCalled();
+  });
+
+  it("stores null schedule fields on an existing seminar", async () => {
+    const seminar = baseSeminar({
+      date: null,
+      startTime: null,
+      endTime: null,
+      hall: null,
+      panelistSlots: null,
+    });
+    const record = prismaEventRecord({
+      seminars: [{ ...seminar, eventId: EVENT_ID }],
+    });
+    eventFindUnique.mockResolvedValueOnce(record).mockResolvedValueOnce(record);
+
+    await patchPrismaEventForApi(EVENT_ID, { seminars: [seminar] });
+
+    expect(seminarUpdate).toHaveBeenCalledWith({
+      where: { id: SEM_A },
+      data: {
+        title: seminar.title,
+        date: null,
+        startTime: null,
+        endTime: null,
+        panelistSlots: null,
+        hall: null,
+      },
+    });
+    expect(seminarDeleteMany).not.toHaveBeenCalled();
+  });
+
   it("syncs registration seminar titles by seminarId on title change", async () => {
     eventFindUnique
       .mockResolvedValueOnce(prismaEventRecord())

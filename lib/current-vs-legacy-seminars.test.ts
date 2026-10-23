@@ -6,10 +6,12 @@ import { describe, expect, it } from "vitest";
 import {
   CAREER_INTEREST_CATEGORIES,
   CAREER_UTTSAV_SEMINARS,
+  LEGACY_CAREER_UTTSAV_SEMINARS,
   isCurrentCareerUttsavSeminar,
 } from "@/features/dashboard/seminars";
 import { formatSeminarInterests } from "@/lib/enrich-registration";
 import {
+  buildCurrentCatalogueSeminarRows,
   buildCurrentSeminarInterestItems,
   seminarsAvailableForPartnerSlots,
   selectCurrentEventSeminars,
@@ -174,6 +176,68 @@ describe("current versus legacy seminars", () => {
     });
   });
 
+  it("shows the canonical 14 on the current dashboard and does not append legacy interests", () => {
+    expect(CAREER_UTTSAV_SEMINARS).toHaveLength(14);
+    expect(LEGACY_CAREER_UTTSAV_SEMINARS).toHaveLength(20);
+
+    const storedInterests = [
+      ...LEGACY_CAREER_UTTSAV_SEMINARS.map((name) => ({ name, value: 2 })),
+      {
+        name: "How to select a stream: Arts, Science or Commerce?",
+        value: 1,
+      },
+      { name: CAREER_UTTSAV_SEMINARS[1], value: 4 },
+    ];
+    const rows = buildCurrentCatalogueSeminarRows(storedInterests);
+
+    expect(rows).toHaveLength(14);
+    expect(rows).not.toHaveLength(
+      CAREER_UTTSAV_SEMINARS.length + LEGACY_CAREER_UTTSAV_SEMINARS.length
+    );
+    expect(new Set(rows.map((row) => row.name))).toEqual(
+      new Set(CAREER_UTTSAV_SEMINARS)
+    );
+    for (const legacyTitle of LEGACY_CAREER_UTTSAV_SEMINARS) {
+      expect(rows.map((row) => row.name)).not.toContain(legacyTitle);
+    }
+    expect(rows.map((row) => row.name)).not.toContain(
+      "How to select a stream: Arts, Science or Commerce?"
+    );
+    expect(
+      rows.find((row) => row.name === CAREER_UTTSAV_SEMINARS[1])?.value
+    ).toBe(4);
+  });
+
+  it("keeps the current seminar programme on the canonical 14 when legacy rows are also stored", () => {
+    const mixed = [
+      ...LEGACY_CAREER_UTTSAV_SEMINARS.map((title, index) => ({
+        id: `legacy-${index}`,
+        title,
+      })),
+      ...CAREER_UTTSAV_SEMINARS.map((title, index) => ({
+        id: `sem-2026-${String(index + 1).padStart(2, "0")}`,
+        title,
+      })),
+    ];
+    const current = selectCurrentEventSeminars(mixed);
+    expect(current).toHaveLength(14);
+    expect(current.map((seminar) => seminar.title)).toEqual([
+      ...CAREER_UTTSAV_SEMINARS,
+    ]);
+
+    const programme = buildCurrentCatalogueSeminarRows(
+      mixed.map((seminar) => ({ name: seminar.title, value: 1 })),
+      current.map((seminar) => seminar.title)
+    );
+    expect(programme).toHaveLength(14);
+    expect(new Set(programme.map((row) => row.name))).toEqual(
+      new Set(CAREER_UTTSAV_SEMINARS)
+    );
+    expect(programme.map((row) => row.name)).not.toContain(
+      LEGACY_CAREER_UTTSAV_SEMINARS[0]
+    );
+  });
+
   it("charts current seminars only and does not rewrite legacy interest", () => {
     const currentTitles = selectCurrentEventSeminars([
       ...PRODUCTION_LEGACY,
@@ -199,6 +263,7 @@ describe("current versus legacy seminars", () => {
   });
 
   it("keeps website and WhatsApp on the canonical 14", () => {
+    expect(WHATSAPP_ARTWORK_SEMINAR_DEFINITIONS).toHaveLength(14);
     expect(
       WHATSAPP_ARTWORK_SEMINAR_DEFINITIONS.map((definition) => definition.title)
     ).toEqual([...CAREER_UTTSAV_SEMINARS]);
@@ -214,6 +279,7 @@ describe("current versus legacy seminars", () => {
     const titles = [
       ...html.matchAll(/class="reg-seminar-chip" data-value="([^"]+)"/g),
     ].map((match) => match[1]);
+    expect(titles).toHaveLength(14);
     expect(titles).toEqual([...CAREER_UTTSAV_SEMINARS]);
     for (const seminar of PRODUCTION_LEGACY) {
       expect(html).not.toContain(seminar.title);

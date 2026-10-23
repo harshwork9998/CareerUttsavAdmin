@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 
-import { CAREER_UTTSAV_SEMINARS } from "@/features/dashboard/seminars";
+import { newSeminarTitleSuggestions } from "@/lib/event-seminar-drafts";
 import { BRAND, INK } from "@/features/dashboard/dashboard-ui";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -31,8 +31,9 @@ export function SeminarTitleCombobox({
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return [...CAREER_UTTSAV_SEMINARS];
-    return CAREER_UTTSAV_SEMINARS.filter((s) => s.toLowerCase().includes(q));
+    const suggestions = newSeminarTitleSuggestions();
+    if (!q) return [...suggestions];
+    return suggestions.filter((s) => s.toLowerCase().includes(q));
   }, [query]);
 
   const display = open ? query : value;

@@ -1,3 +1,7 @@
+import {
+  CAREER_UTTSAV_SEMINARS,
+  isCurrentCareerUttsavSeminar,
+} from "@/features/dashboard/seminars";
 import { generateId } from "@/lib/utils";
 import { savedSeminarSchedule } from "@/lib/seminar-schedule";
 import type { EventSeminar } from "@/types";
@@ -43,4 +47,22 @@ export function seminarSavePayload(drafts: readonly SeminarDraft[]): EventSemina
     title: row.title,
     ...savedSeminarSchedule(row),
   }));
+}
+
+/** Catalogue suggestions for a seminar the user is adding. Not an edit-form seed. */
+export function newSeminarTitleSuggestions(): readonly string[] {
+  return CAREER_UTTSAV_SEMINARS;
+}
+
+export function seminarEditorLegacyLabel(title: string): "Legacy seminar" | null {
+  if (!title.trim() || isCurrentCareerUttsavSeminar(title)) return null;
+  return "Legacy seminar";
+}
+
+export function eventSaveErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error) {
+    const message = error.message.trim();
+    if (message) return message;
+  }
+  return fallback;
 }

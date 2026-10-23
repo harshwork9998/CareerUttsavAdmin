@@ -1,4 +1,8 @@
-import { isCurrentCareerUttsavSeminar } from "@/features/dashboard/seminars";
+import {
+  CAREER_UTTSAV_SEMINARS,
+  canonicalizeSeminarTitle,
+  isCurrentCareerUttsavSeminar,
+} from "@/features/dashboard/seminars";
 import { isStudentRegistration } from "@/lib/registration-kinds";
 import type { Registration } from "@/types";
 
@@ -23,6 +27,31 @@ export function seminarsAvailableForPartnerSlots<
       isCurrentCareerUttsavSeminar(seminar.title) ||
       assignedSeminarIds.has(seminar.id)
   );
+}
+
+/**
+ * Cards for the current dashboard and current seminar programme.
+ * The catalogue is shown as-is. Stored historical titles stay on the
+ * registration record and are not added as extra current cards.
+ */
+export function buildCurrentCatalogueSeminarRows(
+  items: readonly { name: string; value: number }[],
+  catalog: readonly string[] = CAREER_UTTSAV_SEMINARS
+): Array<{ name: string; value: number }> {
+  const allowed = new Set(catalog);
+  const byName = new Map<string, number>();
+  for (const item of items) {
+    const name = canonicalizeSeminarTitle(item.name, catalog);
+    if (!allowed.has(name)) continue;
+    byName.set(name, (byName.get(name) ?? 0) + Number(item.value));
+  }
+
+  return catalog
+    .map((name) => ({
+      name,
+      value: byName.get(name) ?? 0,
+    }))
+    .sort((a, b) => b.value - a.value);
 }
 
 export function buildCurrentSeminarInterestItems(

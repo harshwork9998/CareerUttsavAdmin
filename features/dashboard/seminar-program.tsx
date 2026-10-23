@@ -23,9 +23,9 @@ import {
 } from "@/features/dashboard/dashboard-ui";
 import {
   CAREER_UTTSAV_SEMINARS,
-  canonicalizeSeminarTitle,
   seminarTitlesMatch,
 } from "@/features/dashboard/seminars";
+import { buildCurrentCatalogueSeminarRows } from "@/lib/current-event-seminars";
 import { SeminarBroadcastDialog } from "@/features/messaging/seminar-broadcast-dialog";
 import { citiesMatch } from "@/lib/event-cities";
 import {
@@ -596,32 +596,13 @@ export function SeminarProgram({
 }) {
   const uniformCards = uniformCardsProp ?? Boolean(seminarTitles);
   const catalog = useMemo(
-    () => seminarTitles ?? [...CAREER_UTTSAV_SEMINARS],
+    () => (seminarTitles ? [...seminarTitles] : [...CAREER_UTTSAV_SEMINARS]),
     [seminarTitles]
   );
-  const byName = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const item of items) {
-      const name = canonicalizeSeminarTitle(item.name, catalog);
-      map.set(name, (map.get(name) ?? 0) + Number(item.value));
-    }
-    return map;
-  }, [items, catalog]);
-
-  const seminars = useMemo(() => {
-    const rows = catalog.map((name) => ({
-      name,
-      value: byName.get(name) ?? 0,
-    }));
-    if (!seminarTitles) {
-      for (const [name, value] of byName) {
-        if (value > 0 && !catalog.includes(name)) {
-          rows.push({ name, value });
-        }
-      }
-    }
-    return rows.sort((a, b) => b.value - a.value);
-  }, [byName, catalog, seminarTitles]);
+  const seminars = useMemo(
+    () => buildCurrentCatalogueSeminarRows(items, catalog),
+    [items, catalog]
+  );
   const catalogLabel =
     subtitle ??
     `${seminars.length} seminar${seminars.length === 1 ? "" : "s"} · tap for registration breakdown`;

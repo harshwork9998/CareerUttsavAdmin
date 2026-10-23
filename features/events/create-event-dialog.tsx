@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Loader2, Minus, Plus } from "lucide-react";
@@ -19,10 +19,11 @@ import {
   TimeField,
   toISODate,
 } from "@/features/events/event-datetime-fields";
-import { isCurrentCareerUttsavSeminar } from "@/features/dashboard/seminars";
 import { SeminarTitleCombobox } from "@/features/events/seminar-title-combobox";
 import {
+  eventSaveErrorMessage,
   seminarDraftsFromEvent,
+  seminarEditorLegacyLabel,
   seminarSavePayload,
   type SeminarDraft,
 } from "@/lib/event-seminar-drafts";
@@ -169,12 +170,35 @@ export function CreateEventDialog({
   onOpenChange,
   event = null,
 }: CreateEventDialogProps) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {open ? (
+        <EventEditor
+          key={event ? `${event.id}:${event.updatedAt}` : "create"}
+          open={open}
+          onOpenChange={onOpenChange}
+          event={event}
+        />
+      ) : null}
+    </Dialog>
+  );
+}
+
+function EventEditor({
+  onOpenChange,
+  event = null,
+}: CreateEventDialogProps) {
   const queryClient = useQueryClient();
   const isEditing = Boolean(event);
+  const initialDrafts = event ? seminarDraftsFromEvent(event) : [];
+  const initialStart = event ? toDateOnly(event.startDate) : defaultFairStart();
+  const persistedSeminarIds = new Set(
+    (event?.seminars ?? []).map((seminar) => seminar.id).filter(Boolean)
+  );
   const eventsQuery = useQuery({
     queryKey: ["events"],
     queryFn: () => eventsService.getAll(),
-    enabled: open,
+    enabled: true,
   });
   const cityPlaceholder = useMemo(() => {
     const cities = getEventCities(eventsQuery.data ?? []);
@@ -183,16 +207,20 @@ export function CreateEventDialog({
       : "e.g. Bangalore";
   }, [eventsQuery.data]);
 
-  const [title, setTitle] = useState("");
-  const [city, setCity] = useState("");
-  const [venue, setVenue] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [dayCount, setDayCount] = useState(2);
-  const [startTime, setStartTime] = useState("09:00");
-  const [endTime, setEndTime] = useState("18:00");
-  const [hallCount, setHallCount] = useState(1);
-  const [seminarCount, setSeminarCount] = useState(0);
-  const [seminars, setSeminars] = useState<SeminarDraft[]>([]);
+  const [title, setTitle] = useState(event?.title ?? "");
+  const [city, setCity] = useState(event?.city ?? "");
+  const [venue, setVenue] = useState(event?.venue ?? "");
+  const [startDate, setStartDate] = useState(initialStart);
+  const [dayCount, setDayCount] = useState(
+    event ? inclusiveDayCount(initialStart, toDateOnly(event.endDate)) : 2
+  );
+  const [startTime, setStartTime] = useState(event?.startTime || "09:00");
+  const [endTime, setEndTime] = useState(event?.endTime || "18:00");
+  const [hallCount, setHallCount] = useState(
+    event ? Math.min(3, Math.max(1, event.hallCount || 1)) : 1
+  );
+  const [seminarCount, setSeminarCount] = useState(initialDrafts.length);
+  const [seminars, setSeminars] = useState<SeminarDraft[]>(initialDrafts);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const endDate = useMemo(
@@ -209,57 +237,14 @@ export function CreateEventDialog({
     [hallCount]
   );
 
-  useEffect(() => {
-    if (!open) return;
-    setErrors({});
-    if (event) {
-      const drafts = seminarDraftsFromEvent(event);
-      const eventStart = toDateOnly(event.startDate);
-      const eventEnd = toDateOnly(event.endDate);
-      setTitle(event.title);
-      setCity(event.city ?? "");
-      setVenue(event.venue ?? "");
-      setStartDate(eventStart);
-      setDayCount(inclusiveDayCount(eventStart, eventEnd));
-      setStartTime(event.startTime || "09:00");
-      setEndTime(event.endTime || "18:00");
-      setHallCount(Math.min(3, Math.max(1, event.hallCount || 1)));
-      setSeminarCount(drafts.length);
-      setSeminars(drafts);
-      return;
-    }
-    setTitle("");
-    setCity("");
-    setVenue("");
-    setStartDate(defaultFairStart());
-    setDayCount(2);
-    setStartTime("09:00");
-    setEndTime("18:00");
-    setHallCount(1);
-    setSeminarCount(0);
-    setSeminars([]);
-  }, [open, event]);
-
-  useEffect(() => {
-    if (!dayOptions.length) return;
+  const setHallCountAndClamp = (next: number) => {
+    setHallCount(next);
     setSeminars((prev) =>
       prev.map((row) =>
-        dayOptions.includes(row.date)
-          ? row
-          : { ...row, date: dayOptions[0] }
+        row.hall != null && row.hall > next ? { ...row, hall: next } : row
       )
     );
-  }, [dayOptions]);
-
-  useEffect(() => {
-    setSeminars((prev) =>
-      prev.map((row) =>
-        row.hall != null && row.hall > hallCount
-          ? { ...row, hall: hallCount }
-          : row
-      )
-    );
-  }, [hallCount]);
+  };
 
   const setCount = (next: number) => {
     const n = Math.max(0, Math.min(20, next));
@@ -395,8 +380,13 @@ export function CreateEventDialog({
       toast.success(isEditing ? "Event updated" : "Event created");
       onOpenChange(false);
     },
-    onError: () =>
-      toast.error(isEditing ? "Failed to update event" : "Failed to create event"),
+    onError: (error: unknown) =>
+      toast.error(
+        eventSaveErrorMessage(
+          error,
+          isEditing ? "Failed to update event" : "Failed to create event"
+        )
+      ),
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -406,7 +396,6 @@ export function CreateEventDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         hideClose
         className="flex max-h-[75vh] w-[75vw] max-w-[75vw] flex-col gap-0 overflow-hidden rounded-2xl border p-0 shadow-2xl"
@@ -524,7 +513,7 @@ export function CreateEventDialog({
                   <OptionPills
                     options={AUDI_OPTIONS}
                     value={hallCount}
-                    onChange={setHallCount}
+                    onChange={setHallCountAndClamp}
                   />
                   <FieldError message={errors.hallCount} />
                 </div>
@@ -599,28 +588,39 @@ export function CreateEventDialog({
                         >
                           Seminar {index + 1}
                         </p>
-                        {row.title.trim() &&
-                        !isCurrentCareerUttsavSeminar(row.title) ? (
-                          <span
-                            className="rounded-md border px-2 py-0.5 text-[11px] font-medium"
-                            style={{
-                              borderColor: LINE.subtle,
-                              color: INK.secondary,
-                            }}
-                          >
-                            Legacy seminar
-                          </span>
-                        ) : null}
+                        {(() => {
+                          const legacyLabel = seminarEditorLegacyLabel(row.title);
+                          return legacyLabel ? (
+                            <span
+                              className="rounded-md border px-2 py-0.5 text-[11px] font-medium"
+                              style={{
+                                borderColor: LINE.subtle,
+                                color: INK.secondary,
+                              }}
+                            >
+                              {legacyLabel}
+                            </span>
+                          ) : null;
+                        })()}
                       </div>
                       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                         <div className="space-y-2 sm:col-span-2 lg:col-span-3">
                           <Label>Seminar title</Label>
-                          <SeminarTitleCombobox
-                            value={row.title}
-                            onChange={(v) =>
-                              updateSeminar(index, { title: v })
-                            }
-                          />
+                          {persistedSeminarIds.has(row.key) ? (
+                            <Input
+                              value={row.title}
+                              onChange={(e) =>
+                                updateSeminar(index, { title: e.target.value })
+                              }
+                            />
+                          ) : (
+                            <SeminarTitleCombobox
+                              value={row.title}
+                              onChange={(v) =>
+                                updateSeminar(index, { title: v })
+                              }
+                            />
+                          )}
                           {errors[`sem-${index}-title`] && (
                             <FieldError message={errors[`sem-${index}-title`]} />
                           )}
@@ -789,6 +789,5 @@ export function CreateEventDialog({
           </DialogFooter>
         </form>
       </DialogContent>
-    </Dialog>
   );
 }
