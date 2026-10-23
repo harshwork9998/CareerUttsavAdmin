@@ -1,5 +1,29 @@
+import { readFile } from "fs/promises";
+import path from "path";
+
 import { PARTNER_PORTAL_URL } from "@/lib/partner-welcome-email-content";
 import { sendEmail, type SendEmailResult } from "@/lib/email";
+import {
+  buildPartnerAccessEmailContent,
+  type PartnerAccessEmailInput,
+} from "@/lib/server/partner-access-email-template";
+
+const LOGO_PATH = path.join(
+  process.cwd(),
+  "public",
+  "images",
+  "career-uttsav-logo.png"
+);
+const LOGO_CID = "career-uttsav-logo";
+
+async function loadPartnerAccessLogo(): Promise<string | null> {
+  try {
+    const bytes = await readFile(LOGO_PATH);
+    return bytes.toString("base64");
+  } catch {
+    return null;
+  }
+}
 
 function escapeHtml(value: string): string {
   return value
@@ -17,54 +41,27 @@ export function partnerPortalBaseUrl(): string {
   );
 }
 
-export const PARTNER_ACCESS_EMAIL_SUBJECT =
-  "Your Career Uttsav Partner Portal access";
-
 export function buildPartnerAccessEmail(input: {
   partnerName: string;
   login: string;
   temporaryPassword: string;
+  dueDate?: string | null;
+  supportEmail?: string;
+  supportPhone?: string | null;
+  includeLogo?: boolean;
+  portalUrl?: string;
 }): { subject: string; html: string; text: string } {
-  const name = input.partnerName.trim() || "Partner";
-  const portalUrl = partnerPortalBaseUrl();
-  const text = [
-    `Hello ${name},`,
-    "",
-    "Your Career Uttsav Partner Portal access has been created.",
-    "",
-    `Login ID:`,
-    input.login,
-    "",
-    `Temporary Password:`,
-    input.temporaryPassword,
-    "",
-    `Partner Portal:`,
-    portalUrl,
-    "",
-    "For security, you will be required to create a new password when you first log in.",
-    "",
-    "If you need assistance, contact:",
-    "info@careeruttsav.in",
-    "",
-    "Team Career Uttsav",
-    "K2 Learning Resources India Pvt. Ltd.",
-  ].join("\n");
-
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<body style="font-family:Arial,sans-serif;color:#14121A;line-height:1.5;">
-  <p>Hello ${escapeHtml(name)},</p>
-  <p>Your Career Uttsav Partner Portal access has been created.</p>
-  <p><strong>Login ID:</strong><br>${escapeHtml(input.login)}</p>
-  <p><strong>Temporary Password:</strong><br>${escapeHtml(input.temporaryPassword)}</p>
-  <p><strong>Partner Portal:</strong><br><a href="${escapeHtml(portalUrl)}">${escapeHtml(portalUrl)}</a></p>
-  <p>For security, you will be required to create a new password when you first log in.</p>
-  <p>If you need assistance, contact:<br>info@careeruttsav.in</p>
-  <p>Team Career Uttsav<br>K2 Learning Resources India Pvt. Ltd.</p>
-</body>
-</html>`;
-
-  return { subject: PARTNER_ACCESS_EMAIL_SUBJECT, html, text };
+  const content: PartnerAccessEmailInput = {
+    institutionName: input.partnerName,
+    portalUrl: input.portalUrl?.trim() || partnerPortalBaseUrl(),
+    portalLogin: input.login,
+    temporaryPassword: input.temporaryPassword,
+    dueDate: input.dueDate === undefined ? "2026-12-01" : input.dueDate,
+    supportEmail: input.supportEmail,
+    supportPhone: input.supportPhone,
+    includeLogo: input.includeLogo,
+  };
+  return buildPartnerAccessEmailContent(content);
 }
 
 export async function sendPartnerAccessEmail(input: {
@@ -72,13 +69,30 @@ export async function sendPartnerAccessEmail(input: {
   partnerName: string;
   login: string;
   temporaryPassword: string;
+  dueDate?: string | null;
+  supportPhone?: string | null;
 }): Promise<SendEmailResult> {
-  const message = buildPartnerAccessEmail(input);
+  const logo = await loadPartnerAccessLogo();
+  const message = buildPartnerAccessEmail({
+    ...input,
+    includeLogo: Boolean(logo),
+  });
   return sendEmail({
     to: input.to,
     subject: message.subject,
     html: message.html,
     text: message.text,
+    ...(logo
+      ? {
+          attachments: [
+            {
+              filename: "career-uttsav-logo.png",
+              content: logo,
+              contentId: LOGO_CID,
+            },
+          ],
+        }
+      : {}),
   });
 }
 

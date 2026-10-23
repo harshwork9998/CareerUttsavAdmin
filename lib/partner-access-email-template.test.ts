@@ -3,7 +3,10 @@ import path from "path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { sendEmail } from "@/lib/email";
-import { sendPartnerAccessEmail } from "@/lib/server/partner-access-email";
+import {
+  partnerPortalBaseUrl,
+  sendPartnerAccessEmail,
+} from "@/lib/server/partner-access-email";
 import {
   buildPartnerAccessEmailContent,
   escapePartnerAccessHtml,
@@ -122,8 +125,13 @@ describe("partner access email template", () => {
     expect(template).not.toContain("portalPasswordHash");
     expect(template).not.toContain("prisma");
     expect(sender).toContain("sendEmail");
+    expect(sender).toContain("buildPartnerAccessEmailContent");
+    expect(sender).toContain('from "@/lib/server/partner-access-email-template"');
     expect(sender).not.toContain("api.resend.com");
     expect(sender).not.toContain("portalPasswordHash");
+    expect(sender).not.toContain(
+      "Your Career Uttsav Partner Portal access has been created."
+    );
   });
 
   it("asks the recipient to change the password after first login", () => {
@@ -158,16 +166,40 @@ describe("partner access email transport", () => {
 
     expect(sendEmail).toHaveBeenCalledTimes(1);
     const input = vi.mocked(sendEmail).mock.calls[0]?.[0];
+    const portalUrl = partnerPortalBaseUrl();
+    const attending =
+      "Add attending team members to help us plan and coordinate the onboarding process more effectively for the event.";
     expect(input?.to).toBe("office@example.edu");
     expect(input?.from).toBeUndefined();
-    expect(input?.subject).toContain("Example University");
+    expect(input?.subject).toBe(
+      "You're Onboard! Let's Get Example University Event-Ready"
+    );
+    expect(input?.html).toContain("Example University");
+    expect(input?.text).toContain("Dear Example University Team,");
     expect(input?.html).toContain(PASSWORD);
-    expect(input?.text).toContain(PASSWORD);
+    expect(input?.text).toContain(`Temporary Password: ${PASSWORD}`);
+    expect(input?.html).toContain(portalUrl);
+    expect(input?.text).toContain(`Partner Portal: ${portalUrl}`);
+    expect(input?.html).toContain(LOGIN);
     expect(input?.html).toContain("1 December 2026");
     expect(input?.text).toContain("by 1 December 2026");
-    expect(input?.html).toContain(
-      "Add attending team members to help us plan and coordinate the onboarding process more effectively for the event."
+    expect(input?.html).toContain(attending);
+    expect(input?.text).toContain(attending);
+    expect(input?.html).toContain("info@careeruttsav.in");
+    expect(input?.text).toContain("info@careeruttsav.in");
+    expect(input?.html).not.toContain(
+      "Your Career Uttsav Partner Portal access has been created."
     );
+    expect(input?.text).not.toContain(
+      "Your Career Uttsav Partner Portal access has been created."
+    );
+    expect(input?.attachments?.[0]).toEqual(
+      expect.objectContaining({
+        filename: "career-uttsav-logo.png",
+        contentId: "career-uttsav-logo",
+      })
+    );
+    expect(input?.attachments?.[0]?.content.length).toBeGreaterThan(20);
     expect(JSON.stringify(input?.attachments ?? [])).not.toContain(PASSWORD);
     expect(input?.html).toContain("cid:career-uttsav-logo");
   });
