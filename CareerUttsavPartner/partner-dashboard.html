@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Career Uttsav · Partner Login</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650;9..144,700&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --brand-50: #F3F6FA;
+      --brand-100: #E8EEF6;
+      --brand-500: #3A5F96;
+      --brand-700: #1F3864;
+      --brand-800: #1A2F52;
+      --brand-950: #0B1628;
+      --ink: #1C2430;
+      --ink-2: #5A6574;
+      --ink-3: #7A8696;
+      --paper: #F7F6F3;
+      --paper-muted: #F1F0EC;
+      --surface: #FFFFFF;
+      --line: #E6E4DE;
+      --line-strong: #D4D1C8;
+      --brass: #C4A35A;
+      --brass-deep: #8A6A2F;
+      --brass-soft: #F5EEDC;
+      --teal: #0E7C7B;
+      --teal-soft: #E4F3F2;
+      --success: #2F6B4F;
+      --success-soft: rgba(47, 107, 79, 0.14);
+      --warn: #B07D2A;
+      --warn-soft: rgba(176, 125, 42, 0.16);
+      --shadow: 0 4px 12px rgba(18, 35, 63, 0.08), 0 16px 40px rgba(18, 35, 63, 0.08);
+      --radius: 18px;
+      --ease: cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: "Source Sans 3", system-ui, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(1100px 520px at 8% -8%, rgba(31, 56, 100, 0.08), transparent 55%),
+        radial-gradient(900px 480px at 100% 0%, rgba(196, 163, 90, 0.08), transparent 50%),
+        linear-gradient(180deg, #F7F6F3 0%, #F3F6FA 48%, #F1F0EC 100%);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+    h1, h2, h3, .display {
+      font-family: Fraunces, Georgia, serif;
+      font-weight: 650;
+      letter-spacing: -0.02em;
+    }
+    button, input, select, textarea { font: inherit; }
+    a { color: inherit; }
+
+    /* ——— Screens ——— */
+    .screen { display: none; min-height: 100vh; }
+    .screen.active { display: block; animation: fadeRise 0.55s var(--ease); }
+    @keyframes fadeRise {
+      from { opacity: 0; transform: translateY(14px); }
+      to { opacity: 1; transform: none; }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(-8px); }
+      to { opacity: 1; transform: none; }
+    }
+
+    /* ——— Login ——— */
+    .login-shell {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+    }
+    @media (max-width: 960px) {
+      .login-shell { grid-template-columns: 1fr; }
+      .login-hero { min-height: 42vh; }
+    }
+    .login-hero {
+      position: relative;
+      overflow: hidden;
+      background:
+        linear-gradient(165deg, rgba(11, 22, 40, 0.88) 0%, rgba(31, 56, 100, 0.78) 55%, rgba(138, 106, 47, 0.45) 100%),
+        url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+      color: white;
+      padding: 3rem clamp(1.5rem, 4vw, 3.5rem);
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+    }
+    .login-hero .brand-mark {
+      position: absolute;
+      top: 2.25rem;
+      left: clamp(1.5rem, 4vw, 3.5rem);
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .logo-mark {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      background: linear-gradient(145deg, var(--brass), #E0C988);
+      color: var(--brand-950);
+      display: grid;
+      place-items: center;
+      font-family: Fraunces, serif;
+      font-weight: 700;
+      font-size: 1.1rem;
+    }
+    .brand-name {
+      font-family: Fraunces, serif;
+      font-size: 1.35rem;
+      font-weight: 650;
+      line-height: 1.1;
+    }
+    .brand-sub {
+      font-size: 0.72rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      opacity: 0.7;
+      margin-top: 0.15rem;
+    }
+    .login-hero h1 {
+      font-size: clamp(2.4rem, 5vw, 3.6rem);
+      max-width: 11ch;
+      line-height: 1.05;
+      margin-bottom: 1rem;
+      animation: fadeRise 0.7s var(--ease) 0.1s both;
+    }
+    .login-hero p {
+      max-width: 34ch;
+      color: rgba(255,255,255,0.78);
+      font-size: 1.05rem;
+      line-height: 1.55;
+      animation: fadeRise 0.7s var(--ease) 0.2s both;
+    }
+    .login-panel {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2.5rem 1.5rem;
+    }
+    .login-card {
+      width: 100%;
+      max-width: 420px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      box-shadow: var(--shadow);
+      padding: 2rem 1.75rem 1.75rem;
+      animation: fadeRise 0.65s var(--ease) 0.15s both;
+    }
+    .login-card h2 {
+      font-size: 1.75rem;
+      color: var(--brand-700);
+      margin-bottom: 0.35rem;
+    }
+    .login-card .lede {
+      color: var(--ink-2);
+      font-size: 0.95rem;
+      margin-bottom: 1.5rem;
+      line-height: 1.45;
+    }
+    .field { margin-bottom: 1rem; }
+    .field label {
+      display: block;
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--ink-2);
+      margin-bottom: 0.4rem;
+    }
+    .field input {
+      width: 100%;
+      height: 46px;
+      border-radius: 12px;
+      border: 1px solid var(--line-strong);
+      background: var(--paper);
+      padding: 0 0.95rem;
+      color: var(--ink);
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .field input:focus {
+      border-color: var(--brand-500);
+      box-shadow: 0 0 0 3px rgba(31, 56, 100, 0.12);
+      background: white;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      height: 46px;
+      padding: 0 1.25rem;
+      border-radius: 999px;
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+      transition: transform 0.2s var(--ease), opacity 0.2s, background 0.2s;
+    }
+    .btn:hover { transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
+    .btn-primary {
+      width: 100%;
+      background: var(--brand-700);
+      color: white;
+      margin-top: 0.5rem;
+    }
+    .btn-primary:hover { background: var(--brand-800); }
+    .btn-ghost {
+      background: transparent;
+      color: var(--ink-2);
+      border: 1px solid var(--line);
+      height: 40px;
+      font-size: 0.9rem;
+    }
+    .btn-ghost:hover { background: var(--paper-muted); color: var(--ink); }
+    .btn-brass {
+      background: var(--brass-soft);
+      color: var(--brass-deep);
+      border: 1px solid rgba(196, 163, 90, 0.35);
+    }
+    .hint {
+      margin-top: 1.1rem;
+      padding: 0.85rem 1rem;
+      border-radius: 14px;
+      background: var(--brand-50);
+      border: 1px solid var(--brand-100);
+      font-size: 0.82rem;
+      color: var(--ink-2);
+      line-height: 1.45;
+    }
+    .hint strong { color: var(--brand-700); }
+    .login-error {
+      display: none;
+      margin-bottom: 0.85rem;
+      color: #A33B3B;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+    .login-error.show { display: block; }
+
+    /* ——— App chrome ——— */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      backdrop-filter: blur(14px);
+      background: rgba(247, 246, 243, 0.86);
+      border-bottom: 1px solid var(--line);
+    }
+    .topbar-inner {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 0.85rem 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+    .topbar-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.7rem;
+    }
+    .topbar-brand .brand-name { font-size: 1.15rem; color: var(--brand-700); }
+    .topbar-brand .brand-sub { color: var(--ink-3); }
+    .topbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+    }
+    .partner-pill {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.35rem 0.75rem 0.35rem 0.35rem;
+      border-radius: 999px;
+      background: white;
+      border: 1px solid var(--line);
+    }
+    .avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: linear-gradient(145deg, var(--brand-700), var(--brand-500));
+      color: white;
+      display: grid;
+      place-items: center;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+    .partner-pill span {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--ink);
+      max-width: 160px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    @media (max-width: 640px) {
+      .partner-pill span { display: none; }
+    }
+
+    .wrap {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 1.75rem 1.25rem 3.5rem;
+    }
+
+    /* ——— Welcome strip ——— */
+    .welcome {
+      position: relative;
+      overflow: hidden;
+      border-radius: 28px;
+      padding: clamp(1.5rem, 3vw, 2.25rem);
+      background:
+        radial-gradient(120% 90% at 0% 0%, var(--brand-50) 0%, var(--surface) 55%),
+        white;
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+      margin-bottom: 1.5rem;
+      animation: fadeRise 0.55s var(--ease);
+    }
+    .eyebrow {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--brand-700);
+      margin-bottom: 0.55rem;
+    }
+    .welcome h1 {
+      font-size: clamp(1.85rem, 3.5vw, 2.55rem);
+      color: var(--brand-950);
+      max-width: 18ch;
+      line-height: 1.1;
+    }
+    .welcome .sub {
+      margin-top: 0.65rem;
+      color: var(--ink-2);
+      max-width: 48ch;
+      line-height: 1.5;
+      font-size: 1rem;
+    }
+    .meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 1.25rem;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      border-radius: 999px;
+      padding: 0.35rem 0.8rem;
+      font-size: 0.8rem;
+      font-weight: 650;
+    }
+    .chip-tier {
+      background: var(--brass-soft);
+      color: var(--brass-deep);
+      border: 1px solid rgba(196, 163, 90, 0.4);
+    }
+    .chip-city {
+      background: var(--brand-50);
+      color: var(--brand-700);
+      border: 1px solid var(--brand-100);
+    }
+    .chip-ok {
+      background: var(--success-soft);
+      color: var(--success);
+    }
+
+    /* ——— Layout grid ——— */
+    .grid {
+      display: grid;
+      grid-template-columns: 1.35fr 0.85fr;
+      gap: 1.25rem;
+    }
+    @media (max-width: 900px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+    .stack { display: flex; flex-direction: column; gap: 1.25rem; }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      padding: 1.35rem 1.35rem 1.25rem;
+      box-shadow: 0 1px 2px rgba(18, 35, 63, 0.04), 0 6px 20px rgba(18, 35, 63, 0.05);
+      animation: fadeRise 0.55s var(--ease) both;
+    }
+    .panel:nth-child(2) { animation-delay: 0.05s; }
+    .panel:nth-child(3) { animation-delay: 0.1s; }
+    .panel-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    .panel-head h2 {
+      font-size: 1.35rem;
+      color: var(--brand-800);
+    }
+    .panel-head p {
+      margin-top: 0.25rem;
+      color: var(--ink-2);
+      font-size: 0.9rem;
+      line-height: 1.4;
+    }
+
+    /* Deliverables */
+    .deliverable {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 0.85rem;
+      align-items: start;
+      padding: 0.85rem 0;
+      border-top: 1px solid var(--line);
+    }
+    .deliverable:first-of-type { border-top: none; padding-top: 0.15rem; }
+    .check {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--success-soft);
+      color: var(--success);
+      display: grid;
+      place-items: center;
+      margin-top: 2px;
+      flex-shrink: 0;
+    }
+    .deliverable h3 {
+      font-family: "Source Sans 3", sans-serif;
+      font-size: 0.95rem;
+      font-weight: 650;
+      color: var(--ink);
+    }
+    .deliverable .opt {
+      margin-top: 0.2rem;
+      font-size: 0.82rem;
+      color: var(--ink-3);
+    }
+    .deliverable .tag {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--teal);
+      background: var(--teal-soft);
+      padding: 0.25rem 0.55rem;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+
+    /* Seminar slots */
+    .slot {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 0.95rem 1rem;
+      background: var(--paper);
+      margin-bottom: 0.65rem;
+    }
+    .slot:last-child { margin-bottom: 0; }
+    .slot-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.75rem;
+      align-items: baseline;
+    }
+    .slot h3 {
+      font-family: "Source Sans 3", sans-serif;
+      font-size: 0.95rem;
+      font-weight: 650;
+    }
+    .seats {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--brand-700);
+      background: var(--brand-50);
+      padding: 0.2rem 0.55rem;
+      border-radius: 999px;
+    }
+    .slot-meta {
+      margin-top: 0.35rem;
+      font-size: 0.82rem;
+      color: var(--ink-3);
+    }
+    .empty-soft {
+      padding: 1rem;
+      border-radius: 14px;
+      background: var(--paper-muted);
+      color: var(--ink-2);
+      font-size: 0.9rem;
+      line-height: 1.45;
+    }
+
+    /* Uploads */
+    .upload-grid {
+      display: grid;
+      gap: 0.75rem;
+    }
+    .upload-item {
+      border: 1.5px dashed var(--line-strong);
+      border-radius: 16px;
+      padding: 1rem;
+      background: linear-gradient(180deg, #fff, var(--paper));
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s, transform 0.2s var(--ease);
+    }
+    .upload-item:hover {
+      border-color: var(--brand-500);
+      background: var(--brand-50);
+      transform: translateY(-1px);
+    }
+    .upload-item.done {
+      border-style: solid;
+      border-color: rgba(47, 107, 79, 0.35);
+      background: linear-gradient(180deg, #fff, rgba(47, 107, 79, 0.05));
+    }
+    .upload-item h3 {
+      font-family: "Source Sans 3", sans-serif;
+      font-size: 0.92rem;
+      font-weight: 650;
+    }
+    .upload-item p {
+      margin-top: 0.25rem;
+      font-size: 0.8rem;
+      color: var(--ink-3);
+    }
+    .upload-item .status {
+      margin-top: 0.65rem;
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--warn);
+    }
+    .upload-item.done .status { color: var(--success); }
+    .upload-item input { display: none; }
+
+    /* Updates */
+    .update {
+      padding: 0.85rem 0;
+      border-top: 1px solid var(--line);
+      animation: slideIn 0.4s var(--ease) both;
+    }
+    .update:first-of-type { border-top: none; padding-top: 0; }
+    .update time {
+      display: block;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--brass-deep);
+      margin-bottom: 0.25rem;
+    }
+    .update h3 {
+      font-family: "Source Sans 3", sans-serif;
+      font-size: 0.95rem;
+      font-weight: 650;
+    }
+    .update p {
+      margin-top: 0.25rem;
+      font-size: 0.85rem;
+      color: var(--ink-2);
+      line-height: 1.45;
+    }
+
+    /* Password modal */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 80;
+      background: rgba(11, 22, 40, 0.4);
+      backdrop-filter: blur(10px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 1.25rem;
+      animation: fadeIn 0.35s var(--ease);
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal {
+      width: 100%;
+      max-width: 440px;
+      background: white;
+      border-radius: 24px;
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+      padding: 1.75rem;
+      animation: fadeRise 0.45s var(--ease);
+    }
+    .modal h2 { font-size: 1.45rem; color: var(--brand-800); margin-bottom: 0.35rem; }
+    .modal .lede { color: var(--ink-2); font-size: 0.92rem; margin-bottom: 1.15rem; line-height: 1.45; }
+
+    .toast {
+      position: fixed;
+      bottom: 1.25rem;
+      right: 1.25rem;
+      z-index: 90;
+      background: var(--brand-950);
+      color: white;
+      padding: 0.85rem 1.1rem;
+      border-radius: 14px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      box-shadow: var(--shadow);
+      transform: translateY(20px);
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.35s var(--ease);
+    }
+    .toast.show {
+      opacity: 1;
+      transform: none;
+    }
+
+    .footer-note {
+      margin-top: 2rem;
+      text-align: center;
+      font-size: 0.8rem;
+      color: var(--ink-3);
+    }
+    .footer-note a { color: var(--brand-700); font-weight: 600; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <!-- LOGIN -->
+  <section id="screen-login" class="screen active">
+    <div class="login-shell">
+      <aside class="login-hero" aria-hidden="false">
+        <div class="brand-mark">
+          <div class="logo-mark">CU</div>
+          <div>
+            <div class="brand-name">Career Uttsav</div>
+            <div class="brand-sub">K2 Group</div>
+          </div>
+        </div>
+        <h1>Your partnership, all in one place.</h1>
+        <p>
+          Review your package, manage seminar seats, and upload brand assets for Career Uttsav.
+        </p>
+      </aside>
+
+      <div class="login-panel">
+        <form class="login-card" id="login-form" autocomplete="on">
+          <h2>Partner Login</h2>
+          <p class="lede">Sign in with the credentials emailed by Team Career Uttsav.</p>
+          <div class="login-error" id="login-error">Invalid login or password. Try again.</div>
+          <div class="field">
+            <label for="login">Login</label>
+            <input id="login" name="login" type="email" value="partnerships@rvu.edu.in" required />
+          </div>
+          <div class="field">
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" value="TempPass9x" required />
+          </div>
+          <button class="btn btn-primary" type="submit">Sign in</button>
+          <div class="hint">
+            <strong>Demo:</strong> use the pre-filled credentials, or any email + password of 6+ characters.
+            You’ll be asked to set a new password after first login.
+          </div>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- DASHBOARD -->
+  <section id="screen-dashboard" class="screen">
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="topbar-brand">
+          <div class="logo-mark">CU</div>
+          <div>
+            <div class="brand-name">Career Uttsav</div>
+            <div class="brand-sub">Partner portal</div>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <button class="btn btn-ghost" type="button" id="btn-password">Change password</button>
+          <div class="partner-pill">
+            <div class="avatar">RV</div>
+            <span>RV University</span>
+          </div>
+          <button class="btn btn-ghost" type="button" id="btn-logout">Sign out</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <section class="welcome">
+        <p class="eyebrow">Welcome back</p>
+        <h1>You’re in, RV University.</h1>
+        <p class="sub">
+          Your Knowledge Partner (Gold) package for Career Uttsav Bangalore 2026 is confirmed.
+          Review benefits, check seats, and upload assets so we can go live on branding.
+        </p>
+        <div class="meta-row">
+          <span class="chip chip-tier">Knowledge Partner (Gold)</span>
+          <span class="chip chip-city">Bangalore · 2026</span>
+          <span class="chip chip-ok">Partnership confirmed</span>
+        </div>
+      </section>
+
+      <div class="grid">
+        <div class="stack">
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>Your package</h2>
+                <p>Discussed deliverables included in your sponsorship.</p>
+              </div>
+            </div>
+            <div id="deliverables">
+              <article class="deliverable">
+                <div class="check" aria-hidden="true">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>
+                </div>
+                <div>
+                  <h3>Stall Size (Square Meter)</h3>
+                  <p class="opt">Selected: 12 (4x3)</p>
+                </div>
+                <span class="tag">Included</span>
+              </article>
+              <article class="deliverable">
+                <div class="check" aria-hidden="true">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>
+                </div>
+                <div>
+                  <h3>Weblink in the Career Uttsav website</h3>
+                  <p class="opt">Partner page listing</p>
+                </div>
+                <span class="tag">Included</span>
+              </article>
+              <article class="deliverable">
+                <div class="check" aria-hidden="true">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>
+                </div>
+                <div>
+                  <h3>Common branding at event venue</h3>
+                  <p class="opt">Venue presence across Bangalore edition</p>
+                </div>
+                <span class="tag">Included</span>
+              </article>
+              <article class="deliverable">
+                <div class="check" aria-hidden="true">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>
+                </div>
+                <div>
+                  <h3>Full page write-up in the event souvenir</h3>
+                </div>
+                <span class="tag">Included</span>
+              </article>
+              <article class="deliverable">
+                <div class="check" aria-hidden="true">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>
+                </div>
+                <div>
+                  <h3>Advertisement in “Careers After +2”</h3>
+                  <p class="opt">Selected: full page</p>
+                </div>
+                <span class="tag">Included</span>
+              </article>
+              <article class="deliverable">
+                <div class="check" aria-hidden="true">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>
+                </div>
+                <div>
+                  <h3>Panel discussion</h3>
+                  <p class="opt">Selected: 60 mins</p>
+                </div>
+                <span class="tag">Included</span>
+              </article>
+              <article class="deliverable">
+                <div class="check" aria-hidden="true">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>
+                </div>
+                <div>
+                  <h3>Logo on B2C creatives</h3>
+                </div>
+                <span class="tag">Included</span>
+              </article>
+              <article class="deliverable">
+                <div class="check" aria-hidden="true">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>
+                </div>
+                <div>
+                  <h3>Access to pre-registered students</h3>
+                  <p class="opt">Selected: selected seminar session</p>
+                </div>
+                <span class="tag">Included</span>
+              </article>
+            </div>
+          </section>
+
+          <section class="panel" id="seminar-panel">
+            <div class="panel-head">
+              <div>
+                <h2>Seminar slots</h2>
+                <p>Panelist seats allotted for your linked events. Optional — may be empty if none were assigned.</p>
+              </div>
+            </div>
+            <div id="slots">
+              <article class="slot">
+                <div class="slot-top">
+                  <h3>Careers in Design &amp; Creative Industries</h3>
+                  <span class="seats">2 seats</span>
+                </div>
+                <p class="slot-meta">Day 1 · 11:00 AM – 12:00 PM · Audi 1 · Bangalore</p>
+              </article>
+              <article class="slot">
+                <div class="slot-top">
+                  <h3>Engineering Pathways after Class 12</h3>
+                  <span class="seats">1 seat</span>
+                </div>
+                <p class="slot-meta">Day 2 · 2:30 PM – 3:30 PM · Audi 2 · Bangalore</p>
+              </article>
+            </div>
+          </section>
+        </div>
+
+        <div class="stack">
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>Brand assets</h2>
+                <p>Secure upload for logos, banners &amp; documents we need for production.</p>
+              </div>
+            </div>
+            <div class="upload-grid">
+              <label class="upload-item" data-upload="logo">
+                <input type="file" accept="image/png,image/svg+xml,image/jpeg" />
+                <h3>Primary logo</h3>
+                <p>PNG / SVG · transparent preferred · max 5 MB</p>
+                <div class="status">Awaiting upload</div>
+              </label>
+              <label class="upload-item" data-upload="banner">
+                <input type="file" accept="image/png,image/jpeg" />
+                <h3>Stall / venue banner</h3>
+                <p>JPG / PNG · 3000×1000 or similar · max 10 MB</p>
+                <div class="status">Awaiting upload</div>
+              </label>
+              <label class="upload-item" data-upload="writeup">
+                <input type="file" accept=".pdf,.doc,.docx" />
+                <h3>Souvenir write-up</h3>
+                <p>PDF / DOC · university profile copy</p>
+                <div class="status">Awaiting upload</div>
+              </label>
+              <label class="upload-item" data-upload="docs">
+                <input type="file" accept=".pdf,image/*" />
+                <h3>Other documents</h3>
+                <p>Tax / branding guidelines / extras</p>
+                <div class="status">Awaiting upload</div>
+              </label>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>Partnership updates</h2>
+                <p>Exclusive notes from Team Career Uttsav.</p>
+              </div>
+            </div>
+            <article class="update">
+              <time>10 Jul 2026</time>
+              <h3>Welcome aboard</h3>
+              <p>Your partner dashboard is live. Upload brand assets this week so venue creatives stay on schedule.</p>
+            </article>
+            <article class="update">
+              <time>8 Jul 2026</time>
+              <h3>Bangalore floor plan draft</h3>
+              <p>Stall allocation for Knowledge Partner (Gold) is under review. We’ll share your booth number shortly.</p>
+            </article>
+            <article class="update">
+              <time>5 Jul 2026</time>
+              <h3>Panel brief shared</h3>
+              <p>Speaker guidelines for your 60-min panel are ready. Check your SPOC email for the brief.</p>
+            </article>
+          </section>
+        </div>
+      </div>
+
+      <p class="footer-note">
+        Need help? <a href="mailto:info@careeruttsav.in">info@careeruttsav.in</a>
+        · K2 Learning Resources India Pvt. Ltd. ·
+        <a href="https://www.careeruttsav.in" target="_blank" rel="noopener">www.careeruttsav.in</a>
+      </p>
+    </main>
+  </section>
+
+  <!-- Change password -->
+  <div class="modal-backdrop" id="password-modal" role="dialog" aria-modal="true" aria-labelledby="pw-title">
+    <div class="modal">
+      <h2 id="pw-title">Set a new password</h2>
+      <p class="lede">Please change your temporary password after the first login.</p>
+      <form id="password-form">
+        <div class="field">
+          <label for="pw-new">New password</label>
+          <input id="pw-new" type="password" minlength="8" required placeholder="At least 8 characters" />
+        </div>
+        <div class="field">
+          <label for="pw-confirm">Confirm password</label>
+          <input id="pw-confirm" type="password" minlength="8" required />
+        </div>
+        <button class="btn btn-primary" type="submit">Save password</button>
+        <button class="btn btn-ghost" type="button" id="pw-skip" style="width:100%;margin-top:0.55rem">Skip for now</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status"></div>
+
+  <script>
+    const loginScreen = document.getElementById("screen-login");
+    const dashScreen = document.getElementById("screen-dashboard");
+    const passwordModal = document.getElementById("password-modal");
+    const toastEl = document.getElementById("toast");
+    let mustChangePassword = true;
+
+    function showToast(message) {
+      toastEl.textContent = message;
+      toastEl.classList.add("show");
+      clearTimeout(showToast._t);
+      showToast._t = setTimeout(() => toastEl.classList.remove("show"), 2600);
+    }
+
+    function openDashboard(firstLogin) {
+      loginScreen.classList.remove("active");
+      dashScreen.classList.add("active");
+      window.scrollTo({ top: 0, behavior: "instant" });
+      if (firstLogin && mustChangePassword) {
+        setTimeout(() => passwordModal.classList.add("open"), 420);
+      }
+    }
+
+    function openLogin() {
+      dashScreen.classList.remove("active");
+      loginScreen.classList.add("active");
+      passwordModal.classList.remove("open");
+    }
+
+    document.getElementById("login-form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const login = document.getElementById("login").value.trim();
+      const password = document.getElementById("password").value;
+      const err = document.getElementById("login-error");
+      if (!login || password.length < 6) {
+        err.classList.add("show");
+        return;
+      }
+      err.classList.remove("show");
+      openDashboard(true);
+      showToast("Signed in · welcome to your partner dashboard");
+    });
+
+    document.getElementById("btn-logout").addEventListener("click", () => {
+      openLogin();
+      showToast("Signed out");
+    });
+
+    document.getElementById("btn-password").addEventListener("click", () => {
+      passwordModal.classList.add("open");
+    });
+
+    document.getElementById("pw-skip").addEventListener("click", () => {
+      passwordModal.classList.remove("open");
+    });
+
+    document.getElementById("password-form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const a = document.getElementById("pw-new").value;
+      const b = document.getElementById("pw-confirm").value;
+      if (a !== b) {
+        showToast("Passwords do not match");
+        return;
+      }
+      mustChangePassword = false;
+      passwordModal.classList.remove("open");
+      showToast("Password updated");
+      e.target.reset();
+    });
+
+    passwordModal.addEventListener("click", (e) => {
+      if (e.target === passwordModal && !mustChangePassword) {
+        passwordModal.classList.remove("open");
+      }
+    });
+
+    document.querySelectorAll("[data-upload]").forEach((item) => {
+      const input = item.querySelector("input");
+      const status = item.querySelector(".status");
+      input.addEventListener("change", () => {
+        if (!input.files?.length) return;
+        const name = input.files[0].name;
+        item.classList.add("done");
+        status.textContent = "Uploaded · " + name;
+        showToast("Asset received · " + name);
+      });
+    });
+
+    // Optional: hide seminar panel to preview “no seats” state
+    // Toggle with ?noSlots=1
+    if (new URLSearchParams(location.search).has("noSlots")) {
+      document.getElementById("slots").innerHTML =
+        '<div class="empty-soft">No seminar seats were allotted for this partnership. Your package benefits still apply — focus on brand asset uploads.</div>';
+    }
+  </script>
+</body>
+</html>

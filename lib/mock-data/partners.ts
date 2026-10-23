@@ -115,6 +115,7 @@ export const mockPartners: Partner[] = [
     ],
     portalInviteEmail: "anitha.rao@christuniversity.in",
     portalLogin: "anitha.rao@christuniversity.in",
+    portalAccessEnabled: true,
     portalTempPassword: "ChristDemo9x",
     portalInviteSentAt: "2026-07-10T10:00:00+05:30",
     portalDocuments: mockDocs("001", [
@@ -191,6 +192,7 @@ export const mockPartners: Partner[] = [
     seminarSlotsConfirmedAt: "2026-06-28T16:45:00+05:30",
     portalInviteEmail: "kavitha.nair@pes.edu",
     portalLogin: "kavitha.nair@pes.edu",
+    portalAccessEnabled: true,
     portalTempPassword: "PesPortal9x",
     portalInviteSentAt: "2026-06-29T10:00:00+05:30",
     portalFasciaName: "PES UNIVERSITY",

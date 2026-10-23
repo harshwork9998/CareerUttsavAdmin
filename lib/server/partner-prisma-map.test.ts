@@ -63,6 +63,7 @@ function baseRecord(
     portalPasswordChangedAt: null,
     portalPasswordPromptSkippedAt: new Date("2026-08-18T07:01:20.660Z"),
     portalInviteSentAt: new Date("2026-07-10T10:00:00.000Z"),
+    portalAccessEnabled: true,
     portalDocuments: null,
     portalFasciaName: null,
     portalWebsiteUrl: null,

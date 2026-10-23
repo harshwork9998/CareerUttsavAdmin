@@ -1,4 +1,5 @@
 import { applyPartnerCredentialFields } from "@/lib/partner-credentials";
+import { portalLoginLookupFilter } from "@/lib/partner-login-identity";
 import {
   partnerNeedsEventLinkPrune,
   prunePartnerEventLinks,
@@ -51,14 +52,11 @@ export async function findPartnersByPortalLoginForApi(
     return findPrismaPartnersByPortalLogin(login);
   }
 
-  const normalized = login.trim().toLowerCase();
-  if (!normalized) return [];
+  const where = portalLoginLookupFilter(login);
+  if (!where) return [];
 
   return loadPartners().filter((partner) => {
-    return (
-      partner.portalLogin?.trim().toLowerCase() === normalized ||
-      partner.portalInviteEmail?.trim().toLowerCase() === normalized
-    );
+    return partner.portalLogin?.trim().toLowerCase() === where.portalLoginNormalized;
   });
 }
 

@@ -1,9 +1,16 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Copy, KeyRound, Mail, RefreshCw, ShieldCheck } from "lucide-react";
+import { Copy, KeyRound, Mail, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  FieldError,
+  fieldErrorClass,
+} from "@/components/shared/form-field-error";
 import {
   BRAND,
   INK,
@@ -12,28 +19,28 @@ import {
   displayClass,
 } from "@/features/dashboard/dashboard-ui";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  FieldError,
-  fieldErrorClass,
-} from "@/components/shared/form-field-error";
 
 export function ChapterPartnerInvite(props: {
   inviteEmail: string;
-  setInviteEmail: (v: string) => void;
+  setInviteEmail: (value: string) => void;
   login: string;
-  setLogin: (v: string) => void;
+  setLogin: (value: string) => void;
   temporaryPassword: string;
-  passwordAlreadySet?: boolean;
-  onRegeneratePassword: () => void;
+  accessEnabled: boolean;
+  passwordSet: boolean;
+  passwordChangeRequired: boolean;
+  onGeneratePassword: () => void;
+  onSendEmail: () => void;
+  onSetAccess: (enabled: boolean) => void;
+  pending: boolean;
   errors: Record<string, string>;
+  notice?: string;
 }) {
-  const copyText = async (label: string, value: string) => {
+  const copyPassword = async () => {
+    if (!props.temporaryPassword) return;
     try {
-      await navigator.clipboard.writeText(value);
-      toast.success(`${label} copied`);
+      await navigator.clipboard.writeText(props.temporaryPassword);
+      toast.success("Temporary password copied");
     } catch {
       toast.error("Could not copy");
     }
@@ -54,19 +61,18 @@ export function ChapterPartnerInvite(props: {
           className="text-[11px] font-semibold tracking-[0.18em] uppercase"
           style={{ color: BRAND[700] }}
         >
-          Partner access
+          Partner Portal Access
         </p>
         <h3
           className={cn(displayClass, "mt-2 text-2xl font-bold sm:text-3xl")}
           style={{ color: INK.primary }}
         >
-          Send them in with a smile
+          Portal login
         </h3>
         <p className="mt-2 text-sm leading-relaxed" style={{ color: INK.secondary }}>
-          Use <strong>Send email &amp; finish</strong> below to open Gmail with the
-          recipient and subject pre-filled. The formatted HTML email is copied to
-          your clipboard — click in the message body and press <strong>Ctrl+V</strong>{" "}
-          to paste it before sending.
+          Generate a temporary password, copy it if you need it, and send the
+          access email from here. The current password cannot be shown again
+          after you leave this page.
         </p>
 
         <div className="mt-6 grid gap-4 lg:grid-cols-2">
@@ -77,86 +83,47 @@ export function ChapterPartnerInvite(props: {
             <div className="mb-3 flex items-center gap-2">
               <KeyRound className="h-4 w-4" style={{ color: BRAND[700] }} />
               <p className="text-sm font-semibold" style={{ color: INK.primary }}>
-                Login credentials
+                Login ID
               </p>
             </div>
-            <div className="space-y-3">
-              <div
-                className="space-y-1.5"
-                data-field-error={props.errors.login ? "true" : undefined}
-              >
-                <Label>Login ID</Label>
-                <div className="flex gap-2">
-                  <Input
-                    type="email"
-                    value={props.login}
-                    onChange={(e) => props.setLogin(e.target.value)}
-                    className={fieldErrorClass(props.errors.login, "bg-white")}
-                    aria-invalid={Boolean(props.errors.login)}
-                    placeholder="Defaults to primary contact email"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    onClick={() => copyText("Login", props.login)}
-                    aria-label="Copy login"
-                  >
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                </div>
-                <FieldError message={props.errors.login} />
-                <p className="text-xs" style={{ color: INK.muted }}>
-                  Starts as the primary contact email from Partner details. Change
-                  it here if needed.
-                </p>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Temporary password</Label>
-                <div className="flex gap-2">
-                  <Input
-                    value={
-                      props.temporaryPassword ||
-                      (props.passwordAlreadySet ? "••••••••••••" : "")
-                    }
-                    readOnly
-                    className="bg-white font-mono"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    onClick={() =>
-                      copyText("Temporary password", props.temporaryPassword)
-                    }
-                    disabled={!props.temporaryPassword}
-                    aria-label="Copy password"
-                  >
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    onClick={props.onRegeneratePassword}
-                    aria-label="Regenerate password"
-                  >
-                    <RefreshCw className="h-4 w-4" />
-                  </Button>
-                </div>
-                {props.passwordAlreadySet && !props.temporaryPassword ? (
-                  <p className="text-xs" style={{ color: INK.muted }}>
-                    A password is already saved securely. Regenerate to create a
-                    new one for the invite email.
-                  </p>
-                ) : (
-                  <p className="text-xs" style={{ color: INK.muted }}>
-                    Shown once here for the invite — only a secure hash is stored.
-                  </p>
-                )}
-                <FieldError message={props.errors.password} />
-              </div>
+            <div
+              className="space-y-1.5"
+              data-field-error={props.errors.login ? "true" : undefined}
+            >
+              <Label>Login ID</Label>
+              <Input
+                type="email"
+                value={props.login}
+                onChange={(event) => props.setLogin(event.target.value)}
+                className={fieldErrorClass(props.errors.login, "bg-white")}
+                aria-invalid={Boolean(props.errors.login)}
+              />
+              <FieldError message={props.errors.login} />
             </div>
+            <dl className="mt-4 space-y-2 text-sm">
+              <div className="flex justify-between gap-3">
+                <dt style={{ color: INK.muted }}>Access</dt>
+                <dd className="font-semibold" style={{ color: INK.primary }}>
+                  {props.accessEnabled ? "Active" : "Disabled"}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt style={{ color: INK.muted }}>Password</dt>
+                <dd className="font-semibold" style={{ color: INK.primary }}>
+                  {props.passwordSet ? "Set" : "Not set"}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt style={{ color: INK.muted }}>First login</dt>
+                <dd className="font-semibold" style={{ color: INK.primary }}>
+                  {!props.passwordSet
+                    ? "—"
+                    : props.passwordChangeRequired
+                      ? "Password change required"
+                      : "Password changed"}
+                </dd>
+              </div>
+            </dl>
           </div>
 
           <div
@@ -177,27 +144,94 @@ export function ChapterPartnerInvite(props: {
               <Input
                 type="email"
                 value={props.inviteEmail}
-                onChange={(e) => props.setInviteEmail(e.target.value)}
+                onChange={(event) => props.setInviteEmail(event.target.value)}
                 className={fieldErrorClass(props.errors.inviteEmail, "bg-white")}
                 aria-invalid={Boolean(props.errors.inviteEmail)}
               />
               <FieldError message={props.errors.inviteEmail} />
               <p className="text-xs" style={{ color: INK.muted }}>
-                Where the welcome email is sent. Can differ from the login ID.
+                Where the access email is sent. This address is not a second login.
               </p>
             </div>
-            <div
-              className="mt-4 flex items-start gap-2 rounded-xl px-3 py-2.5 text-xs"
-              style={{ background: BRAND[50], color: INK.secondary }}
-            >
-              <ShieldCheck
-                className="mt-0.5 h-3.5 w-3.5 shrink-0"
-                style={{ color: BRAND[700] }}
+            <div className="mt-4 space-y-2">
+              <Label>Temporary password</Label>
+              <Input
+                value={props.temporaryPassword}
+                readOnly
+                className="bg-white font-mono"
+                placeholder={
+                  props.passwordSet
+                    ? "Reset password to generate new credentials."
+                    : "Generate a password to show it once."
+                }
               />
-              They’ll see deliverables, seminar seats, and upload logo/banner
-              documents from the partner dashboard after login.
+              <FieldError message={props.errors.password} />
             </div>
           </div>
+        </div>
+
+        <div className="mt-5 flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={props.pending}
+            onClick={props.onGeneratePassword}
+          >
+            {props.passwordSet ? "Reset Password" : "Generate Password"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={props.pending || !props.temporaryPassword}
+            onClick={() => void copyPassword()}
+          >
+            <Copy className="mr-2 h-4 w-4" />
+            Copy Password
+          </Button>
+          <Button
+            type="button"
+            disabled={props.pending || !props.temporaryPassword || !props.accessEnabled}
+            onClick={props.onSendEmail}
+          >
+            Send Access Email
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={props.pending || !props.accessEnabled}
+            onClick={() => props.onSetAccess(false)}
+          >
+            Disable Access
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={props.pending || props.accessEnabled}
+            onClick={() => props.onSetAccess(true)}
+          >
+            Enable Access
+          </Button>
+        </div>
+        {!props.temporaryPassword ? (
+          <p className="mt-3 text-xs" style={{ color: INK.muted }}>
+            Reset password to generate new credentials.
+          </p>
+        ) : null}
+        {props.notice ? (
+          <p className="mt-3 text-sm" style={{ color: INK.secondary }}>
+            {props.notice}
+          </p>
+        ) : null}
+        <div
+          className="mt-4 flex items-start gap-2 rounded-xl px-3 py-2.5 text-xs"
+          style={{ background: BRAND[50], color: INK.secondary }}
+        >
+          <ShieldCheck
+            className="mt-0.5 h-3.5 w-3.5 shrink-0"
+            style={{ color: BRAND[700] }}
+          />
+          A temporary password must be changed on first login. Disabling access
+          signs the partner out.
         </div>
       </motion.section>
     </div>

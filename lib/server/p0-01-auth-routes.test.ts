@@ -86,6 +86,7 @@ const samplePartner: Partner = {
     "scrypt$16384$8$1$aaaaaaaaaaaaaaaa$bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
   portalInviteEmail: "partner@test.edu",
   portalInviteSentAt: "2026-01-01T00:00:00.000Z",
+  portalAccessEnabled: true,
   portalAuthVersion: 1,
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",
@@ -514,7 +515,7 @@ describe("P0-01 API authorization", () => {
       expect(updatePartnerForApi).not.toHaveBeenCalled();
     });
 
-    it("PATCH portal partner with portalTempPassword delegates to credential handler", async () => {
+    it("PATCH portal partner rejects credential fields", async () => {
       const response = await partnerPortalPartnerPatch(
         new Request("http://localhost/api/partner-portal/partners/partner-001", {
           method: "PATCH",
@@ -529,14 +530,8 @@ describe("P0-01 API authorization", () => {
         }),
         { params: Promise.resolve({ id: "partner-001" }) }
       );
-      expect(response.status).toBe(200);
-      expect(updatePartnerForApi).toHaveBeenCalledWith(
-        "partner-001",
-        expect.objectContaining({
-          portalTempPassword: "NewPortalPass1",
-          portalAuthVersion: 2,
-        })
-      );
+      expect(response.status).toBe(403);
+      expect(updatePartnerForApi).not.toHaveBeenCalled();
     });
 
     it("GET /api/partner-portal/events without secret returns 401", async () => {
@@ -661,7 +656,7 @@ describe("P0-01 API authorization", () => {
       );
       expect(response.status).toBe(401);
       const body = (await response.json()) as { error?: string };
-      expect(body.error).toBe("Invalid login or password");
+      expect(body.error).toBe("Invalid login or password.");
     });
 
     it("WhatsApp webhook GET rejects invalid verify token with 403", async () => {

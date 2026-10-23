@@ -1,11 +1,11 @@
 import { Prisma } from "@/lib/generated/prisma/client";
 import { enrichPartnerWithEventCatalog } from "@/lib/partner-event-config";
+import { portalLoginLookupFilter } from "@/lib/partner-login-identity";
 import {
   mapPartnerEventLinks,
   mapPartnerEventPartnerships,
   mapPartnerSeminarSlotAssignments,
   mapPartnerSourceToPrisma,
-  normalizePortalLogin,
 } from "@/lib/server/partner-prisma-import-map";
 import {
   mapPrismaPartnerToApi,
@@ -135,16 +135,11 @@ export async function getPrismaPartnerById(id: string): Promise<Partner | null> 
 export async function findPrismaPartnersByPortalLogin(
   login: string
 ): Promise<Partner[]> {
-  const normalized = normalizePortalLogin(login);
-  if (!normalized) return [];
+  const where = portalLoginLookupFilter(login);
+  if (!where) return [];
 
   const records = await prisma.partner.findMany({
-    where: {
-      OR: [
-        { portalLoginNormalized: normalized },
-        { portalInviteEmailNormalized: normalized },
-      ],
-    },
+    where,
     include: partnerInclude,
   });
 

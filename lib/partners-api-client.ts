@@ -45,6 +45,26 @@ export async function updatePartnerApi(
   return parseJson<Partner>(res);
 }
 
+export type PartnerPortalAccessResponse = {
+  partner: Partner;
+  temporaryPassword?: string;
+  emailAccepted?: boolean;
+  emailOutcome?: string;
+  warning?: string;
+};
+
+export async function partnerPortalAccessApi(
+  id: string,
+  body: Record<string, unknown>
+): Promise<PartnerPortalAccessResponse> {
+  const res = await fetch(`/api/partners/${id}/portal-access`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return parseJson<PartnerPortalAccessResponse>(res);
+}
+
 export async function deletePartnerApi(id: string): Promise<Partner[]> {
   const res = await fetch(`/api/partners/${id}`, { method: "DELETE" });
   return parseJson<Partner[]>(res);

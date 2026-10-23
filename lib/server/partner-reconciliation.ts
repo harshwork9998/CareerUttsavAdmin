@@ -46,6 +46,7 @@ export const PARTNER_AUTH_FIELDS = [
   "portalPasswordChangedAt",
   "portalPasswordPromptSkippedAt",
   "portalInviteSentAt",
+  "portalAccessEnabled",
 ] as const;
 
 function normalizeDate(value: Date | string | null | undefined): number | null {
@@ -187,6 +188,7 @@ export function jsonPartnerToExpectedApiShape(partner: Partner): Partner {
     portalPasswordHash: partner.portalPasswordHash,
     portalInviteEmail: partner.portalInviteEmail,
     portalInviteSentAt: partner.portalInviteSentAt,
+    portalAccessEnabled: partner.portalAccessEnabled === true,
     portalDocuments: partner.portalDocuments,
     portalFasciaName: partner.portalFasciaName,
     portalWebsiteUrl: partner.portalWebsiteUrl,
@@ -388,6 +390,9 @@ export function comparePartnerAuthFields(
     normalizeDate(dbRecord.portalInviteSentAt)
   ) {
     mismatches.push("portalInviteSentAt");
+  }
+  if (mapped.portalAccessEnabled !== dbRecord.portalAccessEnabled) {
+    mismatches.push("portalAccessEnabled");
   }
 
   return mismatches;

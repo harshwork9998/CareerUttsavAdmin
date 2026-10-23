@@ -23,6 +23,7 @@ export type PartnerPortalPartnerDto = {
   portalAuthVersion?: number;
   portalInviteEmail?: string;
   portalInviteSentAt?: string;
+  portalAccessEnabled?: boolean;
   portalDocuments?: Partner["portalDocuments"];
   portalFasciaName?: string;
   portalWebsiteUrl?: string;
@@ -32,10 +33,7 @@ export type PartnerPortalPartnerDto = {
 };
 
 export function isPartnerPortalActivated(partner: Partner): boolean {
-  return Boolean(
-    partner.portalInviteSentAt ||
-      (partner.portalLogin && partnerHasPortalPassword(partner))
-  );
+  return partner.portalAccessEnabled === true;
 }
 
 export function toPartnerPortalPartnerDto(
@@ -63,6 +61,7 @@ export function toPartnerPortalPartnerDto(
     portalAuthVersion: partner.portalAuthVersion,
     portalInviteEmail: partner.portalInviteEmail,
     portalInviteSentAt: partner.portalInviteSentAt,
+    portalAccessEnabled: partner.portalAccessEnabled === true,
     portalDocuments: partner.portalDocuments ?? [],
     portalFasciaName: partner.portalFasciaName ?? "",
     portalWebsiteUrl: partner.portalWebsiteUrl ?? "",

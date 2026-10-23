@@ -5,6 +5,7 @@ import {
   deletePartnerApi,
   fetchAllPartners,
   fetchPartnerById,
+  partnerPortalAccessApi,
   updatePartnerApi,
 } from "@/lib/partners-api-client";
 import {
@@ -140,6 +141,8 @@ export const partnersService = {
     simulate(await createPartnerApi(partner)),
   update: async (id: string, data: Partial<Partner>) =>
     simulate(await updatePartnerApi(id, data)),
+  portalAccess: async (id: string, body: Record<string, unknown>) =>
+    simulate(await partnerPortalAccessApi(id, body)),
   delete: async (id: string) => simulate(await deletePartnerApi(id)),
 };
 

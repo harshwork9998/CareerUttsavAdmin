@@ -384,8 +384,12 @@ export interface Partner {
   hasPortalPassword?: boolean;
   /** Email address the invite was sent to */
   portalInviteEmail?: string;
-  /** When the welcome email with credentials was sent */
+  /** When sendEmail accepted the access email. Not set when compose was only prepared. */
   portalInviteSentAt?: string;
+  /** Explicit Partner Portal access switch. Independent of CRM stage. */
+  portalAccessEnabled?: boolean;
+  /** Historical first-login skip. It no longer grants dashboard access. */
+  portalPasswordPromptSkippedAt?: string;
   /** Brand assets & documents uploaded from the partner portal */
   portalDocuments?: PartnerPortalDocument[];
   /** Stall fascia name for venue board */

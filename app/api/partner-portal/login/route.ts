@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 
 import { authenticatePartnerPortalLogin } from "@/lib/partner-portal-auth";
+import {
+  clientIpFromRequest,
+  partnerLoginRateLimitKey,
+} from "@/lib/partner-login-rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -16,16 +20,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
+  const login = body.login ?? "";
   const result = await authenticatePartnerPortalLogin({
-    login: body.login ?? "",
+    login,
     password: body.password ?? "",
+    rateLimitKey: partnerLoginRateLimitKey(clientIpFromRequest(request), login),
   });
 
   if (!result.ok) {
-    return NextResponse.json(
-      { error: result.error, code: result.code },
-      { status: result.status }
-    );
+    return NextResponse.json({ error: result.error }, { status: result.status });
   }
 
   const { partner, mustChangePassword } = result;

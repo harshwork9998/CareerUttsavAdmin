@@ -199,6 +199,7 @@ export function mapPartnerSourceToPrisma(partner: Partner): MappedPartner {
         .portalPasswordPromptSkippedAt
     ),
     portalInviteSentAt: parseOptionalDate(partner.portalInviteSentAt),
+    portalAccessEnabled: partner.portalAccessEnabled === true,
     portalDocuments: toJsonValue(partner.portalDocuments ?? []),
     portalFasciaName: partner.portalFasciaName ?? null,
     portalWebsiteUrl: partner.portalWebsiteUrl ?? null,

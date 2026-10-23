@@ -65,10 +65,7 @@ export function migratePartnerCredentials(partner: Partner): Partner {
 }
 
 export function partnerHasPortalPassword(partner: Partner): boolean {
-  return Boolean(
-    isPartnerPasswordHash(partner.portalPasswordHash) ||
-      partner.portalTempPassword
-  );
+  return isPartnerPasswordHash(partner.portalPasswordHash);
 }
 
 export function toPublicPartner(partner: Partner): PublicPartner {
@@ -87,8 +84,5 @@ export function verifyStoredPartnerPassword(
   partner: Partner,
   password: string
 ): boolean {
-  if (isPartnerPasswordHash(partner.portalPasswordHash)) {
-    return verifyPartnerPassword(password, partner.portalPasswordHash);
-  }
-  return verifyPartnerPassword(password, partner.portalTempPassword);
+  return verifyPartnerPassword(password, partner.portalPasswordHash);
 }

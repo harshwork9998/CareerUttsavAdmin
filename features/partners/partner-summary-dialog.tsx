@@ -339,9 +339,14 @@ export function PartnerSummaryDialog({
       },
       {
         label: "Partner portal",
-        detail: partner.portalInviteSentAt
-          ? `Invite sent · ${partner.portalLogin || "—"}`
-          : "Access not sent",
+        detail:
+          partner.portalAccessEnabled === false
+            ? "Access disabled"
+            : partner.portalInviteSentAt
+              ? `Invite sent · ${partner.portalLogin || "—"}`
+              : partner.portalAccessEnabled
+                ? `Access active · ${partner.portalLogin || "—"}`
+                : "Access not enabled",
         date: partner.portalInviteSentAt,
         done: Boolean(partner.portalInviteSentAt),
       },

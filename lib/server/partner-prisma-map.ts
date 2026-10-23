@@ -136,6 +136,7 @@ export function mapPrismaPartnerToApi(record: PrismaPartnerRecord): Partner {
     portalPasswordHash: record.portalPasswordHash ?? undefined,
     portalInviteEmail: record.portalInviteEmail ?? undefined,
     portalInviteSentAt: optionalIso(record.portalInviteSentAt),
+    portalAccessEnabled: record.portalAccessEnabled === true,
     portalDocuments: readJsonArray<PartnerPortalDocument>(record.portalDocuments),
     portalFasciaName: record.portalFasciaName ?? undefined,
     portalWebsiteUrl: record.portalWebsiteUrl ?? undefined,

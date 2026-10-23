@@ -83,12 +83,7 @@ import {
   upsertEventPartnership,
 } from "@/lib/partner-event-config";
 import {
-  generateTempPassword,
-  buildPartnerWelcomeEmail,
   isPartnerPortalEmail,
-  openGmailComposeWindow,
-  openPartnerWelcomeGmailCompose,
-  PARTNER_WELCOME_EMAIL_SUBJECT,
   resolvePortalLogin,
 } from "@/lib/partner-invite";
 import {
@@ -382,6 +377,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
   const [inviteEmail, setInviteEmail] = useState("");
   const [portalLogin, setPortalLogin] = useState("");
   const [tempPassword, setTempPassword] = useState("");
+  const [accessNotice, setAccessNotice] = useState("");
   const [notProceedingOpen, setNotProceedingOpen] = useState(false);
   const [notProceedingReason, setNotProceedingReason] = useState("");
   const [notProceedingError, setNotProceedingError] = useState("");
@@ -446,13 +442,8 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       partner.portalInviteEmail || partner.primaryContact.email || ""
     );
     setPortalLogin(resolvePortalLogin(partner));
-    setTempPassword((prev) => {
-      if (prev) return prev;
-      // Password is never returned from the API (hash only). Existing partners
-      // must regenerate to set/send a new one; new partners get a fresh temp.
-      if (partner.hasPortalPassword) return "";
-      return generateTempPassword();
-    });
+    setTempPassword("");
+    setAccessNotice("");
   }, [partner?.id, partnerQuery.isSuccess, spocsQuery.isSuccess, spocsQuery.data]);
 
   // Once SPOCs load, resolve dropdown for an already-hydrated partner.
@@ -590,8 +581,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
         return;
       }
       if (vars.isFinal) {
-        // Skip dashboard rebuild here — it is heavy and blocks a snappy finish.
-        toast.success("Welcome email prepared with partner login");
+        toast.success("Partner access details saved");
         router.push("/partners");
         return;
       }
@@ -846,20 +836,10 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     }
     if (chapter === 8) {
       const login = portalLogin.trim().toLowerCase();
-      const password = tempPassword.trim();
-      const hasCredentials = Boolean(
-        login && (password || partner.hasPortalPassword)
-      );
       return {
         ...partner,
         portalLogin: login || partner.portalLogin,
-        // Write-only plaintext — API hashes and discards it.
-        ...(password ? { portalTempPassword: password } : {}),
         portalInviteEmail: inviteEmail.trim() || partner.portalInviteEmail,
-        // Activate portal access as soon as credentials exist (email send is separate).
-        portalInviteSentAt:
-          partner.portalInviteSentAt ??
-          (hasCredentials ? new Date().toISOString() : undefined),
       };
     }
     return null;
@@ -1595,44 +1575,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     if (!login || !isPartnerPortalEmail(login)) {
       next.login = "Login must be a valid email";
     }
-    if (!tempPassword.trim()) {
-      next.password = partner.hasPortalPassword
-        ? "Regenerate a password to include it in the invite email"
-        : "Password required";
-    }
     if (applyFormErrors(setErrors, next)) return;
-
-    // Open Gmail immediately under the user gesture (before any await).
-    openGmailComposeWindow(email, PARTNER_WELCOME_EMAIL_SUBJECT);
-
-    const welcomeEmail = buildPartnerWelcomeEmail({
-      partnerName: partner.name,
-      login,
-      temporaryPassword: tempPassword,
-    });
-
-    // Save and clipboard copy in parallel — don't block finish on either alone.
-    void openPartnerWelcomeGmailCompose({
-      to: email,
-      subject: welcomeEmail.subject,
-      html: welcomeEmail.html,
-      plainText: welcomeEmail.plainText,
-      skipOpen: true,
-    })
-      .then((pasteMode) => {
-        toast.success(
-          pasteMode === "html"
-            ? "Gmail opened — press Ctrl+V in the message body to paste the formatted email"
-            : "Gmail opened — formatted email copied as plain text; paste into the message body"
-        );
-      })
-      .catch((error) => {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : "Could not copy the welcome email — paste details manually in Gmail"
-        );
-      });
 
     saveMutation.mutate({
       create: false,
@@ -1641,18 +1584,47 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       data: {
         ...partner,
         portalLogin: login,
-        portalTempPassword: tempPassword,
         portalInviteEmail: email,
-        portalInviteSentAt: new Date().toISOString(),
         stage: partner.stage === "Not Proceeding" ? partner.stage : "Confirmed",
         stageRemarks: pushRemark(
           partner.stage,
           partner.stage === "Not Proceeding" ? "Not Proceeding" : "Confirmed",
-          `Partner access email prepared for ${email}`
+          "Partner portal login saved"
         ),
       },
     });
   };
+
+  const accessMutation = useMutation({
+    mutationFn: (body: Record<string, unknown>) =>
+      partnersService.portalAccess(partner!.id, body),
+    onSuccess: (result, variables) => {
+      persistCache(result.partner);
+      if (result.temporaryPassword) {
+        setTempPassword(result.temporaryPassword);
+        setAccessNotice("Temporary password is visible only until you leave this page.");
+      }
+      if (variables.action === "send_access_email") {
+        if (result.emailAccepted) {
+          setAccessNotice("Access email sent.");
+          toast.success("Access email sent");
+        } else {
+          setAccessNotice(
+            result.warning ??
+              "The access email was not sent. Retry while this password is still on screen."
+          );
+          toast.error("Access email was not sent");
+        }
+      } else if (variables.action === "set_access") {
+        toast.success(variables.enabled ? "Partner access enabled" : "Partner access disabled");
+      } else if (variables.action === "generate_password") {
+        toast.success("Temporary password generated");
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Could not update partner access");
+    },
+  });
 
   const confirmNotProceeding = () => {
     if (!partner) return;
@@ -1727,7 +1699,8 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
             : "")
       );
       setPortalLogin(resolvePortalLogin(partner));
-      setTempPassword(generateTempPassword());
+      setTempPassword("");
+      setAccessNotice("");
     }
 
     setResetOpen(false);
@@ -2058,9 +2031,27 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
                     login={portalLogin}
                     setLogin={setPortalLogin}
                     temporaryPassword={tempPassword}
-                    passwordAlreadySet={Boolean(partner.hasPortalPassword)}
-                    onRegeneratePassword={() =>
-                      setTempPassword(generateTempPassword())
+                    accessEnabled={partner.portalAccessEnabled === true}
+                    passwordSet={Boolean(partner.hasPortalPassword)}
+                    passwordChangeRequired={
+                      Boolean(partner.hasPortalPassword) &&
+                      !partner.portalPasswordChangedAt
+                    }
+                    pending={accessMutation.isPending}
+                    notice={accessNotice}
+                    onGeneratePassword={() =>
+                      accessMutation.mutate({ action: "generate_password" })
+                    }
+                    onSendEmail={() =>
+                      accessMutation.mutate({
+                        action: "send_access_email",
+                        temporaryPassword: tempPassword,
+                        portalLogin: portalLogin.trim().toLowerCase(),
+                        portalInviteEmail: inviteEmail.trim(),
+                      })
+                    }
+                    onSetAccess={(enabled) =>
+                      accessMutation.mutate({ action: "set_access", enabled })
                     }
                     errors={errors}
                   />
@@ -2139,7 +2130,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : null}
                     {chapter === 8
-                      ? "Send email & finish"
+                      ? "Save & finish"
                       : chapter === 3 && canAdvanceFromMeetings
                         ? "Continue to partnership details"
                         : "Save & next"}

@@ -16,17 +16,16 @@ export function isPartnerPasswordHash(value: string | undefined): boolean {
   return parts.length === 3 && parts[0] === SCRYPT_PREFIX && Boolean(parts[1] && parts[2]);
 }
 
-/** Verify a password against a stored scrypt hash (or legacy plaintext). */
+/**
+ * Verify a password against a stored scrypt hash.
+ * Non-scrypt values fail closed. They are not compared as plaintext.
+ * Reset those accounts from Admin if the hash-shape script reports any.
+ */
 export function verifyPartnerPassword(
   password: string,
   stored: string | undefined
 ): boolean {
-  if (!stored) return false;
-
-  if (!isPartnerPasswordHash(stored)) {
-    // Legacy plaintext rows — exact match only until migrated.
-    return stored === password;
-  }
+  if (!stored || !isPartnerPasswordHash(stored)) return false;
 
   const [, salt, expectedHex] = stored.split("$");
   if (!salt || !expectedHex) return false;

@@ -149,29 +149,32 @@ describe("partner service prisma mode auth", () => {
     expect(matches).toHaveLength(1);
   });
 
-  it("finds partner by portalInviteEmail via prisma lookup", async () => {
-    vi.mocked(findPrismaPartnersByPortalLogin).mockResolvedValue([
-      partner({ portalLogin: undefined }),
-    ]);
+  it("does not treat invite email as a login lookup", async () => {
+    vi.mocked(findPrismaPartnersByPortalLogin).mockResolvedValue([]);
     const matches = await findPartnersByPortalLoginForApi(
       "priya.verify@example.com"
     );
-    expect(matches).toHaveLength(1);
+    expect(matches).toHaveLength(0);
+    expect(findPrismaPartnersByPortalLogin).toHaveBeenCalledWith(
+      "priya.verify@example.com"
+    );
   });
 
-  it("rejects ambiguous cross-field login matches", async () => {
+  it("returns a generic failure when more than one login row matches", async () => {
     vi.mocked(findPrismaPartnersByPortalLogin).mockResolvedValue([
-      partner({ id: "partner-a" }),
-      partner({ id: "partner-b" }),
+      partner({ id: "partner-a", portalAccessEnabled: true }),
+      partner({ id: "partner-b", portalAccessEnabled: true }),
     ]);
     const result = await authenticatePartnerPortalLogin({
       login: "shared@example.com",
       password: "123456",
+      rateLimitKey: "test:shared@example.com",
     });
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.code).toBe("ambiguous_credentials");
-    expect(result.status).toBe(503);
+    expect(result.reason).toBe("ambiguous");
+    expect(result.status).toBe(401);
+    expect(result.error).toBe("Invalid login or password.");
   });
 });
 

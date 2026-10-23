@@ -8,10 +8,6 @@ export const PARTNER_PORTAL_PATCH_ALLOWED_KEYS = [
   "portalSmsContent",
   "portalSeminarSpeakers",
   "portalRepresentatives",
-  "portalPasswordChangedAt",
-  "portalPasswordPromptSkippedAt",
-  "portalTempPassword",
-  "portalAuthVersion",
 ] as const;
 
 const ALLOWED = new Set<string>(PARTNER_PORTAL_PATCH_ALLOWED_KEYS);
