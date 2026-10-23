@@ -52,6 +52,8 @@ function isPartnerPortalApi(pathname: string) {
 function isPublicRegistrationApi(pathname: string) {
   return (
     pathname.startsWith("/api/registrations") ||
+    pathname === "/api/registration-attempts" ||
+    pathname.startsWith("/api/registration-attempts/") ||
     pathname === "/api/send-otp" ||
     pathname === "/api/verify-otp"
   );
@@ -104,6 +106,8 @@ export const config = {
     "/api/registrations",
     "/api/registrations/check",
     "/api/registrations/:path*",
+    "/api/registration-attempts",
+    "/api/registration-attempts/:path*",
     "/api/send-otp",
     "/api/verify-otp",
   ],
