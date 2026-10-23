@@ -1,6 +1,7 @@
 import { readFile } from "fs/promises";
 import path from "path";
 
+import { loadSync, type Font } from "opentype.js";
 import QRCode from "qrcode";
 import sharp from "sharp";
 
@@ -25,6 +26,14 @@ export const EVENT_PASS_LOGO_PATH = path.join(
   "public",
   "images",
   "career-uttsav-logo.png"
+);
+
+/** Bundled face. Pass text is drawn as outlines so the server font set is irrelevant. */
+export const EVENT_PASS_FONT_PATH = path.join(
+  process.cwd(),
+  "public",
+  "fonts",
+  "LiberationSans-Bold.ttf"
 );
 
 const NAVY = "#0E1848";
@@ -268,6 +277,48 @@ function escapeXml(value: string): string {
     .replace(/'/g, "&apos;");
 }
 
+let cachedPassFont: Font | null = null;
+
+function passFont(): Font {
+  if (!cachedPassFont) {
+    cachedPassFont = loadSync(EVENT_PASS_FONT_PATH);
+  }
+  return cachedPassFont;
+}
+
+function outlinedText(value: string, x: number, y: number, extras: string): string {
+  const fontSize = Number(/font-size="([0-9.]+)"/.exec(extras)?.[1]);
+  if (!Number.isFinite(fontSize) || fontSize <= 0) {
+    throw new Error("Event pass text is missing a font size");
+  }
+  const letterSpacingPx = Number(/letter-spacing="([0-9.]+)"/.exec(extras)?.[1] ?? 0);
+  const anchor = /text-anchor="(middle|end|start)"/.exec(extras)?.[1] ?? "start";
+  const fill = /fill="(#[0-9A-Fa-f]{6})"/.exec(extras)?.[1] ?? INK;
+  const font = passFont();
+  for (const char of value) {
+    const glyph = font.charToGlyph(char);
+    if (glyph.unicode === undefined) {
+      throw new Error(
+        `Event pass font cannot draw ${JSON.stringify(char)} in ${JSON.stringify(value)}`
+      );
+    }
+  }
+  const options = {
+    letterSpacing: letterSpacingPx / fontSize,
+    kerning: true,
+  };
+  const advance = font.getAdvanceWidth(value, fontSize, options);
+  const visualWidth = advance - (value.length > 0 ? letterSpacingPx : 0);
+  let drawX = x;
+  if (anchor === "middle") drawX = x - visualWidth / 2;
+  else if (anchor === "end") drawX = x - visualWidth;
+  const d = font.getPath(value, drawX, y, fontSize, options).toPathData(2);
+  if (!d) {
+    throw new Error(`Event pass text produced no outline for ${JSON.stringify(value)}`);
+  }
+  return `<path data-pass-text="${escapeXml(value)}" d="${d}" fill="${fill}"/>`;
+}
+
 function calendarIcon(x: number, y: number): string {
   return `<g fill="none" stroke="${NAVY}" stroke-width="3" stroke-linecap="round">
     <rect x="${x}" y="${y}" width="36" height="34" rx="7"/>
@@ -289,13 +340,7 @@ export function buildEventPassSvg(input: {
 }): string {
   const { layout } = input;
   const registrationId = eventPassQrPayload(input.registrationId);
-  const text = (
-    value: string,
-    x: number,
-    y: number,
-    extras: string
-  ) =>
-    `<text x="${x}" y="${y}" ${extras}>${escapeXml(value)}</text>`;
+  const text = outlinedText;
 
   const seminarSvg: string[] = [];
   if (layout.seminarLines.length > 0) {
@@ -363,7 +408,6 @@ export function buildEventPassSvg(input: {
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${EVENT_PASS_WIDTH}" height="${EVENT_PASS_HEIGHT}" viewBox="0 0 ${EVENT_PASS_WIDTH} ${EVENT_PASS_HEIGHT}">
-  <style>text { font-family: "Segoe UI", Arial, Helvetica, sans-serif; }</style>
   <rect width="100%" height="100%" fill="#FFFFFF"/>
   <rect x="28" y="24" width="${EVENT_PASS_WIDTH - 56}" height="${EVENT_PASS_HEIGHT - 48}" rx="40" fill="#FFFFFF" stroke="${HAIRLINE}" stroke-width="2"/>
   <circle cx="70" cy="520" r="150" fill="#E7F4FC" fill-opacity="0.45"/>

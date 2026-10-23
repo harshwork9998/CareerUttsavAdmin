@@ -10,6 +10,7 @@ import {
 } from "@/features/dashboard/seminars";
 import {
   EVENT_PASS_DATE,
+  EVENT_PASS_FONT_PATH,
   EVENT_PASS_HEIGHT,
   EVENT_PASS_LOGO_PATH,
   EVENT_PASS_MIN_QR_PX,
@@ -206,6 +207,78 @@ describe("event pass image", () => {
     const corner = (info.width - 1) * channels;
     expect(data[0]).toBeGreaterThan(250);
     expect(data[corner]).toBeGreaterThan(250);
+  });
+
+  it("outlines English pass copy with the bundled font and keeps the QR payload", async () => {
+    const selected = [
+      CAREER_UTTSAV_SEMINARS[1]!,
+      CAREER_UTTSAV_SEMINARS[2]!,
+    ];
+    const layout = layoutEventPass(selected);
+    const svg = buildEventPassSvg({ registrationId: REGISTRATION_ID, layout });
+    expect(EVENT_PASS_FONT_PATH.replace(/\\/g, "/")).toMatch(
+      /public\/fonts\/LiberationSans-Bold\.ttf$/
+    );
+    expect(svg).not.toMatch(/<text[\s>]/);
+    expect(svg).not.toMatch(/font-family|Segoe UI|Helvetica|system-ui|Montserrat/i);
+    expect(svg).not.toContain("Arial");
+    for (const copy of [
+      "YOUR EVENT PASS",
+      "SCAN THIS QR",
+      "AT THE ENTRY GATE",
+      "YOUR SEMINAR SELECTIONS",
+      EVENT_PASS_DATE,
+      EVENT_PASS_VENUE_LINES[0],
+      EVENT_PASS_VENUE_LINES[1],
+      REGISTRATION_ID,
+      selected[0],
+      selected[1].replace(/&/g, "&amp;"),
+    ]) {
+      expect(svg).toContain(`data-pass-text="${copy}"`);
+    }
+    const outlined = svg.match(/data-pass-text="YOUR EVENT PASS" d="([^"]+)"/);
+    expect(outlined?.[1]).toMatch(/[CQ]/);
+    expect((outlined?.[1] ?? "").length).toBeGreaterThan(400);
+    expect(svg).toContain(`data-pass-text="2"`);
+    expect(svg).toContain(`data-pass-text="3"`);
+
+    const png = await renderEventPassPng({
+      registrationId: REGISTRATION_ID,
+      seminarTitles: selected,
+    });
+    const meta = await sharp(png).metadata();
+    expect(meta.width).toBe(EVENT_PASS_WIDTH);
+    expect(meta.height).toBe(EVENT_PASS_HEIGHT);
+
+    const { data, info } = await sharp(png).raw().toBuffer({ resolveWithObject: true });
+    const channels = info.channels;
+    let titleInk = 0;
+    const titleBaseline = layout.qrY - 8;
+    for (let y = titleBaseline - 40; y < titleBaseline; y += 1) {
+      for (let x = 280; x < 800; x += 1) {
+        const offset = (y * info.width + x) * channels;
+        const red = data[offset] ?? 255;
+        const green = data[offset + 1] ?? 255;
+        const blue = data[offset + 2] ?? 255;
+        if (red < 40 && green < 60 && blue > 40 && blue < 130) titleInk += 1;
+      }
+    }
+    expect(titleInk).toBeGreaterThan(400);
+
+    const qr = await renderEventPassQrPng(REGISTRATION_ID, layout.qrSize);
+    const qrRaw = await sharp(qr).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    let qrMismatch = 0;
+    const sampleStep = 8;
+    for (let y = 0; y < layout.qrSize; y += sampleStep) {
+      for (let x = 0; x < layout.qrSize; x += sampleStep) {
+        const passOffset = ((layout.qrY + y) * info.width + (layout.qrX + x)) * channels;
+        const qrOffset = (y * qrRaw.info.width + x) * qrRaw.info.channels;
+        if (Math.abs((data[passOffset] ?? 0) - (qrRaw.data[qrOffset] ?? 0)) > 12) {
+          qrMismatch += 1;
+        }
+      }
+    }
+    expect(qrMismatch).toBe(0);
   });
 
   it("renders one and three long seminars without clipping the canvas", async () => {
