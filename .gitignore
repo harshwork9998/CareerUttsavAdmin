@@ -50,3 +50,7 @@ temp-partner.json
 # IDE
 .idea
 .vscode
+
+# Local development folders
+/CareerUttsavPartner/
+/tmp/
