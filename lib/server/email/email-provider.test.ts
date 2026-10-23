@@ -39,6 +39,7 @@ const ENV_KEYS = [
   "SMTP_REQUIRE_TLS",
   "SMTP_FROM_EMAIL",
   "SMTP_FROM_NAME",
+  "SMTP_EHLO_NAME",
   "SMTP_USER",
   "SMTP_PASS",
 ] as const;
@@ -73,6 +74,7 @@ function useSmtpEnv() {
   process.env.SMTP_REQUIRE_TLS = "true";
   process.env.SMTP_FROM_EMAIL = "registrations@careeruttsav.in";
   process.env.SMTP_FROM_NAME = "Career Uttsav";
+  delete process.env.SMTP_EHLO_NAME;
   delete process.env.SMTP_USER;
   delete process.env.SMTP_PASS;
 }
@@ -165,6 +167,64 @@ describe("email provider routing", () => {
       })
     );
     expect(createTransport.mock.calls[0]?.[0]).not.toHaveProperty("auth");
+    expect(createTransport.mock.calls[0]?.[0]).not.toHaveProperty("name");
+  });
+
+  it("passes SMTP_EHLO_NAME to Nodemailer as transport.name", async () => {
+    useSmtpEnv();
+    process.env.SMTP_EHLO_NAME =
+      "ec2-65-2-156-37.ap-south-1.compute.amazonaws.com";
+
+    const result = await sendEmail(message);
+
+    expect(result).toMatchObject({
+      ok: true,
+      id: "<smtp-123@careeruttsav.in>",
+      outcome: "accepted",
+    });
+    expect(createTransport).toHaveBeenCalledWith(
+      expect.objectContaining({
+        host: "smtp-relay.gmail.com",
+        port: 587,
+        secure: false,
+        requireTLS: true,
+        name: "ec2-65-2-156-37.ap-south-1.compute.amazonaws.com",
+      })
+    );
+  });
+
+  it("keeps SMTP timeout and rejection outcomes when SMTP_EHLO_NAME is set", async () => {
+    useSmtpEnv();
+    process.env.SMTP_EHLO_NAME =
+      "ec2-65-2-156-37.ap-south-1.compute.amazonaws.com";
+
+    sendMail.mockRejectedValueOnce(
+      Object.assign(new Error("Connection timeout"), {
+        code: "ETIMEDOUT",
+      })
+    );
+    const timeoutResult = await sendEmail(message);
+    expect(timeoutResult).toMatchObject({
+      ok: false,
+      error: "Connection timeout",
+      outcome: "unknown",
+    });
+
+    sendMail.mockRejectedValueOnce(
+      Object.assign(new Error("Mailbox unavailable"), {
+        code: "EENVELOPE",
+        responseCode: 550,
+      })
+    );
+    const rejected = await sendEmail({
+      ...message,
+      timeoutMs: 12_000,
+    });
+    expect(rejected).toMatchObject({
+      ok: false,
+      error: "Mailbox unavailable",
+      outcome: "definitive_failure",
+    });
   });
 
   it("maps HTML, plain text, and Reply-To for SMTP", async () => {

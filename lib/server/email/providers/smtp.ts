@@ -168,6 +168,7 @@ function readSmtpConfig(timeoutMs: number | undefined): SmtpConfig {
 
   const timeout = transportTimeout(timeoutMs);
   const secure = port === 465;
+  const ehloName = process.env.SMTP_EHLO_NAME?.trim();
 
   const transport: SMTPTransportOptions = {
     host,
@@ -182,6 +183,10 @@ function readSmtpConfig(timeoutMs: number | undefined): SmtpConfig {
     debug: false,
     transactionLog: false,
   };
+
+  if (ehloName) {
+    transport.name = ehloName;
+  }
 
   if (auth) {
     transport.auth = auth;

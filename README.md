@@ -28,12 +28,13 @@ npm run dev
 | `SMTP_REQUIRE_TLS` | When provider is SMTP | `true` requires STARTTLS on port 587 |
 | `SMTP_FROM_EMAIL` | When provider is SMTP | Envelope sender, for example `registrations@careeruttsav.in` |
 | `SMTP_FROM_NAME` | When provider is SMTP | Display name, for example `Career Uttsav` |
-
-`EMAIL_PROVIDER=resend` is the current production behavior. Google Workspace SMTP relay is expected to authorize the server in Workspace admin by IP. Do not configure a mailbox password for that relay. `SMTP_USER` and `SMTP_PASS` are optional and are used only if SMTP AUTH is explicitly enabled later. Leave both unset for the IP-authorized relay.
+| `SMTP_EHLO_NAME` | When provider is SMTP | EHLO hostname. Production relay: `ec2-65-2-156-37.ap-south-1.compute.amazonaws.com` |
 | `PHONE_VERIFICATION_TOKEN_SECRET` | Recommended | Hashes opaque `verificationToken` values after OTP verify (not MSG91 OTPs) |
 | `OTP_PROVIDER` | Optional | `msg91` (default) or `mock` (local only) |
 | `MSG91_AUTH_KEY` | When `msg91` | MSG91 auth key — **server only, never expose to the browser** |
 | `MSG91_TEMPLATE_ID` | When `msg91` | MSG91 OTP Template ID from the MSG91 OTP section (not the DLT Template ID) |
+
+`EMAIL_PROVIDER=resend` is the current production behavior. Google Workspace SMTP relay is expected to authorize the server in Workspace admin by IP. Do not configure a mailbox password for that relay. `SMTP_USER` and `SMTP_PASS` are optional and are used only if SMTP AUTH is explicitly enabled later. Leave both unset for the IP-authorized relay. Set `SMTP_EHLO_NAME` to the sending server's public hostname. The production relay returns `421` and closes the connection when that EHLO name is omitted.
 
 Legacy `OTP_HASH_SECRET` is still accepted as a fallback for token hashing. Remove Twilio variables (`TWILIO_*`, `SMS_PROVIDER`) if present — they are unused.
 
