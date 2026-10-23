@@ -142,6 +142,7 @@ export function resolvePartnershipsForImport(partner: Partner): PartnerEventPart
     sponsorshipTier: partner.sponsorshipTier,
     deliverables: partner.deliverables ?? [],
     seminarSlotCount: slotCountByEvent.get(eventId) ?? 0,
+    representativeSlotCount: 0,
   }));
 }
 
@@ -237,6 +238,7 @@ export function mapPartnerEventPartnerships(
     customTierLabel: partnership.customTierLabel ?? null,
     deliverables: toJsonValue(partnership.deliverables ?? []),
     seminarSlotCount: partnership.seminarSlotCount ?? 0,
+    representativeSlotCount: partnership.representativeSlotCount ?? 0,
   }));
 }
 

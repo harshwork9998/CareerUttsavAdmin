@@ -10,6 +10,25 @@ export const STALL_SIZE_OPTIONS = [
 
 export const BOOK_AD_PLUS2_OPTIONS = ["half page", "full page"] as const;
 
+export const BOOK_AD_PLUS2_OPTION_LABELS: Record<
+  (typeof BOOK_AD_PLUS2_OPTIONS)[number],
+  string
+> = {
+  "full page": 'Full Page (6.5" W × 4.75" H)',
+  "half page": 'Half Page (6.5" W × 9.5" H)',
+};
+
+export function deliverableOptionLabel(
+  option: string | undefined
+): string {
+  if (!option) return "";
+  const label =
+    BOOK_AD_PLUS2_OPTION_LABELS[
+      option.trim().toLowerCase() as (typeof BOOK_AD_PLUS2_OPTIONS)[number]
+    ];
+  return label ?? option;
+}
+
 export const PANEL_DURATION_OPTIONS = ["45 mins", "60 mins"] as const;
 
 export const STALL_LOGO_POSITIONING_OPTIONS = [

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { toPartnerPortalPartnerDto } from "@/lib/server/partner-portal-dto";
+import { validatePartnerPortalContent } from "@/lib/server/partner-portal-content";
 import { parsePartnerPortalPatch } from "@/lib/server/partner-portal-patch";
 import { requirePartnerPortalServiceAuth } from "@/lib/server/partner-portal-service-auth";
 import { updatePartnerForApi } from "@/lib/server/partner-service";
@@ -19,6 +20,11 @@ export async function PATCH(request: Request, context: RouteContext) {
   const parsed = parsePartnerPortalPatch(body);
   if (!parsed.ok) {
     return NextResponse.json({ error: parsed.error }, { status: parsed.status });
+  }
+
+  const contentError = validatePartnerPortalContent(parsed.patch);
+  if (contentError) {
+    return NextResponse.json({ error: contentError }, { status: 400 });
   }
 
   const result = await updatePartnerForApi(id, parsed.patch);

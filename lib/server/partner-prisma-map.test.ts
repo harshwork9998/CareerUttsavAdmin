@@ -88,6 +88,7 @@ function baseRecord(
           },
         ],
         seminarSlotCount: 2,
+        representativeSlotCount: 0,
         seminarSlotAssignments: [
           {
             id: "pssa-partner-001-sem-001-a",

@@ -227,6 +227,7 @@ function normalizePartnerships(
     customTierLabel: partnership.customTierLabel,
     deliverables: partnership.deliverables ?? [],
     seminarSlotCount: partnership.seminarSlotCount ?? 0,
+    representativeSlotCount: partnership.representativeSlotCount ?? 0,
   }));
 }
 
@@ -249,6 +250,7 @@ function normalizeRelationalPartnerships(
     sponsorshipTier: partnership.sponsorshipTier ?? null,
     customTierLabel: partnership.customTierLabel ?? null,
     seminarSlotCount: partnership.seminarSlotCount ?? 0,
+    representativeSlotCount: partnership.representativeSlotCount ?? 0,
     deliverables: partnership.deliverables ?? [],
   }));
 }
@@ -432,6 +434,7 @@ export function comparePartnerRelationalState(
     sponsorshipTier: partnership.sponsorshipTier,
     customTierLabel: partnership.customTierLabel,
     seminarSlotCount: partnership.seminarSlotCount,
+    representativeSlotCount: partnership.representativeSlotCount ?? 0,
     deliverables: Array.isArray(partnership.deliverables)
       ? partnership.deliverables
       : [],

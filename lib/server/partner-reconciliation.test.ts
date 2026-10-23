@@ -81,6 +81,7 @@ function prismaPartnerFromJson(partner: Partner): PrismaPartnerRecord {
         customTierLabel: null,
         deliverables: (partner.deliverables ?? []) as unknown as PrismaPartnerRecord["eventPartnerships"][number]["deliverables"],
         seminarSlotCount: 0,
+        representativeSlotCount: 0,
         seminarSlotAssignments: [],
       },
     ],
@@ -143,6 +144,7 @@ describe("partner reconciliation", () => {
         sponsorshipTier: "Knowledge Partner (Silver)",
         deliverables: expected.deliverables,
         seminarSlotCount: 0,
+        representativeSlotCount: 0,
       },
     ]);
   });

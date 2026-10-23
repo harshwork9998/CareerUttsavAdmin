@@ -1465,6 +1465,13 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       if (ep.seminarSlotCount < 0) {
         next[`seminar-slots-${ep.eventId}`] = "Invalid slot count";
       }
+      if (
+        !Number.isInteger(ep.representativeSlotCount ?? 0) ||
+        (ep.representativeSlotCount ?? 0) < 0
+      ) {
+        next[`rep-slots-${ep.eventId}`] =
+          "Event representative slots must be a whole number of 0 or more.";
+      }
     }
 
     if (applyFormErrors(setErrors, next)) return;

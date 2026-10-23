@@ -334,6 +334,8 @@ export interface PartnerEventPartnership {
   deliverables: PartnerDeliverable[];
   /** Total panelist slots allotted for this event (set in deliverables step) */
   seminarSlotCount: number;
+  /** Admin-owned count of event representative forms for this partner/event */
+  representativeSlotCount?: number;
 }
 
 export interface Partner {
@@ -441,6 +443,8 @@ export interface SeminarSpeaker {
   contact?: string;
   /** Speaker bio / intro from partner portal */
   introduction?: string;
+  /** Optional LinkedIn profile URL from the partner portal */
+  linkedinProfile?: string;
   /** Headshot URL (data URL or hosted) from partner portal */
   photoUrl?: string;
   organization: string;
@@ -485,6 +489,8 @@ export interface PartnerSeminarSpeakerDetail {
   contact?: string;
   /** Speaker bio / intro for seminar programme (max 500 chars) */
   introduction?: string;
+  /** Optional LinkedIn profile URL */
+  linkedinProfile?: string;
   /** Headshot from partner portal */
   photoUrl?: string;
   /** @deprecated use contact */
@@ -503,6 +509,7 @@ export interface PartnerSeminarSpeakerSubmission {
 
 export interface PartnerRepresentative {
   name: string;
+  designation?: string;
   phone: string;
 }
 

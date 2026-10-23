@@ -82,6 +82,7 @@ export {
   buildDeliverablesForTier,
   applyTierDefaultsPreservingCustom,
   normalizeDeliverableOptions,
+  deliverableOptionLabel,
 } from "./partner-deliverables";
 export type {
   PartnerDeliverableKey,

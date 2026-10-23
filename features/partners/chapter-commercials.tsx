@@ -15,6 +15,7 @@ import {
   buildEventPackageSummaries,
   type EventPackageSummary,
 } from "@/lib/partner-event-config";
+import { deliverableOptionLabel } from "@/constants/partner-deliverables";
 import { cn } from "@/lib/utils";
 import type {
   Event,
@@ -337,7 +338,10 @@ function EventPackageCard({
                       {item.label}
                     </span>
                     {item.option ? (
-                      <span style={{ color: INK.muted }}> · {item.option}</span>
+                      <span style={{ color: INK.muted }}>
+                        {" "}
+                        · {deliverableOptionLabel(item.option)}
+                      </span>
                     ) : null}
                   </span>
                 </li>

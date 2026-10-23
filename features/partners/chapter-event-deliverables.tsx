@@ -7,6 +7,7 @@ import { Mic2, Plus, Trash2 } from "lucide-react";
 import {
   PARTNER_DELIVERABLE_DEFINITIONS,
   SPONSORSHIP_TIERS,
+  deliverableOptionLabel,
   type PartnerDeliverableKey,
 } from "@/constants";
 import {
@@ -226,7 +227,7 @@ function EventDeliverableList({
                     </span>
                   )}
                   {options ? (
-                    <div className="w-full sm:w-56 sm:shrink-0">
+                    <div className="w-full sm:w-80 sm:shrink-0">
                       <Select
                         value={item.option || undefined}
                         onValueChange={(v) => updateItem(item.id, { option: v })}
@@ -237,7 +238,7 @@ function EventDeliverableList({
                         <SelectContent>
                           {options.map((opt) => (
                             <SelectItem key={opt} value={opt}>
-                              {opt}
+                              {deliverableOptionLabel(opt)}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -311,7 +312,7 @@ function EventDeliverableList({
                   <SelectContent>
                     {selectedDefinition.options.map((opt) => (
                       <SelectItem key={opt} value={opt}>
-                        {opt}
+                        {deliverableOptionLabel(opt)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -404,7 +405,7 @@ function EventDeliverableList({
                 </span>
               </label>
               {options ? (
-                <div className="w-full sm:w-56 sm:shrink-0">
+                <div className="w-full sm:w-80 sm:shrink-0">
                   <Select
                     value={item.option || undefined}
                     onValueChange={(v) => updateItem(item.id, { option: v })}
@@ -416,7 +417,7 @@ function EventDeliverableList({
                     <SelectContent>
                       {options.map((opt) => (
                         <SelectItem key={opt} value={opt}>
-                          {opt}
+                          {deliverableOptionLabel(opt)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -694,6 +695,65 @@ export function ChapterEventDeliverables({
                 </div>
               </div>
               <FieldError message={errors[`seminar-slots-${ep.eventId}`]} />
+            </div>
+
+            <div
+              className={fieldErrorSurfaceClass(
+                errors[`rep-slots-${ep.eventId}`],
+                "rounded-xl border p-4"
+              )}
+              style={
+                errors[`rep-slots-${ep.eventId}`]
+                  ? undefined
+                  : {
+                      borderColor: LINE.subtle,
+                      background: PAPER.muted,
+                    }
+              }
+              data-field-error={
+                errors[`rep-slots-${ep.eventId}`] ? "true" : undefined
+              }
+            >
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className="text-sm font-semibold" style={{ color: INK.primary }}>
+                    Event representative slots
+                  </p>
+                  <p className="mt-0.5 text-xs" style={{ color: INK.muted }}>
+                    How many representative forms this partner can fill.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor={`reps-${ep.eventId}`} className="sr-only">
+                    Event representative slots
+                  </Label>
+                  <Input
+                    id={`reps-${ep.eventId}`}
+                    type="number"
+                    min={0}
+                    max={99}
+                    step={1}
+                    className={fieldErrorClass(
+                      errors[`rep-slots-${ep.eventId}`],
+                      "w-20 text-center tabular-nums"
+                    )}
+                    aria-invalid={Boolean(errors[`rep-slots-${ep.eventId}`])}
+                    value={ep.representativeSlotCount ?? 0}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      if (raw === "") {
+                        patchEvent(ep.eventId, { representativeSlotCount: 0 });
+                        return;
+                      }
+                      const n = Number(raw);
+                      if (!Number.isInteger(n) || n < 0) return;
+                      patchEvent(ep.eventId, { representativeSlotCount: n });
+                    }}
+                  />
+                  <span className="text-sm text-muted-foreground">slots</span>
+                </div>
+              </div>
+              <FieldError message={errors[`rep-slots-${ep.eventId}`]} />
             </div>
           </div>
         </motion.section>

@@ -14,11 +14,15 @@ function isValidRepPhone(phone: string): boolean {
 function isRepresentativesRowComplete(
   row: PartnerRepresentativesSubmission
 ): boolean {
+  if (row.count < 1) return true;
+  const visible = row.representatives.slice(0, row.count);
   return (
-    row.count >= 1 &&
-    row.representatives.length === row.count &&
-    row.representatives.every(
-      (r) => r.name.trim().length > 0 && isValidRepPhone(r.phone)
+    visible.length === row.count &&
+    visible.every(
+      (r) =>
+        r.name.trim().length > 0 &&
+        Boolean(r.designation?.trim()) &&
+        isValidRepPhone(r.phone)
     )
   );
 }
@@ -35,7 +39,7 @@ export function normalizePortalRepresentatives(
 
   if (Array.isArray(raw)) {
     return raw
-      .map((item) => {
+      .map((item): PartnerRepresentativesSubmission | null => {
         const row = item as Partial<PartnerRepresentativesSubmission>;
         const eventId = typeof row.eventId === "string" ? row.eventId : "";
         if (!eventId) return null;
@@ -45,6 +49,8 @@ export function normalizePortalRepresentatives(
           representatives: Array.isArray(row.representatives)
             ? row.representatives.map((r) => ({
                 name: typeof r?.name === "string" ? r.name : "",
+                designation:
+                  typeof r?.designation === "string" ? r.designation : "",
                 phone: typeof r?.phone === "string" ? r.phone : "",
               }))
             : [],
@@ -52,7 +58,7 @@ export function normalizePortalRepresentatives(
             typeof row.updatedAt === "string"
               ? row.updatedAt
               : new Date().toISOString(),
-        } satisfies PartnerRepresentativesSubmission;
+        };
       })
       .filter((r): r is PartnerRepresentativesSubmission => r !== null);
   }
@@ -71,6 +77,8 @@ export function normalizePortalRepresentatives(
         representatives: Array.isArray(legacy.representatives)
           ? legacy.representatives.map((r) => ({
               name: typeof r?.name === "string" ? r.name : "",
+              designation:
+                typeof r?.designation === "string" ? r.designation : "",
               phone: typeof r?.phone === "string" ? r.phone : "",
             }))
           : [],
@@ -123,7 +131,7 @@ export const PORTAL_SUBMISSION_ITEMS = [
   },
   {
     key: "representatives" as const,
-    label: "Event representatives",
+    label: "Event Representatives",
     type: "representatives" as const,
   },
 ] as const;
@@ -289,7 +297,7 @@ export function getPartnerPortalUploadStatus(
     },
     {
       key: "representatives",
-      label: "Event representatives",
+      label: "Event Representatives",
       complete: representativesComplete,
       uploaded: representativesComplete,
       kind: "representatives",

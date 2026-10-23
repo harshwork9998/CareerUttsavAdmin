@@ -384,6 +384,11 @@ function SubmissionPreview({
                                     speaker.email}
                                 </p>
                               ) : null}
+                              {speaker.linkedinProfile?.trim() ? (
+                                <p className="mt-1 text-xs" style={{ color: INK.secondary }}>
+                                  {speaker.linkedinProfile.trim()}
+                                </p>
+                              ) : null}
                               {speaker.introduction ? (
                                 <p
                                   className="mt-2 whitespace-pre-wrap text-xs leading-relaxed"
@@ -483,6 +488,9 @@ function SubmissionPreview({
                           style={{ color: INK.primary }}
                         >
                           {person.name || "—"}
+                        </p>
+                        <p className="text-xs" style={{ color: INK.secondary }}>
+                          {person.designation?.trim() || "—"}
                         </p>
                         <p className="text-xs" style={{ color: INK.secondary }}>
                           {person.phone || "—"}

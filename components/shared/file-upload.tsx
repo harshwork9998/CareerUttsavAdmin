@@ -4,8 +4,9 @@ import * as React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Upload, File, X, AlertCircle } from "lucide-react";
 
-import { cn } from "@/lib/utils";
+import { PORTAL_UPLOAD_ACCEPT, validateUploadFile } from "@/lib/partner-upload-policy";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export interface FileUploadProps {
   value?: File[];
@@ -29,7 +30,7 @@ function formatFileSize(bytes: number): string {
 export function FileUpload({
   value = [],
   onChange,
-  accept,
+  accept = PORTAL_UPLOAD_ACCEPT,
   multiple = false,
   maxSize,
   maxFiles,
@@ -51,14 +52,21 @@ export function FileUpload({
       return;
     }
 
-    if (maxSize) {
-      const oversized = fileArray.find((file) => file.size > maxSize);
-      if (oversized) {
-        setError(
-          `"${oversized.name}" exceeds the ${formatFileSize(maxSize)} limit`
-        );
-        return;
-      }
+    const invalid = fileArray.find(
+      (file) =>
+        validateUploadFile({
+          fileName: file.name,
+          fileSizeBytes: file.size,
+        }) !== null
+    );
+    if (invalid) {
+      setError(
+        validateUploadFile({
+          fileName: invalid.name,
+          fileSizeBytes: invalid.size,
+        }) ?? "Unsupported file format. Please upload a valid file."
+      );
+      return;
     }
 
     const nextFiles = multiple ? [...value, ...fileArray] : fileArray.slice(0, 1);

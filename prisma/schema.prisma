@@ -409,8 +409,10 @@ model PartnerEventPartnership {
   eventId          String
   sponsorshipTier  String?
   customTierLabel  String?
-  deliverables     Json    @default("[]")
-  seminarSlotCount Int     @default(0)
+  deliverables            Json @default("[]")
+  seminarSlotCount        Int  @default(0)
+  /// Admin-owned count of on-ground event representative forms for this partner.
+  representativeSlotCount Int  @default(0)
 
   partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
   event   Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)

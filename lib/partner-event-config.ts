@@ -115,6 +115,7 @@ export function resolveEventPartnerships(
     sponsorshipTier: tier,
     deliverables: baseDeliverables.map((d) => ({ ...d, id: idFactory() })),
     seminarSlotCount: slotCountByEvent.get(eventId) ?? 0,
+    representativeSlotCount: 0,
   }));
 }
 
@@ -227,6 +228,7 @@ export function upsertEventPartnership(
         eventId,
         deliverables: [],
         seminarSlotCount: 0,
+        representativeSlotCount: 0,
         ...patch,
       },
     ];
