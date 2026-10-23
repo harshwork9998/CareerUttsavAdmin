@@ -1,11 +1,18 @@
--- evt-001 canonical seminar insert.
--- Prepared only. Do not execute until the nullable-schedule migration is applied.
+-- SUPERSEDED. Do not execute.
 --
--- Inserts the 14 canonical identities with schedule fields NULL.
--- It does not update, rename, or delete the five legacy seminars.
--- It does not touch registrations, partner assignments, rosters, or WhatsApp.
+-- This file previously inserted the 14 canonical seminars and kept the five
+-- legacy evt-001 rows, then required a final count of 19.
+-- The production requirement is now 14 canonical rows and 0 legacy rows.
+-- Use scripts/production-evt-001-replace-legacy-seminars.sql.
+-- The exception below aborts this transaction before any insert.
 
 BEGIN;
+
+DO $$
+BEGIN
+  RAISE EXCEPTION
+    'Superseded. This script would leave legacy evt-001 seminars in place and expected a count of 19. Use scripts/production-evt-001-replace-legacy-seminars.sql.';
+END $$;
 
 CREATE TEMP TABLE canonical_schedule (
   id text PRIMARY KEY,
@@ -128,8 +135,13 @@ BEGIN
   JOIN canonical_schedule c ON c.id = s.id
   WHERE s."eventId" <> 'evt-001';
 
-  IF seminar_count <> 19 THEN
-    RAISE EXCEPTION 'evt-001 seminar count is %, expected 19.', seminar_count;
+  IF seminar_count <> 14 OR EXISTS (
+    SELECT 1 FROM seminars
+    WHERE id IN ('sem-001-a', 'sem-001-b', 'sem-001-c', 'sem-001-d', 'zyhwu550q')
+  ) THEN
+    RAISE EXCEPTION
+      'Obsolete success check. evt-001 must end at 14 canonical rows and 0 legacy rows (count is %). Use scripts/production-evt-001-replace-legacy-seminars.sql.',
+      seminar_count;
   END IF;
 
   IF EXISTS (
@@ -144,8 +156,8 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'Canonical seminar schedule fields must stay null on insert.';
   END IF;
-  IF canonical_count <> 14 OR distinct_titles <> 19 OR distinct_ids <> 19 OR wrong_event <> 0 THEN
-    RAISE EXCEPTION 'Canonical insert verification failed.';
+  IF canonical_count <> 14 OR distinct_titles <> 14 OR distinct_ids <> 14 OR wrong_event <> 0 THEN
+    RAISE EXCEPTION 'Canonical insert verification failed. This superseded script cannot commit.';
   END IF;
 
   IF (

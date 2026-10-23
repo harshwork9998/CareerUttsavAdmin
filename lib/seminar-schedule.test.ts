@@ -199,7 +199,10 @@ describe("nullable seminar schedule", () => {
       "utf8"
     );
     expect(sql).not.toContain("Approved schedule metadata is missing");
-    expect(sql).toContain("expected 19");
+    expect(sql).toContain("expected a count of 19");
+    expect(sql).toContain("Superseded");
+    expect(sql).toContain("production-evt-001-replace-legacy-seminars.sql");
+    expect(sql).toContain("0 legacy rows");
     expect(sql).toContain("evt-001 seminar count is not 5");
     expect(sql).toContain("Legacy rows changed during insert");
     expect(sql).toContain("sem-2026-01");
@@ -207,5 +210,39 @@ describe("nullable seminar schedule", () => {
     expect(sql).toContain("sem-001-a");
     expect(sql).toContain("Canonical seminar schedule fields must stay null");
     expect(sql).toContain("A registration, partner, roster, or WhatsApp reference changed");
+
+    const replacement = readFileSync(
+      join(
+        process.cwd(),
+        "scripts",
+        "production-evt-001-replace-legacy-seminars.sql"
+      ),
+      "utf8"
+    );
+    expect(replacement).toContain("MIGRATE_TO_CANONICAL");
+    expect(replacement).toContain("DELETE_ASSIGNMENT");
+    expect(replacement).toContain("DELETE_ROSTER");
+    expect(replacement).toContain("Do not invent canonical_seminar_id");
+    expect(replacement).toContain('SET "seminarId" = NULL');
+    expect(replacement).toContain("evt-001 final seminar state is not the 14 canonical rows");
+    expect(replacement).toContain("('997eo0v5r', 'DELETE_ROW')");
+    expect(replacement).toContain(
+      "('pssa-partner-001-sem-001-a', 'DELETE_ASSIGNMENT', NULL)"
+    );
+    expect(replacement).toContain(
+      "('pssa-partner-001-sem-001-b', 'DELETE_ASSIGNMENT', NULL)"
+    );
+    expect(replacement).toContain(
+      "('evt-001', 'sem-001-a', 'DELETE_ROSTER', NULL)"
+    );
+    expect(replacement).toContain("('partner-001', 'STRIP_LEGACY_SEMINAR_IDS')");
+    expect(replacement).toContain("Expected 11 historical registration-interest rows");
+    expect(replacement).toContain(
+      "Approved partner actions are DELETE_ASSIGNMENT for the two Christ University rows only."
+    );
+    expect(replacement).toContain(
+      "The only approved roster action is DELETE_ROSTER for evt-001 / sem-001-a."
+    );
+    expect(replacement).not.toContain("sem-2026-XX");
   });
 });
