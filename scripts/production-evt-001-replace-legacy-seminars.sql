@@ -1,6 +1,12 @@
 -- evt-001 legacy seminar replacement.
 -- Decisions below are filled. Do not execute until an operator runs it.
 --
+-- Current live evt-001 rows this script expects:
+--   997eo0v5r, sem-001-a, sem-001-b.
+-- sem-001-c, sem-001-d, and zyhwu550q were already removed.
+-- Their historical registration titles must already be detached
+-- (seminarId NULL) and are not deleted or rewritten.
+--
 -- Approved actions:
 --   DELETE 997eo0v5r, including its stored schedule.
 --   DELETE_ASSIGNMENT pssa-partner-001-sem-001-a and pssa-partner-001-sem-001-b.
@@ -22,17 +28,32 @@ CREATE TEMP TABLE legacy_seminar (
 
 INSERT INTO legacy_seminar (id) VALUES
   ('sem-001-a'),
-  ('sem-001-b'),
+  ('sem-001-b');
+
+CREATE TEMP TABLE already_removed_seminar (
+  id text PRIMARY KEY
+) ON COMMIT DROP;
+
+INSERT INTO already_removed_seminar (id) VALUES
   ('sem-001-c'),
   ('sem-001-d'),
   ('zyhwu550q');
+
+CREATE TEMP TABLE portal_strip_seminar (
+  id text PRIMARY KEY
+) ON COMMIT DROP;
+
+INSERT INTO portal_strip_seminar (id)
+SELECT id FROM legacy_seminar
+UNION ALL
+SELECT id FROM already_removed_seminar;
 
 CREATE TEMP TABLE retired_seminar (
   id text PRIMARY KEY
 ) ON COMMIT DROP;
 
 INSERT INTO retired_seminar (id)
-SELECT id FROM legacy_seminar
+SELECT id FROM portal_strip_seminar
 UNION ALL
 SELECT '997eo0v5r';
 
@@ -124,9 +145,24 @@ CREATE TEMP TABLE portal_speaker_decision (
 INSERT INTO portal_speaker_decision (partner_id, action) VALUES
   ('partner-001', 'STRIP_LEGACY_SEMINAR_IDS');
 
+CREATE TEMP TABLE detached_registration_snapshot ON COMMIT DROP AS
+SELECT id, "registrationId", "seminarId", "seminarTitle"
+FROM registration_seminars
+WHERE (
+  "seminarTitle" = 'All about Overseas Education'
+  AND "seminarId" IS NULL
+) OR (
+  "seminarTitle" = 'Medicine in the 21st century'
+  AND "seminarId" IS NULL
+);
+
 DO $$
 DECLARE
   unexpected_ids text;
+  overseas_rows integer;
+  medicine_rows integer;
+  stream_rows integer;
+  ai_rows integer;
 BEGIN
   IF (SELECT count(*) FROM canonical_schedule) <> 14 THEN
     RAISE EXCEPTION 'Expected 14 canonical rows in canonical_schedule.';
@@ -134,6 +170,50 @@ BEGIN
 
   IF (SELECT count(*) FROM retired_seminar) <> 6 THEN
     RAISE EXCEPTION 'Expected six retired seminar ids.';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM seminars
+    WHERE id IN (SELECT id FROM already_removed_seminar)
+  ) THEN
+    RAISE EXCEPTION 'sem-001-c, sem-001-d, and zyhwu550q must already be absent.';
+  END IF;
+
+  SELECT count(*) INTO overseas_rows
+  FROM detached_registration_snapshot
+  WHERE "seminarTitle" = 'All about Overseas Education';
+  SELECT count(*) INTO medicine_rows
+  FROM detached_registration_snapshot
+  WHERE "seminarTitle" = 'Medicine in the 21st century';
+  IF overseas_rows <> 3 OR medicine_rows <> 1 THEN
+    RAISE EXCEPTION
+      'Detached historical registrations for sem-001-c/sem-001-d were not found (overseas %, medicine %).',
+      overseas_rows, medicine_rows;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM registration_seminars
+    WHERE "seminarId" IN (SELECT id FROM already_removed_seminar)
+  ) OR EXISTS (
+    SELECT 1 FROM registration_seminars
+    WHERE "seminarTitle" = 'Architecture - A Promising Creative Career'
+      AND "seminarId" = 'zyhwu550q'
+  ) THEN
+    RAISE EXCEPTION 'A removed seminar id is still attached to a registration.';
+  END IF;
+
+  SELECT count(*) INTO stream_rows
+  FROM registration_seminars
+  WHERE "seminarId" = 'sem-001-a'
+    AND "seminarTitle" = 'How to select a stream – Art – Science – Commerce?';
+  SELECT count(*) INTO ai_rows
+  FROM registration_seminars
+  WHERE "seminarId" = 'sem-001-b'
+    AND "seminarTitle" = 'Real Careers with Artificial Intelligence';
+  IF stream_rows <> 2 OR ai_rows <> 5 THEN
+    RAISE EXCEPTION
+      'Remaining legacy registration links do not match the audit (sem-001-a %, sem-001-b %).',
+      stream_rows, ai_rows;
   END IF;
 
   IF (
@@ -207,20 +287,23 @@ BEGIN
       INTERSECT
       SELECT * FROM (VALUES
         ('sem-001-a', 'How to select a stream – Art – Science – Commerce?', '2026-12-19', '10:00', '11:00', 1, 4),
-        ('sem-001-b', 'Real Careers with Artificial Intelligence', '2026-12-19', '11:30', '12:30', 2, 2),
-        ('sem-001-c', 'All about Overseas Education', '2026-12-19', '10:00', '11:00', 1, 4),
-        ('sem-001-d', 'Medicine in the 21st century', '2026-12-19', '14:00', '15:00', 2, 3),
-        ('zyhwu550q', 'Architecture - A Promising Creative Career', '2026-12-20', '10:00', '11:00', 1, 2)
+        ('sem-001-b', 'Real Careers with Artificial Intelligence', '2026-12-19', '11:30', '12:30', 2, 2)
       ) AS expected(id, title, date, "startTime", "endTime", hall, "panelistSlots")
     ) AS unchanged
-  ) <> 5 THEN
+  ) <> 2 THEN
     RAISE EXCEPTION 'evt-001 legacy seminar snapshot does not match. Aborting.';
   END IF;
 
   IF (
     SELECT count(*) FROM seminars WHERE id IN (SELECT id FROM legacy_seminar)
-  ) <> 5 THEN
-    RAISE EXCEPTION 'Expected exactly five legacy seminar rows.';
+  ) <> 2 THEN
+    RAISE EXCEPTION 'Expected exactly two remaining legacy seminar rows.';
+  END IF;
+
+  IF (
+    SELECT count(*) FROM seminars WHERE "eventId" = 'evt-001'
+  ) <> 3 THEN
+    RAISE EXCEPTION 'evt-001 must currently contain exactly 997eo0v5r, sem-001-a, and sem-001-b.';
   END IF;
 
   SELECT string_agg(s.id, ', ' ORDER BY s.id)
@@ -232,7 +315,7 @@ BEGIN
 
   IF unexpected_ids IS NOT NULL THEN
     RAISE EXCEPTION
-      'evt-001 has seminar ids outside the five legacy rows and no DELETE_ROW decision: %.',
+      'evt-001 has seminar ids outside sem-001-a, sem-001-b, and 997eo0v5r: %.',
       unexpected_ids;
   END IF;
 
@@ -298,11 +381,11 @@ BEGIN
     WHERE s."eventId" = 'evt-001'
       AND s.id NOT IN (SELECT id FROM legacy_seminar)
   ) THEN
-    RAISE EXCEPTION 'evt-001 still has rows other than the five legacy seminars.';
+    RAISE EXCEPTION 'evt-001 still has rows other than sem-001-a and sem-001-b.';
   END IF;
 
-  IF (SELECT count(*) FROM seminars WHERE "eventId" = 'evt-001') <> 5 THEN
-    RAISE EXCEPTION 'evt-001 must be exactly the five legacy seminars before the canonical insert.';
+  IF (SELECT count(*) FROM seminars WHERE "eventId" = 'evt-001') <> 2 THEN
+    RAISE EXCEPTION 'evt-001 must be exactly sem-001-a and sem-001-b before the canonical insert.';
   END IF;
 
   IF EXISTS (
@@ -343,9 +426,9 @@ DECLARE
   legacy_registration_rows integer;
 BEGIN
   SELECT count(*) INTO legacy_registration_rows FROM registration_title_snapshot;
-  IF legacy_registration_rows <> 11 THEN
+  IF legacy_registration_rows <> 7 THEN
     RAISE EXCEPTION
-      'Expected 11 historical registration-interest rows pointing at legacy seminars, found %.',
+      'Expected 7 historical registration-interest rows still pointing at sem-001-a or sem-001-b, found %.',
       legacy_registration_rows;
   END IF;
 END $$;
@@ -381,7 +464,7 @@ BEGIN
     SELECT count(*) FROM registration_seminars
     WHERE id IN (SELECT id FROM registration_title_snapshot)
   ) <> (SELECT count(*) FROM registration_title_snapshot)
-  OR (SELECT count(*) FROM registration_title_snapshot) <> 11 THEN
+  OR (SELECT count(*) FROM registration_title_snapshot) <> 7 THEN
     RAISE EXCEPTION 'Historical registration titles were not preserved.';
   END IF;
 
@@ -516,7 +599,7 @@ BEGIN
   FROM partners p
   WHERE EXISTS (
     SELECT 1
-    FROM legacy_seminar legacy
+    FROM portal_strip_seminar legacy
     WHERE p."portalSeminarSpeakers"::text LIKE '%' || legacy.id || '%'
   )
   AND p.id NOT IN (SELECT partner_id FROM portal_speaker_decision);
@@ -577,7 +660,7 @@ SELECT COALESCE(
   (
     SELECT jsonb_agg(listed.entry ORDER BY listed.ordinality)
     FROM jsonb_array_elements(p."portalSeminarSpeakers") WITH ORDINALITY AS listed(entry, ordinality)
-    WHERE COALESCE(listed.entry->>'seminarId', '') NOT IN (SELECT id FROM legacy_seminar)
+    WHERE COALESCE(listed.entry->>'seminarId', '') NOT IN (SELECT id FROM portal_strip_seminar)
   ),
   '[]'::jsonb
 ) AS speakers
@@ -633,7 +716,7 @@ BEGIN
     WHERE d.action = 'STRIP_LEGACY_SEMINAR_IDS'
       AND EXISTS (
         SELECT 1
-        FROM legacy_seminar legacy
+        FROM portal_strip_seminar legacy
         WHERE p."portalSeminarSpeakers"::text LIKE '%' || legacy.id || '%'
       )
   ) THEN
@@ -686,7 +769,7 @@ BEGIN
     RAISE EXCEPTION 'A retired seminar id still exists.';
   END IF;
 
-  IF (SELECT count(*) FROM registration_title_snapshot) <> 11
+  IF (SELECT count(*) FROM registration_title_snapshot) <> 7
      OR EXISTS (
        SELECT 1
        FROM registration_title_snapshot snap
@@ -694,7 +777,31 @@ BEGIN
        WHERE live."seminarTitle" IS DISTINCT FROM snap."seminarTitle"
           OR live."seminarId" IS NOT NULL
      ) THEN
-    RAISE EXCEPTION 'The 11 historical registration interests were not preserved with a null seminarId.';
+    RAISE EXCEPTION 'The 7 remaining legacy registration interests were not preserved with a null seminarId.';
+  END IF;
+
+  IF (
+    SELECT count(*) FROM detached_registration_snapshot
+    WHERE "seminarTitle" = 'All about Overseas Education'
+  ) <> 3
+  OR (
+    SELECT count(*) FROM detached_registration_snapshot
+    WHERE "seminarTitle" = 'Medicine in the 21st century'
+  ) <> 1
+  OR EXISTS (
+    SELECT 1
+    FROM detached_registration_snapshot snap
+    JOIN registration_seminars live ON live.id = snap.id
+    WHERE live."seminarTitle" IS DISTINCT FROM snap."seminarTitle"
+       OR live."seminarId" IS NOT NULL
+       OR live."registrationId" IS DISTINCT FROM snap."registrationId"
+  ) OR (
+    SELECT count(*) FROM detached_registration_snapshot
+  ) <> (
+    SELECT count(*) FROM registration_seminars
+    WHERE id IN (SELECT id FROM detached_registration_snapshot)
+  ) THEN
+    RAISE EXCEPTION 'Historical registrations for the already-removed seminars were changed.';
   END IF;
 
   IF EXISTS (

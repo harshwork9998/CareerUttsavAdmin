@@ -387,6 +387,59 @@ describe("event prisma write store", () => {
     }
   });
 
+  it("does not trigger deletion protection for an unrelated save of the three live evt-001 seminars", async () => {
+    const seminars = [
+      baseSeminar({
+        id: "997eo0v5r",
+        title: "Do What You Love, Love What You Do",
+        date: "2026-12-19",
+        startTime: "16:00",
+        endTime: "17:00",
+        hall: 2,
+        panelistSlots: 1,
+      }),
+      baseSeminar({
+        id: SEM_A,
+        title: "How to select a stream – Art – Science – Commerce?",
+        date: "2026-12-19",
+        startTime: "10:00",
+        endTime: "11:00",
+        hall: 1,
+        panelistSlots: 4,
+      }),
+      baseSeminar({
+        id: SEM_B,
+        title: "Real Careers with Artificial Intelligence",
+        date: "2026-12-19",
+        startTime: "11:30",
+        endTime: "12:30",
+        hall: 2,
+        panelistSlots: 2,
+      }),
+    ];
+    const record = prismaEventRecord({
+      seminars: seminars.map((seminar) => ({
+        ...seminar,
+        eventId: EVENT_ID,
+      })),
+    });
+    eventFindUnique.mockResolvedValueOnce(record).mockResolvedValueOnce(record);
+    partnerAssignmentCount.mockResolvedValue(1);
+
+    await patchPrismaEventForApi(EVENT_ID, {
+      venue: "Palace Grounds",
+      seminars,
+    });
+
+    expect(seminarDeleteMany).not.toHaveBeenCalled();
+    expect(partnerAssignmentCount).not.toHaveBeenCalled();
+    expect(seminars.map((seminar) => seminar.id)).toEqual([
+      "997eo0v5r",
+      SEM_A,
+      SEM_B,
+    ]);
+  });
+
   it("still returns 409 when an assigned seminar is removed from the payload", async () => {
     partnerAssignmentCount.mockResolvedValue(1);
     await expect(

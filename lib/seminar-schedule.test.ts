@@ -236,7 +236,15 @@ describe("nullable seminar schedule", () => {
       "('evt-001', 'sem-001-a', 'DELETE_ROSTER', NULL)"
     );
     expect(replacement).toContain("('partner-001', 'STRIP_LEGACY_SEMINAR_IDS')");
-    expect(replacement).toContain("Expected 11 historical registration-interest rows");
+    expect(replacement).toContain(
+      "Expected 7 historical registration-interest rows still pointing at sem-001-a or sem-001-b"
+    );
+    expect(replacement).toContain(
+      "sem-001-c, sem-001-d, and zyhwu550q must already be absent."
+    );
+    expect(replacement).toContain(
+      "Detached historical registrations for sem-001-c/sem-001-d were not found"
+    );
     expect(replacement).toContain(
       "Approved partner actions are DELETE_ASSIGNMENT for the two Christ University rows only."
     );

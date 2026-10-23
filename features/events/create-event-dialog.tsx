@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Loader2, Minus, Plus } from "lucide-react";
@@ -174,7 +174,13 @@ export function CreateEventDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       {open ? (
         <EventEditor
-          key={event ? `${event.id}:${event.updatedAt}` : "create"}
+          key={
+          event
+            ? `${event.id}:${event.updatedAt}:${(event.seminars ?? [])
+                .map((seminar) => seminar.id)
+                .join(",")}`
+            : "create"
+        }
           open={open}
           onOpenChange={onOpenChange}
           event={event}
@@ -219,9 +225,26 @@ function EventEditor({
   const [hallCount, setHallCount] = useState(
     event ? Math.min(3, Math.max(1, event.hallCount || 1)) : 1
   );
-  const [seminarCount, setSeminarCount] = useState(initialDrafts.length);
   const [seminars, setSeminars] = useState<SeminarDraft[]>(initialDrafts);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const persistedSeminarSignature = (event?.seminars ?? [])
+    .map((seminar) =>
+      [
+        seminar.id,
+        seminar.title,
+        seminar.date ?? "",
+        seminar.startTime ?? "",
+        seminar.endTime ?? "",
+        seminar.hall ?? "",
+        seminar.panelistSlots ?? "",
+      ].join("\u001f")
+    )
+    .join("\n");
+
+  useEffect(() => {
+    if (!event) return;
+    setSeminars(seminarDraftsFromEvent(event));
+  }, [persistedSeminarSignature]);
 
   const endDate = useMemo(
     () => endFromStart(startDate, dayCount),
@@ -248,7 +271,6 @@ function EventEditor({
 
   const setCount = (next: number) => {
     const n = Math.max(0, Math.min(20, next));
-    setSeminarCount(n);
     setSeminars((prev) => {
       if (n === prev.length) return prev;
       if (n < prev.length) return prev.slice(0, n);
@@ -539,8 +561,8 @@ function EventEditor({
                       variant="outline"
                       size="icon"
                       className="h-8 w-8"
-                      onClick={() => setCount(seminarCount - 1)}
-                      disabled={seminarCount <= 0}
+                      onClick={() => setCount(seminars.length - 1)}
+                      disabled={seminars.length <= 0}
                     >
                       <Minus className="h-3.5 w-3.5" />
                     </Button>
@@ -549,15 +571,15 @@ function EventEditor({
                       style={{ color: INK.primary }}
                       aria-live="polite"
                     >
-                      {seminarCount}
+                      {seminars.length}
                     </span>
                     <Button
                       type="button"
                       variant="outline"
                       size="icon"
                       className="h-8 w-8"
-                      onClick={() => setCount(seminarCount + 1)}
-                      disabled={seminarCount >= 20}
+                      onClick={() => setCount(seminars.length + 1)}
+                      disabled={seminars.length >= 20}
                     >
                       <Plus className="h-3.5 w-3.5" />
                     </Button>
@@ -565,7 +587,7 @@ function EventEditor({
                 </div>
               </div>
 
-              {seminarCount === 0 ? null : (
+              {seminars.length === 0 ? null : (
                 <div className="space-y-4">
                   {seminars.map((row, index) => (
                     <div

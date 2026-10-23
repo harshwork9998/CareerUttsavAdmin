@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import {
   CAREER_UTTSAV_SEMINARS,
   LEGACY_CAREER_UTTSAV_SEMINARS,
 } from "@/features/dashboard/seminars";
-import { buildCurrentCatalogueSeminarRows } from "@/lib/current-event-seminars";
+import {
+  buildCurrentCatalogueSeminarRows,
+  selectCurrentEventSeminars,
+} from "@/lib/current-event-seminars";
 import {
   eventSaveErrorMessage,
   newSeminarTitleSuggestions,
@@ -59,6 +65,36 @@ const PRODUCTION_EVT_001_SEMINARS: EventSeminar[] = [
     startTime: "10:00",
     endTime: "11:00",
     hall: 1,
+    panelistSlots: 2,
+  },
+];
+
+const CURRENT_EVT_001_SEMINARS: EventSeminar[] = [
+  {
+    id: "997eo0v5r",
+    title: "Do What You Love, Love What You Do",
+    date: "2026-12-19",
+    startTime: "16:00",
+    endTime: "17:00",
+    hall: 2,
+    panelistSlots: 1,
+  },
+  {
+    id: "sem-001-a",
+    title: "How to select a stream – Art – Science – Commerce?",
+    date: "2026-12-19",
+    startTime: "10:00",
+    endTime: "11:00",
+    hall: 1,
+    panelistSlots: 4,
+  },
+  {
+    id: "sem-001-b",
+    title: "Real Careers with Artificial Intelligence",
+    date: "2026-12-19",
+    startTime: "11:30",
+    endTime: "12:30",
+    hall: 2,
     panelistSlots: 2,
   },
 ];
@@ -173,6 +209,43 @@ describe("edit event drafts for persisted seminars", () => {
     });
     expect(seminarSavePayload([draft!])).toEqual([undecided]);
     expect(seminarEditorLegacyLabel(undecided.title)).toBeNull();
+  });
+
+  it("keeps all three current persisted evt-001 seminars in the editor", () => {
+    const drafts = seminarDraftsFromEvent({
+      seminars: CURRENT_EVT_001_SEMINARS,
+    });
+    const payload = seminarSavePayload(drafts);
+    const catalogueOnly = selectCurrentEventSeminars(CURRENT_EVT_001_SEMINARS);
+    const dialog = readFileSync(
+      join(process.cwd(), "features/events/create-event-dialog.tsx"),
+      "utf8"
+    );
+
+    expect(drafts).toHaveLength(3);
+    expect(drafts.map((row) => row.key)).toEqual([
+      "997eo0v5r",
+      "sem-001-a",
+      "sem-001-b",
+    ]);
+    expect(drafts.map((row) => row.title)).toEqual([
+      "Do What You Love, Love What You Do",
+      "How to select a stream – Art – Science – Commerce?",
+      "Real Careers with Artificial Intelligence",
+    ]);
+    expect(catalogueOnly).toHaveLength(1);
+    expect(catalogueOnly.map((seminar) => seminar.title)).toEqual([
+      "Do What You Love, Love What You Do",
+    ]);
+    expect(payload.map((seminar) => seminar.id)).toEqual([
+      "997eo0v5r",
+      "sem-001-a",
+      "sem-001-b",
+    ]);
+    expect(dialog).toContain("seminarDraftsFromEvent(event)");
+    expect(dialog).toContain("{seminars.length}");
+    expect(dialog).not.toContain("selectCurrentEventSeminars");
+    expect(dialog).toContain("Number of seminars");
   });
 
   it("surfaces the partner-assignment 409 text", () => {
