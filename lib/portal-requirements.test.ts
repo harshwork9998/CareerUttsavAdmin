@@ -26,7 +26,7 @@ import {
   validateUploadFile,
 } from "@/lib/partner-upload-policy";
 import { validatePartnerPortalContent } from "@/lib/server/partner-portal-content";
-import { parsePartnerPortalPatch } from "@/lib/server/partner-portal-patch";
+import { parsePartnerPortalPatch, stripPartnerOwnedSubmissionFields } from "@/lib/server/partner-portal-patch";
 
 const root = path.resolve(__dirname, "..");
 
@@ -38,18 +38,18 @@ describe("event representative allocation", () => {
     expect(parseRepresentativeSlotCount(1.5).ok).toBe(false);
   });
 
-  it("keeps historical representative rows when allocation shrinks", () => {
-    const merged = mergeRepresentativesPreservingHistory(
+  it("replaces the current representative list and does not merge removed people back", () => {
+    const saved = mergeRepresentativesPreservingHistory(
       [
         { name: "A", designation: "Dean", phone: "9876543210" },
         { name: "B", designation: "Lead", phone: "9876543211" },
+        { name: "C", designation: "Manager", phone: "9876543212" },
       ],
-      1,
-      [{ name: "Asha", designation: "Director", phone: "9876543212" }]
+      2,
+      [{ name: "Asha", designation: "Director", phone: "9876543213" }]
     );
-    expect(merged).toEqual([
-      { name: "Asha", designation: "Director", phone: "9876543212" },
-      { name: "B", designation: "Lead", phone: "9876543211" },
+    expect(saved).toEqual([
+      { name: "Asha", designation: "Director", phone: "9876543213" },
     ]);
   });
 
@@ -58,6 +58,40 @@ describe("event representative allocation", () => {
       eventPartnerships: [{ eventId: "evt-001", representativeSlotCount: 9 }],
     });
     expect(parsed.ok).toBe(false);
+  });
+
+  it("drops partner submissions from an Admin partnership save", () => {
+    const stripped = stripPartnerOwnedSubmissionFields({
+      eventPartnerships: [
+        {
+          eventId: "evt-001",
+          deliverables: [],
+          seminarSlotCount: 4,
+          representativeSlotCount: 2,
+        },
+      ],
+      portalRepresentatives: [
+        {
+          eventId: "evt-001",
+          count: 3,
+          representatives: [
+            { name: "A", phone: "9876543210" },
+            { name: "B", phone: "9876543211" },
+            { name: "C", phone: "9876543212" },
+          ],
+          updatedAt: "2026-10-01T00:00:00.000Z",
+        },
+      ],
+      portalSmsContent: "stale sms",
+      portalSeminarSpeakers: [],
+      portalDocuments: [],
+    });
+    expect(stripped.eventPartnerships?.[0]?.representativeSlotCount).toBe(2);
+    expect(stripped.eventPartnerships?.[0]?.seminarSlotCount).toBe(4);
+    expect(stripped).not.toHaveProperty("portalRepresentatives");
+    expect(stripped).not.toHaveProperty("portalSmsContent");
+    expect(stripped).not.toHaveProperty("portalSeminarSpeakers");
+    expect(stripped).not.toHaveProperty("portalDocuments");
   });
 });
 

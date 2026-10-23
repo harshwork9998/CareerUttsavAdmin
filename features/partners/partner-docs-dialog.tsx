@@ -533,6 +533,8 @@ export function PartnerDocsDialog({
     queryKey: ["partner-docs", initialPartner?.id],
     queryFn: () => partnersService.getById(initialPartner!.id),
     enabled: open && Boolean(initialPartner?.id),
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   const eventsQuery = useQuery({

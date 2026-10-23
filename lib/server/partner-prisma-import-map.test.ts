@@ -92,6 +92,21 @@ describe("partner prisma import map", () => {
     );
   });
 
+  it("persists an empty current submission instead of leaving the previous JSON", () => {
+    const mapped = mapPartnerSourceToPrisma(
+      basePartner({
+        portalDocuments: [],
+        portalSeminarSpeakers: [],
+        portalRepresentatives: [],
+        portalSmsContent: "Updated SMS",
+      })
+    );
+    expect(mapped.portalDocuments).toEqual([]);
+    expect(mapped.portalSeminarSpeakers).toEqual([]);
+    expect(mapped.portalRepresentatives).toEqual([]);
+    expect(mapped.portalSmsContent).toBe("Updated SMS");
+  });
+
   it("normalizes portal login and invite email fields", () => {
     const mapped = mapPartnerSourceToPrisma(basePartner());
     expect(normalizePortalLogin("Anitha.Rao@ChristUniversity.in")).toBe(

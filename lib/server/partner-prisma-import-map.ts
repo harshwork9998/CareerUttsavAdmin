@@ -199,21 +199,12 @@ export function mapPartnerSourceToPrisma(partner: Partner): MappedPartner {
         .portalPasswordPromptSkippedAt
     ),
     portalInviteSentAt: parseOptionalDate(partner.portalInviteSentAt),
-    portalDocuments:
-      partner.portalDocuments && partner.portalDocuments.length > 0
-        ? toJsonValue(partner.portalDocuments)
-        : Prisma.JsonNull,
+    portalDocuments: toJsonValue(partner.portalDocuments ?? []),
     portalFasciaName: partner.portalFasciaName ?? null,
     portalWebsiteUrl: partner.portalWebsiteUrl ?? null,
     portalSmsContent: partner.portalSmsContent ?? null,
-    portalSeminarSpeakers:
-      partner.portalSeminarSpeakers && partner.portalSeminarSpeakers.length > 0
-        ? toJsonValue(partner.portalSeminarSpeakers)
-        : Prisma.JsonNull,
-    portalRepresentatives:
-      partner.portalRepresentatives && partner.portalRepresentatives.length > 0
-        ? toJsonValue(partner.portalRepresentatives)
-        : Prisma.JsonNull,
+    portalSeminarSpeakers: toJsonValue(partner.portalSeminarSpeakers ?? []),
+    portalRepresentatives: toJsonValue(partner.portalRepresentatives ?? []),
     createdAt: parseRequiredDate(partner.createdAt, "partner.createdAt"),
     updatedAt: parseRequiredDate(partner.updatedAt, "partner.updatedAt"),
   };

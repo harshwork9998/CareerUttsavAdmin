@@ -63,12 +63,12 @@ export function toPartnerPortalPartnerDto(
     portalAuthVersion: partner.portalAuthVersion,
     portalInviteEmail: partner.portalInviteEmail,
     portalInviteSentAt: partner.portalInviteSentAt,
-    portalDocuments: partner.portalDocuments,
-    portalFasciaName: partner.portalFasciaName,
-    portalWebsiteUrl: partner.portalWebsiteUrl,
-    portalSmsContent: partner.portalSmsContent,
-    portalSeminarSpeakers: partner.portalSeminarSpeakers,
-    portalRepresentatives: partner.portalRepresentatives,
+    portalDocuments: partner.portalDocuments ?? [],
+    portalFasciaName: partner.portalFasciaName ?? "",
+    portalWebsiteUrl: partner.portalWebsiteUrl ?? "",
+    portalSmsContent: partner.portalSmsContent ?? "",
+    portalSeminarSpeakers: partner.portalSeminarSpeakers ?? [],
+    portalRepresentatives: partner.portalRepresentatives ?? [],
   };
 }
 

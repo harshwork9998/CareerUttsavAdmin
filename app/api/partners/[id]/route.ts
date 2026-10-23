@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { requireAdminUser } from "@/lib/server/admin-auth";
 import { toPublicPartner } from "@/lib/partner-credentials";
+import { stripPartnerOwnedSubmissionFields } from "@/lib/server/partner-portal-patch";
 import {
   deletePartnerForApi,
   getPartnerByIdForApi,
@@ -30,7 +31,9 @@ export async function PATCH(request: Request, context: RouteContext) {
   if (auth instanceof NextResponse) return auth;
 
   const { id } = await context.params;
-  const patch = (await request.json()) as Partial<Partner>;
+  const patch = stripPartnerOwnedSubmissionFields(
+    (await request.json()) as Partial<Partner>
+  );
   const result = await updatePartnerForApi(id, patch);
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status });

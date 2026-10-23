@@ -16,6 +16,26 @@ export const PARTNER_PORTAL_PATCH_ALLOWED_KEYS = [
 
 const ALLOWED = new Set<string>(PARTNER_PORTAL_PATCH_ALLOWED_KEYS);
 
+/** Partner submissions. Admin partnership saves must not write these. */
+export const PARTNER_OWNED_SUBMISSION_KEYS = [
+  "portalDocuments",
+  "portalFasciaName",
+  "portalWebsiteUrl",
+  "portalSmsContent",
+  "portalSeminarSpeakers",
+  "portalRepresentatives",
+] as const;
+
+export function stripPartnerOwnedSubmissionFields<T extends Partial<Partner>>(
+  patch: T
+): Omit<T, (typeof PARTNER_OWNED_SUBMISSION_KEYS)[number]> {
+  const next = { ...patch };
+  for (const key of PARTNER_OWNED_SUBMISSION_KEYS) {
+    delete next[key];
+  }
+  return next;
+}
+
 export type PartnerPortalPatchResult =
   | { ok: true; patch: Partial<Partner> }
   | { ok: false; status: 403; error: string };

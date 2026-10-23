@@ -136,14 +136,14 @@ export function mapPrismaPartnerToApi(record: PrismaPartnerRecord): Partner {
     portalPasswordHash: record.portalPasswordHash ?? undefined,
     portalInviteEmail: record.portalInviteEmail ?? undefined,
     portalInviteSentAt: optionalIso(record.portalInviteSentAt),
-    portalDocuments: readJsonValue<PartnerPortalDocument[]>(record.portalDocuments),
+    portalDocuments: readJsonArray<PartnerPortalDocument>(record.portalDocuments),
     portalFasciaName: record.portalFasciaName ?? undefined,
     portalWebsiteUrl: record.portalWebsiteUrl ?? undefined,
     portalSmsContent: record.portalSmsContent ?? undefined,
-    portalSeminarSpeakers: readJsonValue<PartnerSeminarSpeakerSubmission[]>(
+    portalSeminarSpeakers: readJsonArray<PartnerSeminarSpeakerSubmission>(
       record.portalSeminarSpeakers
     ),
-    portalRepresentatives: readJsonValue<PartnerRepresentativesSubmission[]>(
+    portalRepresentatives: readJsonArray<PartnerRepresentativesSubmission>(
       record.portalRepresentatives
     ),
     portalPasswordChangedAt: optionalIso(record.portalPasswordChangedAt),
