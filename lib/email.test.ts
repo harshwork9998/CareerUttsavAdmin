@@ -42,13 +42,21 @@ function mockResendSendWithAbortAwareDelay(
 }
 
 describe("sendEmail timeout", () => {
+  const originalProvider = process.env.EMAIL_PROVIDER;
+
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.RESEND_API_KEY = "re_test_key";
+    delete process.env.EMAIL_PROVIDER;
   });
 
   afterEach(() => {
     delete process.env.RESEND_API_KEY;
+    if (originalProvider === undefined) {
+      delete process.env.EMAIL_PROVIDER;
+    } else {
+      process.env.EMAIL_PROVIDER = originalProvider;
+    }
     vi.useRealTimers();
   });
 

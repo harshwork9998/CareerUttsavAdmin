@@ -2,80 +2,21 @@ import { readFile } from "fs/promises";
 import path from "path";
 
 import QRCode from "qrcode";
-import { Resend } from "resend";
 
-export type EmailAttachment = {
-  filename: string;
-  content: string;
-  contentId: string;
-};
+import { sendWithResend, getDefaultFromAddress } from "@/lib/server/email/providers/resend";
+import { sendWithSmtp } from "@/lib/server/email/providers/smtp";
+import { resolveEmailProvider } from "@/lib/server/email/resolve-provider";
+import {
+  EMAIL_SEND_TIMEOUT_ERROR,
+  RESEND_AMBIGUOUS_NETWORK_ERROR,
+  type EmailAttachment,
+  type EmailSendOutcome,
+  type SendEmailInput,
+  type SendEmailResult,
+} from "@/lib/server/email/types";
 
-export type SendEmailInput = {
-  to: string | string[];
-  subject: string;
-  html: string;
-  text?: string;
-  from?: string;
-  replyTo?: string;
-  tags?: { name: string; value: string }[];
-  attachments?: EmailAttachment[];
-  timeoutMs?: number;
-};
-
-export type EmailSendOutcome = "accepted" | "definitive_failure" | "unknown";
-
-export type SendEmailResult =
-  | { ok: true; id: string; durationMs: number; outcome: "accepted" }
-  | {
-      ok: false;
-      error: string;
-      durationMs: number;
-      outcome: "definitive_failure" | "unknown";
-    };
-
-export const EMAIL_SEND_TIMEOUT_ERROR = "EMAIL_SEND_TIMEOUT";
-
-export const RESEND_AMBIGUOUS_NETWORK_ERROR =
-  "Unable to fetch data. The request could not be resolved.";
-
-function classifyEmailSendFailure(
-  error: string
-): "definitive_failure" | "unknown" {
-  if (
-    error === EMAIL_SEND_TIMEOUT_ERROR ||
-    error === RESEND_AMBIGUOUS_NETWORK_ERROR
-  ) {
-    return "unknown";
-  }
-
-  return "definitive_failure";
-}
-
-/**
- * Resend v6.x forwards unknown PostOptions fields (including `signal`) to `fetch`
- * at runtime even though CreateEmailRequestOptions does not yet declare it.
- */
-type ResendEmailSendOptions = { signal?: AbortSignal };
-
-let resendClient: Resend | null = null;
-
-function getResendClient(): Resend {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
-    throw new Error("RESEND_API_KEY is not set in the environment");
-  }
-  if (!resendClient) {
-    resendClient = new Resend(apiKey);
-  }
-  return resendClient;
-}
-
-export function getDefaultFromAddress(): string {
-  return (
-    process.env.RESEND_FROM_EMAIL ??
-    "Career Uttsav <onboarding@resend.dev>"
-  );
-}
+export type { EmailAttachment, EmailSendOutcome, SendEmailInput, SendEmailResult };
+export { EMAIL_SEND_TIMEOUT_ERROR, RESEND_AMBIGUOUS_NETWORK_ERROR, getDefaultFromAddress };
 
 /** Replace `{{key}}` placeholders in an HTML string. */
 export function applyTemplatePlaceholders(
@@ -96,7 +37,7 @@ export async function loadEmailTemplate(
 }
 
 /**
- * Generate a PNG QR code as base64 (for Resend CID inline attachments).
+ * Generate a PNG QR code as base64 for a CID inline attachment.
  * Data URLs in img src are blocked by most email clients (Gmail, Outlook, etc.).
  */
 export async function generateRegistrationQrPngBase64(
@@ -136,9 +77,31 @@ export async function generateRegistrationQrDataUrl(
   });
 }
 
+function withDuration(
+  result: Awaited<ReturnType<typeof sendWithResend>>,
+  durationMs: number
+): SendEmailResult {
+  if (result.ok) {
+    return {
+      ok: true,
+      id: result.id,
+      durationMs,
+      outcome: "accepted",
+    };
+  }
+
+  return {
+    ok: false,
+    error: result.error,
+    durationMs,
+    outcome: result.outcome,
+  };
+}
+
 /**
- * Reusable Resend sender for transactional emails.
+ * Provider-neutral transactional sender.
  * Callers decide whether to await or fire-and-forget.
+ * EMAIL_PROVIDER selects resend or smtp. A missing value stays on Resend.
  */
 async function performSendEmail(
   input: SendEmailInput,
@@ -157,27 +120,11 @@ async function performSendEmail(
   }
 
   try {
-    const resend = getResendClient();
-    const requestOptions: ResendEmailSendOptions | undefined = signal
-      ? { signal }
-      : undefined;
-    const { data, error } = await resend.emails.send(
-      {
-        from: input.from ?? getDefaultFromAddress(),
-        to: input.to,
-        subject: input.subject,
-        html: input.html,
-        text: input.text,
-        replyTo: input.replyTo,
-        tags: input.tags,
-        attachments: input.attachments?.map((attachment) => ({
-          filename: attachment.filename,
-          content: attachment.content,
-          contentId: attachment.contentId,
-        })),
-      },
-      requestOptions as Parameters<Resend["emails"]["send"]>[1]
-    );
+    const provider = resolveEmailProvider();
+    const result =
+      provider === "smtp"
+        ? await sendWithSmtp(input, signal)
+        : await sendWithResend(input, signal);
 
     if (signal?.aborted) {
       return {
@@ -188,27 +135,7 @@ async function performSendEmail(
       };
     }
 
-    const durationMs = elapsedMs();
-
-    if (error) {
-      return {
-        ok: false,
-        error: error.message,
-        durationMs,
-        outcome: classifyEmailSendFailure(error.message),
-      };
-    }
-
-    if (!data?.id) {
-      return {
-        ok: false,
-        error: "Resend did not return an email id",
-        durationMs,
-        outcome: "definitive_failure",
-      };
-    }
-
-    return { ok: true, id: data.id, durationMs, outcome: "accepted" };
+    return withDuration(result, elapsedMs());
   } catch (error) {
     if (signal?.aborted) {
       return {
@@ -221,14 +148,15 @@ async function performSendEmail(
 
     const message =
       error instanceof Error ? error.message : "Unknown email send failure";
+    const definitive =
+      message === "RESEND_API_KEY is not set in the environment" ||
+      message.startsWith("Invalid EMAIL_PROVIDER");
+
     return {
       ok: false,
       error: message,
       durationMs: elapsedMs(),
-      outcome:
-        message === "RESEND_API_KEY is not set in the environment"
-          ? "definitive_failure"
-          : "unknown",
+      outcome: definitive ? "definitive_failure" : "unknown",
     };
   }
 }

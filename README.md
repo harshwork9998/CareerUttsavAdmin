@@ -20,8 +20,16 @@ npm run dev
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `RESEND_API_KEY` | For email | Resend API key |
-| `RESEND_FROM_EMAIL` | For email | Verified sender |
+| `EMAIL_PROVIDER` | Optional | `resend` (default) or `smtp`. A missing value stays on Resend |
+| `RESEND_API_KEY` | When provider is Resend | Resend API key |
+| `RESEND_FROM_EMAIL` | When provider is Resend | Verified sender, for example `Career Uttsav <onboarding@resend.dev>` |
+| `SMTP_HOST` | When provider is SMTP | Relay host. Workspace target: `smtp-relay.gmail.com` |
+| `SMTP_PORT` | When provider is SMTP | `587` for STARTTLS |
+| `SMTP_REQUIRE_TLS` | When provider is SMTP | `true` requires STARTTLS on port 587 |
+| `SMTP_FROM_EMAIL` | When provider is SMTP | Envelope sender, for example `registrations@careeruttsav.in` |
+| `SMTP_FROM_NAME` | When provider is SMTP | Display name, for example `Career Uttsav` |
+
+`EMAIL_PROVIDER=resend` is the current production behavior. Google Workspace SMTP relay is expected to authorize the server in Workspace admin by IP. Do not configure a mailbox password for that relay. `SMTP_USER` and `SMTP_PASS` are optional and are used only if SMTP AUTH is explicitly enabled later. Leave both unset for the IP-authorized relay.
 | `PHONE_VERIFICATION_TOKEN_SECRET` | Recommended | Hashes opaque `verificationToken` values after OTP verify (not MSG91 OTPs) |
 | `OTP_PROVIDER` | Optional | `msg91` (default) or `mock` (local only) |
 | `MSG91_AUTH_KEY` | When `msg91` | MSG91 auth key — **server only, never expose to the browser** |

@@ -81,10 +81,13 @@ function mockAbortAwareDelayedSend(successDelayMs: number) {
 }
 
 describe("password reset timeout regression", () => {
+  const originalProvider = process.env.EMAIL_PROVIDER;
+
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.RESEND_API_KEY = "re_test_key";
     process.env.RESEND_FROM_EMAIL = "Career Uttsav <noreply@careeruttsav.in>";
+    delete process.env.EMAIL_PROVIDER;
     vi.mocked(findPrismaAdminUserRecordByEmail).mockResolvedValue(activeUser);
     vi.mocked(createPrismaPasswordResetToken).mockResolvedValue("tok-new");
   });
@@ -92,6 +95,11 @@ describe("password reset timeout regression", () => {
   afterEach(() => {
     delete process.env.RESEND_API_KEY;
     delete process.env.RESEND_FROM_EMAIL;
+    if (originalProvider === undefined) {
+      delete process.env.EMAIL_PROVIDER;
+    } else {
+      process.env.EMAIL_PROVIDER = originalProvider;
+    }
     vi.useRealTimers();
   });
 
