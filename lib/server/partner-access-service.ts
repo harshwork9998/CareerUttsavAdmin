@@ -10,6 +10,7 @@ import {
   updatePartnerForApi,
   findPartnersByPortalLoginForApi,
 } from "@/lib/server/partner-service";
+import { notifyAfterAccessAccepted } from "@/lib/server/partner-communication-service";
 import {
   buildPartnerResetUrl,
   logEmailResult,
@@ -182,6 +183,16 @@ export async function sendPartnerPortalAccessEmail(input: {
     portalInviteSentAt: new Date().toISOString(),
   });
   if (!marked.ok) return marked;
+
+  try {
+    await notifyAfterAccessAccepted(marked.partner);
+  } catch (error) {
+    console.info("[partner-communication]", {
+      partnerId: marked.partner.id,
+      outcome: "unknown",
+      error: error instanceof Error ? error.message : "Follow-up email failed",
+    });
+  }
 
   return {
     ok: true,

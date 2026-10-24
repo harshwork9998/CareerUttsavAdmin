@@ -312,12 +312,16 @@ describe("admin access actions", () => {
     expect(sendEmail).toHaveBeenCalledWith(
       expect.objectContaining({
         to: "office@example.edu",
-        subject: "Your Career Uttsav Partner Portal access",
+        subject: "You're Onboard! Let's Get Example Institute Event-Ready",
       })
     );
     const mailed = vi.mocked(sendEmail).mock.calls[0]?.[0];
     expect(mailed?.html).toContain(temporaryPassword);
+    expect(mailed?.text).toContain(temporaryPassword);
     expect(mailed?.text).toContain("dean@example.edu");
+    const patches = vi.mocked(updatePartnerForApi).mock.calls.map((call) => call[1]);
+    expect(patches.some((patch) => Boolean(patch.portalInviteSentAt))).toBe(true);
+    expect(JSON.stringify(patches)).not.toContain(temporaryPassword);
 
     vi.mocked(sendEmail).mockResolvedValue({
       ok: false,

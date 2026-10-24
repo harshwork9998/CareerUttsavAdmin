@@ -27,6 +27,10 @@ import {
   STATUS,
   displayClass,
 } from "@/features/dashboard/dashboard-ui";
+import type {
+  CommunicationHistoryItem,
+  CommunicationLastReminder,
+} from "@/lib/partner-communication-history";
 import {
   formatDaysSinceUploadChip,
   getPartnerPortalUploadStatus,
@@ -39,6 +43,7 @@ import { cn } from "@/lib/utils";
 import { eventsService, partnersService } from "@/services/api";
 import type { Event, Partner, PartnerPortalDocument } from "@/types";
 import { Button } from "@/components/ui/button";
+import { PartnerReminderDialog } from "@/features/partners/partner-reminder-dialog";
 import {
   Dialog,
   DialogContent,
@@ -528,6 +533,10 @@ export function PartnerDocsDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [reminderOpen, setReminderOpen] = useState(false);
+  const [history, setHistory] = useState<CommunicationHistoryItem[]>([]);
+  const [lastReminder, setLastReminder] = useState<CommunicationLastReminder | null>(null);
+  const [historyRefresh, setHistoryRefresh] = useState(0);
 
   const partnerQuery = useQuery({
     queryKey: ["partner-docs", initialPartner?.id],
@@ -544,6 +553,35 @@ export function PartnerDocsDialog({
   });
 
   const partner = partnerQuery.data ?? initialPartner;
+
+  useEffect(() => {
+    if (!open || !initialPartner?.id) return;
+    let cancelled = false;
+    setHistory([]);
+    setLastReminder(null);
+    void fetch(`/api/partners/${initialPartner.id}/communications`, { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return (await response.json()) as {
+          history?: CommunicationHistoryItem[];
+          lastReminder?: CommunicationLastReminder | null;
+        };
+      })
+      .then((body) => {
+        if (cancelled || !body) return;
+        setHistory(body.history ?? []);
+        setLastReminder(body.lastReminder ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setHistory([]);
+          setLastReminder(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, initialPartner?.id, historyRefresh]);
 
   const partnerWithSeminarTitles = useMemo(() => {
     if (!partner) return null;
@@ -581,18 +619,6 @@ export function PartnerDocsDialog({
     if (!open) setSelectedKey(null);
   }, [open]);
 
-  const sendReminder = () => {
-    if (!partner || !uploadStatus || uploadStatus.missing.length === 0) return;
-    const missingLabels = uploadStatus.missing.map((m) => m.label).join(", ");
-    const to =
-      partner.portalInviteEmail ||
-      partner.primaryContact?.email ||
-      "partner contact";
-    toast.success("Reminder sent", {
-      description: `Asked ${to} to upload: ${missingLabels}`,
-    });
-  };
-
   const reminderChip = uploadStatus
     ? formatDaysSinceUploadChip(uploadStatus)
     : null;
@@ -601,6 +627,7 @@ export function PartnerDocsDialog({
     partner?.portalDocuments?.filter((doc) => doc.kind === "other") ?? [];
 
   return (
+    <>
     <Dialog
       open={open}
       onOpenChange={(next) => {
@@ -786,26 +813,82 @@ export function PartnerDocsDialog({
               ) : null}
             </div>
 
-            {uploadStatus && !uploadStatus.allUploaded ? (
-              <div
-                className="shrink-0 border-t p-3"
-                style={{ borderColor: LINE.subtle }}
+            <div
+              className="shrink-0 border-t p-3"
+              style={{ borderColor: LINE.subtle }}
+            >
+              <p
+                className="px-1 text-[11px] font-semibold tracking-[0.14em] uppercase"
+                style={{ color: INK.muted }}
               >
-                <p className="mb-2 px-1 text-xs" style={{ color: INK.secondary }}>
+                Communication History
+              </p>
+              {history.length === 0 ? (
+                <p className="mt-1 px-1 text-xs" style={{ color: INK.muted }}>
+                  No communications sent yet.
+                </p>
+              ) : (
+                <ul className="mt-1 max-h-36 overflow-y-auto">
+                  {history.map((item) => (
+                    <li
+                      key={item.id}
+                      className="border-b px-1 py-1.5 last:border-b-0"
+                      style={{ borderColor: LINE.subtle }}
+                    >
+                      <p className="text-[11px]" style={{ color: INK.muted }}>
+                        {item.sentAtLabel}
+                      </p>
+                      <p className="text-xs font-medium" style={{ color: INK.primary }}>
+                        {item.name}
+                      </p>
+                      <p className="truncate text-[11px]" style={{ color: INK.secondary }}>
+                        {item.triggerLabel} · {item.status}
+                        {item.recipientEmail ? ` · ${item.recipientEmail}` : ""}
+                      </p>
+                      {item.pendingItems && item.pendingItems.length > 0 ? (
+                        <details className="mt-0.5">
+                          <summary
+                            className="cursor-pointer text-[11px]"
+                            style={{ color: INK.secondary }}
+                          >
+                            Pending items
+                          </summary>
+                          <ul
+                            className="mt-0.5 list-disc pl-4 text-[11px]"
+                            style={{ color: INK.secondary }}
+                          >
+                            {item.pendingItems.map((label) => (
+                              <li key={label}>{label}</li>
+                            ))}
+                          </ul>
+                        </details>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {lastReminder ? (
+                <p className="mt-2 px-1 text-xs" style={{ color: INK.secondary }}>
+                  Last reminder: {lastReminder.sentAtLabel} · {lastReminder.triggerLabel}
+                </p>
+              ) : null}
+              {uploadStatus && !uploadStatus.allUploaded ? (
+                <p className="mt-2 mb-2 px-1 text-xs" style={{ color: INK.secondary }}>
                   Missing:{" "}
                   {uploadStatus.missing.map((m) => m.label).join(", ")}
                 </p>
-                <Button
-                  type="button"
-                  className="h-10 w-full gap-2 text-white hover:opacity-90"
-                  style={{ backgroundColor: BRAND[700] }}
-                  onClick={sendReminder}
-                >
-                  <Bell className="h-4 w-4" />
-                  Send reminder
-                </Button>
-              </div>
-            ) : null}
+              ) : null}
+              <Button
+                type="button"
+                className="mt-2 h-10 w-full gap-2 text-white hover:opacity-90"
+                style={{ backgroundColor: BRAND[700] }}
+                onClick={() => setReminderOpen(true)}
+                disabled={!partner}
+              >
+                <Bell className="h-4 w-4" />
+                Send reminder
+              </Button>
+            </div>
           </aside>
 
           <div className="flex min-h-0 flex-col">
@@ -864,5 +947,14 @@ export function PartnerDocsDialog({
         </div>
       </DialogContent>
     </Dialog>
+    {partner ? (
+      <PartnerReminderDialog
+        partnerId={partner.id}
+        open={reminderOpen}
+        onOpenChange={setReminderOpen}
+        onSent={() => setHistoryRefresh((value) => value + 1)}
+      />
+    ) : null}
+    </>
   );
 }

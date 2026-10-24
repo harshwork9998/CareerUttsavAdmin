@@ -89,6 +89,9 @@ export function mapPrismaPartnerToApi(record: PrismaPartnerRecord): Partner {
       deliverables: readJsonArray<PartnerDeliverable>(partnership.deliverables),
       seminarSlotCount: partnership.seminarSlotCount ?? 0,
       representativeSlotCount: partnership.representativeSlotCount ?? 0,
+      partnerPortalLastActivityAt: optionalIso(
+        partnership.partnerPortalLastActivityAt
+      ),
     }));
 
   const seminarSlotAssignments: PartnerSeminarSlotAssignment[] =

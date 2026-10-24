@@ -80,16 +80,32 @@ describe("partner access email template", () => {
     expect(withoutDate.text).not.toMatch(/\bby\s*\./);
   });
 
-  it("omits a support phone when none is supplied", () => {
+  it("shows the support email and phone on one line", () => {
     const built = message();
-    expect(built.html).toContain("info@careeruttsav.in");
-    expect(built.text).toContain("info@careeruttsav.in");
-    expect(built.html).not.toContain("+91");
-    expect(built.text.split("Support:")[1]?.trim()).toBe("info@careeruttsav.in");
+    const supportLine = "info@careeruttsav.in | +91 91130 64877";
+    expect(built.html).toContain(
+      'href="mailto:info@careeruttsav.in"'
+    );
+    expect(built.html).toContain(
+      'info@careeruttsav.in</a> | <span style="color:#3A3742;">+91 91130 64877</span>'
+    );
+    expect(built.text).toContain(supportLine);
+    expect(built.text.split("Support:")[1]?.trim()).toBe(supportLine);
 
     const withPhone = message({ supportPhone: "+91 90000 00000" });
     expect(withPhone.html).toContain("+91 90000 00000");
-    expect(withPhone.text).toContain("+91 90000 00000");
+    expect(withPhone.html).not.toContain("+91 91130 64877");
+    expect(withPhone.text.split("Support:")[1]?.trim()).toBe(
+      "info@careeruttsav.in | +91 90000 00000"
+    );
+
+    const preview = readFileSync(
+      path.join(process.cwd(), "emails/previews/partner-access-welcome.html"),
+      "utf8"
+    );
+    expect(preview).toContain(
+      'info@careeruttsav.in</a> | <span style="color:#3A3742;">+91 91130 64877</span>'
+    );
   });
 
   it("escapes institution names and dynamic values", () => {
@@ -186,7 +202,8 @@ describe("partner access email transport", () => {
     expect(input?.html).toContain(attending);
     expect(input?.text).toContain(attending);
     expect(input?.html).toContain("info@careeruttsav.in");
-    expect(input?.text).toContain("info@careeruttsav.in");
+    expect(input?.html).toContain("+91 91130 64877");
+    expect(input?.text).toContain("info@careeruttsav.in | +91 91130 64877");
     expect(input?.html).not.toContain(
       "Your Career Uttsav Partner Portal access has been created."
     );

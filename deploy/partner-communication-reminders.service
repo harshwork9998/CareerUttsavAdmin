@@ -1,0 +1,9 @@
+[Unit]
+Description=Career Uttsav partner communication reminders
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/career-uttsav/partner-communication.env
+ExecStart=/usr/bin/curl --fail --silent --show-error --max-time 120 -X POST -H "x-cu-partner-communication-cron-key: ${PARTNER_COMMUNICATION_CRON_SECRET}" https://admin.careeruttsav.in/api/internal/partner-communications/reminders

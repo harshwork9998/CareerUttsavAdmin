@@ -376,6 +376,7 @@ model Partner {
   portalAccessEnabled           Boolean   @default(false)
 
   passwordResetTokens PartnerPasswordResetToken[]
+  communicationLogs   PartnerCommunicationLog[]
 
   portalDocuments       Json?
   portalFasciaName      String?
@@ -431,6 +432,8 @@ model PartnerEventPartnership {
   seminarSlotCount        Int  @default(0)
   /// Admin-owned count of on-ground event representative forms for this partner.
   representativeSlotCount Int  @default(0)
+  /// Last successful partner-originated change to submission data for this event.
+  partnerPortalLastActivityAt DateTime?
 
   partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
   event   Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
@@ -455,6 +458,28 @@ model PartnerSeminarSlotAssignment {
   @@unique([partnershipId, seminarId])
   @@index([seminarId])
   @@map("partner_seminar_slot_assignments")
+}
+
+model PartnerCommunicationLog {
+  id                 String   @id
+  partnerId          String
+  eventPartnershipId String?
+  eventId            String?
+  communicationType  String
+  triggerType        String
+  sentAt             DateTime
+  outcome            String
+  /// Address the message was accepted for. Not updated if the partner email changes later.
+  recipientEmail     String   @default("")
+  messageId          String?
+  metadata           Json?
+  createdAt          DateTime @default(now())
+
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@index([partnerId, communicationType])
+  @@index([partnerId, eventId, sentAt])
+  @@map("partner_communication_logs")
 }
 
 // ─── Admin users / auth ──────────────────────────────────────────────────────

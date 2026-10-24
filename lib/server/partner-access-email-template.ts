@@ -1,4 +1,12 @@
-const SUPPORT_EMAIL_DEFAULT = "info@careeruttsav.in";
+import {
+  PARTNER_EMAIL_SUPPORT_EMAIL,
+  PARTNER_EMAIL_SUPPORT_PHONE,
+  escapePartnerEmailHtml,
+  renderPartnerEmailDocument,
+} from "@/lib/server/partner-email-layout";
+
+const SUPPORT_EMAIL_DEFAULT = PARTNER_EMAIL_SUPPORT_EMAIL;
+const SUPPORT_PHONE_DEFAULT = PARTNER_EMAIL_SUPPORT_PHONE;
 
 const CAPABILITIES = [
   "Complete your institution profile and participation details",
@@ -21,11 +29,7 @@ export type PartnerAccessEmailInput = {
 };
 
 export function escapePartnerAccessHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+  return escapePartnerEmailHtml(value);
 }
 
 function clean(value: string | null | undefined): string {
@@ -105,46 +109,20 @@ export function buildPartnerAccessEmailContent(
   const portalLogin = clean(input.portalLogin);
   const temporaryPassword = input.temporaryPassword ?? "";
   const supportEmail = clean(input.supportEmail) || SUPPORT_EMAIL_DEFAULT;
-  const supportPhone = clean(input.supportPhone);
+  const supportPhone = clean(input.supportPhone) || SUPPORT_PHONE_DEFAULT;
   const dueDateLabel = formatPartnerAccessDueDate(input.dueDate);
   const deadline = partnerAccessDeadlineCopy(dueDateLabel);
   const subject = buildPartnerAccessSubject(institutionName);
   const safeName = escapePartnerAccessHtml(institutionName);
   const safeUrl = escapePartnerAccessHtml(portalUrl);
-  const safeEmail = escapePartnerAccessHtml(supportEmail);
-  const safePhone = escapePartnerAccessHtml(supportPhone);
 
-  const logo = input.includeLogo
-    ? `<img src="cid:career-uttsav-logo" width="168" alt="Career Uttsav" style="display:block;width:168px;max-width:100%;height:auto;border:0;" />`
-    : `<div style="font-family:Georgia,'Times New Roman',serif;font-size:22px;line-height:1.2;font-weight:700;color:#14121A;">Career Uttsav</div>`;
-
-  const phoneLine = supportPhone
-    ? `<br /><span style="color:#3A3742;">${safePhone}</span>`
-    : "";
-
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${escapePartnerAccessHtml(subject)}</title>
-</head>
-<body style="margin:0;padding:0;background:#FBFAF3;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#FBFAF3;margin:0;padding:0;">
-    <tr>
-      <td align="center" style="padding:24px 12px;">
-        <table role="presentation" width="640" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:640px;background:#ffffff;border:1px solid #E4E1D6;border-radius:28px;">
-          <tr>
-            <td bgcolor="#E5372B" height="8" style="height:8px;font-size:0;line-height:0;background:#E5372B;border-radius:28px 28px 0 0;">&nbsp;</td>
-          </tr>
-          <tr>
-            <td style="padding:28px 32px 8px 32px;">
-              ${logo}
-              <div style="padding-top:18px;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.3;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#E5372B;">Partner Portal</div>
-              <h1 style="margin:10px 0 0 0;font-family:Georgia,'Times New Roman',serif;font-size:28px;line-height:1.15;font-weight:700;color:#14121A;word-break:break-word;">Welcome aboard, ${safeName}</h1>
-            </td>
-          </tr>
-          <tr>
+  const html = renderPartnerEmailDocument({
+    title: subject,
+    heading: `Welcome aboard, ${institutionName}`,
+    includeLogo: input.includeLogo,
+    supportEmail,
+    supportPhone,
+    bodyHtml: `<tr>
             <td style="padding:18px 32px 8px 32px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#3A3742;">
               <p style="margin:0 0 12px 0;">Dear ${safeName} Team,</p>
               <p style="margin:0 0 12px 0;">We're delighted to welcome you as a participating partner at Career Uttsav 2026.</p>
@@ -197,20 +175,8 @@ export function buildPartnerAccessEmailContent(
             <td style="padding:8px 32px 24px 32px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.55;color:#3A3742;">
               ${escapePartnerAccessHtml(deadline)}
             </td>
-          </tr>
-          <tr>
-            <td style="padding:18px 32px 28px 32px;border-top:1px solid #E4E1D6;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.55;color:#3A3742;">
-              <div style="color:#14121A;">Warm regards,</div>
-              <div style="padding-top:4px;font-weight:700;color:#14121A;">Team Career Uttsav</div>
-              <div style="padding-top:12px;">Support:<br /><a href="mailto:${safeEmail}" style="color:#E5372B;font-weight:700;text-decoration:none;">${safeEmail}</a>${phoneLine}</div>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
+          </tr>`,
+  });
 
   const text = [
     `Welcome aboard, ${institutionName}`,
@@ -239,8 +205,7 @@ export function buildPartnerAccessEmailContent(
     "Team Career Uttsav",
     "",
     "Support:",
-    supportEmail,
-    ...(supportPhone ? [supportPhone] : []),
+    `${supportEmail} | ${supportPhone}`,
   ].join("\n");
 
   return { subject, html, text };

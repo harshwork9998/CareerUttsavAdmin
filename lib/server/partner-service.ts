@@ -1,3 +1,4 @@
+import { preservePartnershipActivity } from "@/lib/partner-communication-policy";
 import { applyPartnerCredentialFields } from "@/lib/partner-credentials";
 import { portalLoginLookupFilter } from "@/lib/partner-login-identity";
 import {
@@ -116,10 +117,13 @@ export async function updatePartnerForApi(
     return { ok: false, status: 400, error: allocationError };
   }
 
-  const updated = applyPartnerCredentialFields(existing, {
-    ...phones.patch,
-    updatedAt: new Date().toISOString(),
-  });
+  const updated = preservePartnershipActivity(
+    existing,
+    applyPartnerCredentialFields(existing, {
+      ...phones.patch,
+      updatedAt: new Date().toISOString(),
+    })
+  );
 
   if (isPrismaPartnerPersistence()) {
     try {

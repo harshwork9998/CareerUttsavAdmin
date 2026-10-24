@@ -82,6 +82,7 @@ function prismaPartnerFromJson(partner: Partner): PrismaPartnerRecord {
         deliverables: (partner.deliverables ?? []) as unknown as PrismaPartnerRecord["eventPartnerships"][number]["deliverables"],
         seminarSlotCount: 0,
         representativeSlotCount: 0,
+        partnerPortalLastActivityAt: null,
         seminarSlotAssignments: [],
       },
     ],

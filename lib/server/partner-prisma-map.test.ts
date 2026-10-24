@@ -90,6 +90,7 @@ function baseRecord(
         ],
         seminarSlotCount: 2,
         representativeSlotCount: 0,
+        partnerPortalLastActivityAt: null,
         seminarSlotAssignments: [
           {
             id: "pssa-partner-001-sem-001-a",

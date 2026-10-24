@@ -231,6 +231,9 @@ export function mapPartnerEventPartnerships(
     deliverables: toJsonValue(partnership.deliverables ?? []),
     seminarSlotCount: partnership.seminarSlotCount ?? 0,
     representativeSlotCount: partnership.representativeSlotCount ?? 0,
+    partnerPortalLastActivityAt: parseOptionalDate(
+      partnership.partnerPortalLastActivityAt
+    ),
   }));
 }
 

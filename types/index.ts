@@ -336,6 +336,8 @@ export interface PartnerEventPartnership {
   seminarSlotCount: number;
   /** Admin-owned count of event representative forms for this partner/event */
   representativeSlotCount?: number;
+  /** Last successful partner-originated submission change for this event. */
+  partnerPortalLastActivityAt?: string;
 }
 
 export interface Partner {

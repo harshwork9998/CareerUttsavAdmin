@@ -1,0 +1,10 @@
+[Unit]
+Description=Hourly Career Uttsav partner communication reminders
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+Unit=partner-communication-reminders.service
+
+[Install]
+WantedBy=timers.target
