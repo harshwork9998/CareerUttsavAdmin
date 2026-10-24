@@ -116,7 +116,7 @@ vi.mock("@/lib/server/whatsapp/whatsapp-conversation-store", () => ({
   resetWhatsAppConversationsForDeletedRegistration: vi.fn(),
 }));
 
-vi.mock("@/lib/email", () => ({
+vi.mock("@/lib/server/student-registration-email", () => ({
   sendStudentWelcomeEmail: vi.fn(async () => ({ ok: true })),
 }));
 

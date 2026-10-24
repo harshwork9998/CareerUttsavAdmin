@@ -1,0 +1,9 @@
+[Unit]
+Description=Career Uttsav Relationship Owner daily follow-up WhatsApp digest
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/career-uttsav/relationship-owner-followup.env
+ExecStart=/usr/bin/curl --fail --silent --show-error --max-time 120 -X POST -H "x-cu-relationship-owner-followup-cron-key: ${RELATIONSHIP_OWNER_FOLLOWUP_CRON_SECRET}" https://admin.careeruttsav.in/api/internal/whatsapp/relationship-owner-follow-ups

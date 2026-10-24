@@ -141,16 +141,25 @@ export function renderPartnerEmailDocument(input: {
   bodyHtml: string;
   includeLogo?: boolean;
   eyebrow?: string;
+  subheading?: string;
   supportEmail?: string;
   supportPhone?: string;
+  websiteUrl?: string;
 }): string {
   const title = escapePartnerEmailHtml(input.title);
   const heading = escapePartnerEmailHtml(input.heading);
   const eyebrow = escapePartnerEmailHtml(input.eyebrow ?? "Partner Portal");
+  const subheading = input.subheading
+    ? `<p style="margin:12px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:#3A3742;">${escapePartnerEmailHtml(input.subheading)}</p>`
+    : "";
   const supportEmail = input.supportEmail?.trim() || PARTNER_EMAIL_SUPPORT_EMAIL;
   const supportPhone = input.supportPhone?.trim() || PARTNER_EMAIL_SUPPORT_PHONE;
   const safeEmail = escapePartnerEmailHtml(supportEmail);
   const safePhone = escapePartnerEmailHtml(supportPhone);
+  const websiteUrl = (input.websiteUrl ?? "").trim();
+  const websiteLine = websiteUrl
+    ? `<div style="padding-top:10px;">Website:<br /><a href="${escapePartnerEmailHtml(websiteUrl.startsWith("http") ? websiteUrl : `https://${websiteUrl.replace(/^\/\//, "")}`)}" style="color:#E5372B;font-weight:700;text-decoration:none;">${escapePartnerEmailHtml(websiteUrl.replace(/^https?:\/\//, ""))}</a></div>`
+    : "";
   const logo = partnerEmailLogoHtml(input.includeLogo);
 
   return `<!DOCTYPE html>
@@ -174,6 +183,7 @@ export function renderPartnerEmailDocument(input: {
               ${logo}
               <div style="padding-top:18px;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.3;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#E5372B;">${eyebrow}</div>
               <h1 style="margin:10px 0 0 0;font-family:Georgia,'Times New Roman',serif;font-size:28px;line-height:1.15;font-weight:700;color:#14121A;word-break:break-word;">${heading}</h1>
+              ${subheading}
             </td>
           </tr>
           ${input.bodyHtml}
@@ -182,6 +192,7 @@ export function renderPartnerEmailDocument(input: {
               <div style="color:#14121A;">Warm regards,</div>
               <div style="padding-top:4px;font-weight:700;color:#14121A;">Team Career Uttsav</div>
               <div style="padding-top:12px;">Support:<br /><a href="mailto:${safeEmail}" style="color:#E5372B;font-weight:700;text-decoration:none;">${safeEmail}</a> | <span style="color:#3A3742;">${safePhone}</span></div>
+              ${websiteLine}
             </td>
           </tr>
         </table>

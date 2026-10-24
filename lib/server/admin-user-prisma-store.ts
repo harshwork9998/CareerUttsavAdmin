@@ -29,6 +29,7 @@ export const PATCH_EDITABLE_ADMIN_USER_FIELDS = [
   "role",
   "status",
   "department",
+  "relationshipSpocId",
 ] as const;
 
 export type CreateAdminUserInput = Omit<User, "id" | "createdAt" | "updatedAt">;
@@ -226,6 +227,29 @@ export async function updatePrismaAdminUser(
   if (scalarPatch.role !== undefined) {
     data.role = mapApiAdminRoleToPrisma(scalarPatch.role);
     data.roleId = ROLE_ID_BY_NAME[scalarPatch.role];
+  }
+  if (patch.relationshipSpocId !== undefined) {
+    const nextSpocId = patch.relationshipSpocId?.trim() || null;
+    if (nextSpocId) {
+      const spoc = await prisma.spoc.findUnique({
+        where: { id: nextSpocId },
+        select: { id: true },
+      });
+      if (!spoc) {
+        throw new AdminUserError(400, "Selected Relationship Owner was not found");
+      }
+      const taken = await prisma.adminUser.findFirst({
+        where: { relationshipSpocId: nextSpocId, NOT: { id } },
+        select: { id: true },
+      });
+      if (taken) {
+        throw new AdminUserError(
+          409,
+          "Another admin user is already mapped to this Relationship Owner"
+        );
+      }
+    }
+    data.relationshipSpocId = nextSpocId;
   }
 
   const updated = await prisma.adminUser.update({

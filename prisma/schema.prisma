@@ -316,7 +316,9 @@ model Spoc {
   createdAt       DateTime
   updatedAt       DateTime
 
-  partners Partner[] @relation("PartnerRelationshipSpoc")
+  partners                    Partner[]                         @relation("PartnerRelationshipSpoc")
+  adminUser                     AdminUser?
+  relationshipOwnerFollowUpDigests RelationshipOwnerFollowUpDigest[]
 
   @@index([organization])
   @@map("spocs")
@@ -510,13 +512,47 @@ model AdminUser {
   passwordHash        String
   authVersion         Int                     @default(0)
   lastLogin           DateTime?
+  relationshipSpocId  String?                 @unique
   createdAt           DateTime
   updatedAt           DateTime
   passwordResetTokens AdminPasswordResetToken[]
+  relationshipSpoc    Spoc?                   @relation(fields: [relationshipSpocId], references: [id], onDelete: SetNull)
 
   @@index([role])
   @@index([status])
+  @@index([relationshipSpocId])
   @@map("admin_users")
+}
+
+enum RelationshipOwnerFollowUpDigestStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+model RelationshipOwnerFollowUpDigest {
+  id              String                                @id @default(cuid())
+  ownerSpocId     String
+  digestDate      String
+  recipientPhone  String
+  itemCount       Int
+  templateName    String
+  status          RelationshipOwnerFollowUpDigestStatus
+  messageId       String?
+  attemptedAt     DateTime
+  sentAt          DateTime?
+  errorCode       String?
+  errorMessage    String?
+  skipReason      String?
+  createdAt       DateTime                              @default(now())
+  updatedAt       DateTime                              @updatedAt
+
+  ownerSpoc Spoc @relation(fields: [ownerSpocId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerSpocId, digestDate])
+  @@index([digestDate])
+  @@map("relationship_owner_follow_up_digests")
 }
 
 model AdminPasswordResetToken {

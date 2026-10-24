@@ -193,6 +193,12 @@ function canPersistNewPartner(name: string, city: string, state: string) {
   );
 }
 
+function isRelationshipOwnerReady(
+  owner: RelationshipOwner | undefined
+): boolean {
+  return Boolean(owner?.spocId || owner?.managerName?.trim());
+}
+
 function isChapter1Complete(partner: Partner): boolean {
   return Boolean(
     partner.name?.trim() &&
@@ -203,7 +209,8 @@ function isChapter1Complete(partner: Partner): boolean {
       partner.primaryContact?.email?.trim() &&
       partner.secondaryContact?.name?.trim() &&
       partner.secondaryContact?.phone?.trim() &&
-      partner.secondaryContact?.email?.trim()
+      partner.secondaryContact?.email?.trim() &&
+      isRelationshipOwnerReady(partner.relationshipOwner)
   );
 }
 
@@ -239,13 +246,8 @@ function startingChapter(partner: Partner | null): ChapterId {
     return 3;
   }
   const eps = resolveEventPartnerships(partner);
-  const ownerReady = Boolean(partner.relationshipOwner?.managerName);
   const eventsReady = partner.eventIds.length > 0;
-  if (
-    !ownerReady ||
-    !eventsReady ||
-    !eps.every((ep) => hasPartnershipTier(ep))
-  ) {
+  if (!eventsReady || !eps.every((ep) => hasPartnershipTier(ep))) {
     return 4;
   }
   if (!partner.deliverablesConfirmedAt) return 5;
@@ -728,6 +730,12 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       if (isNew && !partnerId && !canPersistNewPartner(trimmedName, city, state)) {
         return null;
       }
+      const selectedSpoc =
+        spocChoice !== NEW_SPOC
+          ? spocs.find((s) => s.id === spocChoice)
+          : undefined;
+      const organization =
+        selectedSpoc?.organization?.trim() || spocOrganization.trim();
       return {
         name: trimmedName,
         city: city.trim(),
@@ -738,7 +746,13 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
           partner?.eventIds?.length
             ? partner.eventIds
             : ensureCurrentEventIds(eventIds),
-        relationshipOwner: partner?.relationshipOwner ?? emptyOwner(),
+        relationshipOwner: {
+          organization,
+          spocId: selectedSpoc?.id,
+          managerName: (selectedSpoc?.name ?? managerName).trim(),
+          managerPhone: (selectedSpoc?.phone ?? managerPhone).trim(),
+          managerEmail: (selectedSpoc?.email ?? managerEmail).trim(),
+        },
         stage: partner?.stage ?? "New",
         stageRemarks: partner?.stageRemarks ?? [],
         contactedAt: partner?.contactedAt,
@@ -777,12 +791,6 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       };
     }
     if (chapter === 4) {
-      const selectedSpoc =
-        spocChoice !== NEW_SPOC
-          ? spocs.find((s) => s.id === spocChoice)
-          : undefined;
-      const organization =
-        selectedSpoc?.organization?.trim() || spocOrganization.trim();
       const activePartnerships = eventPartnerships.filter((ep) =>
         eventIds.includes(ep.eventId)
       );
@@ -791,13 +799,6 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
         ...partner,
         ...legacy,
         eventPartnerships: activePartnerships,
-        relationshipOwner: {
-          organization,
-          spocId: selectedSpoc?.id,
-          managerName: (selectedSpoc?.name ?? managerName).trim(),
-          managerPhone: (selectedSpoc?.phone ?? managerPhone).trim(),
-          managerEmail: (selectedSpoc?.email ?? managerEmail).trim(),
-        },
         sponsorshipNotes: sponsorshipNotes.trim(),
       };
     }
@@ -895,7 +896,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     }
 
     let payload: DraftPayload = data;
-    if (chapter === 4) {
+    if (chapter === 1) {
       const linked = await ensureSpocLinked({ requireComplete: false });
       if (!linked.ok) {
         setDraftStatus("error");
@@ -1121,7 +1122,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     ];
   };
 
-  const submitChapter1 = () => {
+  const submitChapter1 = async () => {
     const next: Record<string, string> = {};
     if (!name.trim()) next.name = "Required";
     if (!city.trim()) next.city = "Required";
@@ -1154,7 +1155,27 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       );
       if (phoneErr) next.secondary = phoneErr;
     }
+    if (!spocChoice) {
+      next.spoc = "Select a SPOC";
+    } else if (spocChoice === NEW_SPOC) {
+      if (!managerName.trim()) next.mName = "Required";
+      if (!spocOrganization.trim()) next.mOrg = "Required";
+      if (!managerPhone.trim()) next.mPhone = "Required";
+      else {
+        const phoneErr = mobileErrorForSubmit(managerPhone, "");
+        if (phoneErr) next.mPhone = phoneErr;
+      }
+      if (!managerEmail.trim()) next.mEmail = "Required";
+    } else if (!spocs.some((s) => s.id === spocChoice)) {
+      next.spoc = "Select a SPOC";
+    }
     if (applyFormErrors(setErrors, next)) return;
+
+    const linked = await ensureSpocLinked({ requireComplete: true });
+    if (!linked.ok) {
+      toast.error(linked.error);
+      return;
+    }
 
     const base = {
       name: name.trim(),
@@ -1178,7 +1199,13 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
           : eventPartnerships.some((ep) => ep.eventId === CURRENT_EVENT_ID)
             ? eventPartnerships
             : defaultCurrentEventPartnerships(),
-      relationshipOwner: partner?.relationshipOwner ?? emptyOwner(),
+      relationshipOwner: {
+        organization: linked.organization,
+        spocId: linked.spocId,
+        managerName: linked.managerName,
+        managerPhone: linked.managerPhone,
+        managerEmail: linked.managerEmail,
+      },
       stage: "New" as const,
       stageRemarks: partner?.stageRemarks ?? [],
       contactedAt: partner?.contactedAt,
@@ -1318,20 +1345,6 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
   const submitChapter4 = async () => {
     if (!partner) return;
     const next: Record<string, string> = {};
-    if (!spocChoice) {
-      next.spoc = "Select a SPOC";
-    } else if (spocChoice === NEW_SPOC) {
-      if (!managerName.trim()) next.mName = "Required";
-      if (!spocOrganization.trim()) next.mOrg = "Required";
-      if (!managerPhone.trim()) next.mPhone = "Required";
-      else {
-        const phoneErr = mobileErrorForSubmit(managerPhone, "");
-        if (phoneErr) next.mPhone = phoneErr;
-      }
-      if (!managerEmail.trim()) next.mEmail = "Required";
-    } else if (!spocs.some((s) => s.id === spocChoice)) {
-      next.spoc = "Select a SPOC";
-    }
     if (eventIds.length === 0) next.events = "Current Bangalore event is required";
     if (!allEventsHaveTier(eventPartnerships, eventIds)) {
       next.tier = "Select a sponsorship tier";
@@ -1343,12 +1356,6 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       }
     }
     if (applyFormErrors(setErrors, next)) return;
-
-    const linked = await ensureSpocLinked({ requireComplete: true });
-    if (!linked.ok) {
-      toast.error(linked.error);
-      return;
-    }
 
     const activePartnerships = eventPartnerships.filter((ep) =>
       eventIds.includes(ep.eventId)
@@ -1375,13 +1382,6 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
           ? activePartnerships
           : defaultCurrentEventPartnerships(),
         seminarSlotAssignments: nextAssignments,
-        relationshipOwner: {
-          organization: linked.organization,
-          spocId: linked.spocId,
-          managerName: linked.managerName,
-          managerPhone: linked.managerPhone,
-          managerEmail: linked.managerEmail,
-        },
         sponsorshipNotes: sponsorshipNotes.trim(),
         stage: "Negotiation",
         stageRemarks: pushRemark(
@@ -1664,7 +1664,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       setContactedNotes(partner.contactedNotes ?? "");
     } else if (chapter === 3) {
       // Meetings reset handled in ChapterMeetings composer
-    } else if (chapter === 4) {
+    } else if (chapter === 1) {
       setManagerName(partner.relationshipOwner?.managerName ?? "");
       setManagerPhone(partner.relationshipOwner?.managerPhone ?? "");
       setManagerEmail(partner.relationshipOwner?.managerEmail ?? "");
@@ -1679,6 +1679,7 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
             ""
         );
       }
+    } else if (chapter === 4) {
       setEventIds([...partner.eventIds]);
       setEventPartnerships(resolveEventPartnerships(partner, generateId));
       setSponsorshipNotes(partner.sponsorshipNotes ?? "");
@@ -1920,6 +1921,17 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
                     setPrimary={setPrimary}
                     secondary={secondary}
                     setSecondary={setSecondary}
+                    spocChoice={spocChoice}
+                    spocs={spocs}
+                    onSpocChoiceChange={selectSpoc}
+                    managerName={managerName}
+                    setManagerName={setManagerName}
+                    spocOrganization={spocOrganization}
+                    setSpocOrganization={setSpocOrganization}
+                    managerPhone={managerPhone}
+                    setManagerPhone={setManagerPhone}
+                    managerEmail={managerEmail}
+                    setManagerEmail={setManagerEmail}
                     errors={errors}
                   />
                 )}
@@ -1958,17 +1970,6 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
 
                 {chapter === 4 && (
                   <ChapterPartnership
-                    spocChoice={spocChoice}
-                    spocs={spocs}
-                    onSpocChoiceChange={selectSpoc}
-                    managerName={managerName}
-                    setManagerName={setManagerName}
-                    spocOrganization={spocOrganization}
-                    setSpocOrganization={setSpocOrganization}
-                    managerPhone={managerPhone}
-                    setManagerPhone={setManagerPhone}
-                    managerEmail={managerEmail}
-                    setManagerEmail={setManagerEmail}
                     setEventIds={setEventIds}
                     eventPartnerships={eventPartnerships}
                     setEventPartnerships={setEventPartnerships}
@@ -2342,8 +2343,20 @@ function ChapterPartnerDetails(props: {
   setPrimary: (v: PartnerContact) => void;
   secondary: PartnerContact;
   setSecondary: (v: PartnerContact) => void;
+  spocChoice: string;
+  spocs: Spoc[];
+  onSpocChoiceChange: (v: string) => void;
+  managerName: string;
+  setManagerName: (v: string) => void;
+  spocOrganization: string;
+  setSpocOrganization: (v: string) => void;
+  managerPhone: string;
+  setManagerPhone: (v: string) => void;
+  managerEmail: string;
+  setManagerEmail: (v: string) => void;
   errors: Record<string, string>;
 }) {
+  const creatingSpoc = props.spocChoice === NEW_SPOC;
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2">
@@ -2396,6 +2409,99 @@ function ChapterPartnerDetails(props: {
         />
         <FieldError message={props.errors.secondary} />
       </div>
+      <div className="border-t pt-6" style={{ borderColor: LINE.subtle }}>
+        <section className="space-y-4">
+          <h3
+            className="text-sm font-semibold tracking-wide uppercase"
+            style={{ color: BRAND[700] }}
+          >
+            Relationship owner
+          </h3>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div
+              className="space-y-1.5 sm:col-span-2"
+              data-field-error={props.errors.spoc ? "true" : undefined}
+            >
+              <Label>SPOC</Label>
+              <Select
+                value={props.spocChoice || undefined}
+                onValueChange={props.onSpocChoiceChange}
+              >
+                <SelectTrigger className={fieldErrorClass(props.errors.spoc)}>
+                  <SelectValue placeholder="Select a SPOC" />
+                </SelectTrigger>
+                <SelectContent>
+                  {props.spocs.map((spoc) => (
+                    <SelectItem key={spoc.id} value={spoc.id}>
+                      {spoc.organization?.trim() && spoc.organization !== "—"
+                        ? `${spoc.name} - ${spoc.organization}`
+                        : spoc.name}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value={NEW_SPOC}>Create new SPOC</SelectItem>
+                </SelectContent>
+              </Select>
+              <FieldError message={props.errors.spoc} />
+            </div>
+            {creatingSpoc ? (
+              <>
+                <div
+                  className="space-y-1.5"
+                  data-field-error={props.errors.mName ? "true" : undefined}
+                >
+                  <Label>Name</Label>
+                  <Input
+                    className={fieldErrorClass(props.errors.mName)}
+                    value={props.managerName}
+                    onChange={(e) => props.setManagerName(e.target.value)}
+                  />
+                  <FieldError message={props.errors.mName} />
+                </div>
+                <div
+                  className="space-y-1.5"
+                  data-field-error={props.errors.mOrg ? "true" : undefined}
+                >
+                  <Label>Organization name</Label>
+                  <Input
+                    className={fieldErrorClass(props.errors.mOrg)}
+                    value={props.spocOrganization}
+                    onChange={(e) => props.setSpocOrganization(e.target.value)}
+                  />
+                  <FieldError message={props.errors.mOrg} />
+                </div>
+                <div
+                  className="space-y-1.5"
+                  data-field-error={props.errors.mPhone ? "true" : undefined}
+                >
+                  <Label>Mobile Number</Label>
+                  <Input
+                    type="tel"
+                    value={props.managerPhone}
+                    onChange={(e) =>
+                      props.setManagerPhone(
+                        constrainIndianMobileTyping(e.target.value)
+                      )
+                    }
+                  />
+                  <FieldError message={props.errors.mPhone} />
+                </div>
+                <div
+                  className="space-y-1.5"
+                  data-field-error={props.errors.mEmail ? "true" : undefined}
+                >
+                  <Label>Email</Label>
+                  <Input
+                    type="email"
+                    value={props.managerEmail}
+                    onChange={(e) => props.setManagerEmail(e.target.value)}
+                  />
+                  <FieldError message={props.errors.mEmail} />
+                </div>
+              </>
+            ) : null}
+          </div>
+        </section>
+      </div>
     </div>
   );
 }
@@ -2434,17 +2540,6 @@ function ChapterContacted(props: {
 }
 
 function ChapterPartnership(props: {
-  spocChoice: string;
-  spocs: Spoc[];
-  onSpocChoiceChange: (v: string) => void;
-  managerName: string;
-  setManagerName: (v: string) => void;
-  spocOrganization: string;
-  setSpocOrganization: (v: string) => void;
-  managerPhone: string;
-  setManagerPhone: (v: string) => void;
-  managerEmail: string;
-  setManagerEmail: (v: string) => void;
   setEventIds: (v: string[] | ((p: string[]) => string[])) => void;
   eventPartnerships: PartnerEventPartnership[];
   setEventPartnerships: (
@@ -2457,7 +2552,6 @@ function ChapterPartnership(props: {
   setSponsorshipNotes: (v: string) => void;
   errors: Record<string, string>;
 }) {
-  const creatingSpoc = props.spocChoice === NEW_SPOC;
   const partnershipForEvent = (eventId: string) =>
     props.eventPartnerships.find((ep) => ep.eventId === eventId);
 
@@ -2527,106 +2621,6 @@ function ChapterPartnership(props: {
 
   return (
     <div className="space-y-8">
-      <section className="space-y-4">
-        <h3 className="text-sm font-semibold tracking-wide uppercase" style={{ color: BRAND[700] }}>
-          Relationship owner
-        </h3>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div
-            className="space-y-1.5 sm:col-span-2"
-            data-field-error={props.errors.spoc ? "true" : undefined}
-          >
-            <Label>SPOC</Label>
-            <Select
-              value={props.spocChoice || undefined}
-              onValueChange={props.onSpocChoiceChange}
-            >
-              <SelectTrigger className={fieldErrorClass(props.errors.spoc)}>
-                <SelectValue placeholder="Select a SPOC" />
-              </SelectTrigger>
-              <SelectContent>
-                {props.spocs.map((spoc) => (
-                  <SelectItem key={spoc.id} value={spoc.id}>
-                    {spoc.organization?.trim() && spoc.organization !== "—"
-                      ? `${spoc.name} - ${spoc.organization}`
-                      : spoc.name}
-                  </SelectItem>
-                ))}
-                <SelectItem value={NEW_SPOC}>Create new SPOC</SelectItem>
-              </SelectContent>
-            </Select>
-            <FieldError message={props.errors.spoc} />
-            <p className="text-xs text-muted-foreground">
-              Select a saved SPOC, or create a new one to reuse across partners.
-            </p>
-          </div>
-          {creatingSpoc ? (
-            <>
-              <div
-                className="space-y-1.5"
-                data-field-error={props.errors.mName ? "true" : undefined}
-              >
-                <Label>Name</Label>
-                <Input
-                  className={fieldErrorClass(props.errors.mName)}
-                  aria-invalid={Boolean(props.errors.mName)}
-                  value={props.managerName}
-                  onChange={(e) => props.setManagerName(e.target.value)}
-                />
-                <FieldError message={props.errors.mName} />
-              </div>
-              <div
-                className="space-y-1.5"
-                data-field-error={props.errors.mOrg ? "true" : undefined}
-              >
-                <Label>Organization name</Label>
-                <Input
-                  className={fieldErrorClass(props.errors.mOrg)}
-                  aria-invalid={Boolean(props.errors.mOrg)}
-                  value={props.spocOrganization}
-                  onChange={(e) => props.setSpocOrganization(e.target.value)}
-                />
-                <FieldError message={props.errors.mOrg} />
-              </div>
-              <div
-                className="space-y-1.5"
-                data-field-error={props.errors.mPhone ? "true" : undefined}
-              >
-                <Label>Mobile Number</Label>
-                <Input
-                  type="tel"
-                  inputMode="numeric"
-                  autoComplete="tel"
-                  className={fieldErrorClass(props.errors.mPhone)}
-                  aria-invalid={Boolean(props.errors.mPhone)}
-                  value={props.managerPhone}
-                  onChange={(e) =>
-                    props.setManagerPhone(
-                      constrainIndianMobileTyping(e.target.value)
-                    )
-                  }
-                />
-                <FieldError message={props.errors.mPhone} />
-              </div>
-              <div
-                className="space-y-1.5"
-                data-field-error={props.errors.mEmail ? "true" : undefined}
-              >
-                <Label>Email</Label>
-                <Input
-                  type="email"
-                  className={fieldErrorClass(props.errors.mEmail)}
-                  aria-invalid={Boolean(props.errors.mEmail)}
-                  value={props.managerEmail}
-                  onChange={(e) => props.setManagerEmail(e.target.value)}
-                />
-                <FieldError message={props.errors.mEmail} />
-              </div>
-            </>
-          ) : null}
-        </div>
-      </section>
-
       <section className="space-y-4">
         <h3 className="text-sm font-semibold tracking-wide uppercase" style={{ color: BRAND[700] }}>
           Sponsorship package

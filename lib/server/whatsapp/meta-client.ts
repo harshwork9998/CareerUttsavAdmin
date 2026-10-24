@@ -74,6 +74,23 @@ export type SendWhatsAppImageInput = {
   caption?: string;
 };
 
+export type WhatsAppTemplateComponentParameter = {
+  type: "text";
+  text: string;
+};
+
+export type WhatsAppTemplateComponent = {
+  type: "body" | "header";
+  parameters?: WhatsAppTemplateComponentParameter[];
+};
+
+export type SendWhatsAppTemplateInput = {
+  to: string;
+  templateName: string;
+  languageCode: string;
+  components?: WhatsAppTemplateComponent[];
+};
+
 type FetchFn = typeof fetch;
 
 let customFetch: FetchFn | null = null;
@@ -256,6 +273,38 @@ function buildBaseMessagePayload(to: string): Record<string, unknown> {
     recipient_type: "individual",
     to: normalizeRecipient(to),
   };
+}
+
+export async function sendWhatsAppTemplate(
+  input: SendWhatsAppTemplateInput
+): Promise<MetaSendResult> {
+  const configResult = getMetaClientConfig();
+  if (!configResult.ok) {
+    return {
+      success: false,
+      errorCode: configResult.errorCode,
+      retryable: false,
+    };
+  }
+
+  const template: Record<string, unknown> = {
+    name: input.templateName,
+    language: { code: input.languageCode },
+  };
+  if (input.components?.length) {
+    template.components = input.components;
+  }
+
+  return sendMetaMessagePayload({
+    config: configResult.config,
+    to: input.to,
+    actionType: "TEMPLATE",
+    payload: {
+      ...buildBaseMessagePayload(input.to),
+      type: "template",
+      template,
+    },
+  });
 }
 
 export async function sendWhatsAppText(

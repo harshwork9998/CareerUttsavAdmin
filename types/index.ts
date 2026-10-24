@@ -76,6 +76,8 @@ export interface User {
   name: string;
   email: string;
   phone?: string;
+  /** Links this Admin login to a Relationship Owner (SPOC) for follow-up scoping. */
+  relationshipSpocId?: string | null;
   avatar?: string;
   role: RoleName;
   roleId: string;

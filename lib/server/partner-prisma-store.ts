@@ -122,6 +122,17 @@ export async function listPrismaPartners(): Promise<Partner[]> {
   return enrichPartners(mapPrismaPartnersToApi(records));
 }
 
+export async function listPrismaPartnersByRelationshipSpocId(
+  relationshipSpocId: string
+): Promise<Partner[]> {
+  const records = await prisma.partner.findMany({
+    where: { relationshipSpocId },
+    include: partnerInclude,
+    orderBy: { updatedAt: "desc" },
+  });
+  return enrichPartners(mapPrismaPartnersToApi(records));
+}
+
 export async function getPrismaPartnerById(id: string): Promise<Partner | null> {
   const record = await prisma.partner.findUnique({
     where: { id },

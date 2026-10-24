@@ -1,4 +1,4 @@
-import { sendStudentWelcomeEmail } from "@/lib/email";
+import { sendStudentWelcomeEmail } from "@/lib/server/student-registration-email";
 import { resolveRegistration } from "@/lib/enrich-registration";
 import { consumePhoneVerification } from "@/lib/otp";
 import { isStudentRegistration } from "@/lib/registration-kinds";

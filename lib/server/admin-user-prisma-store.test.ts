@@ -18,6 +18,7 @@ const baseRecord = {
   avatar: null,
   department: null,
   lastLogin: null,
+  relationshipSpocId: null,
 };
 
 const {

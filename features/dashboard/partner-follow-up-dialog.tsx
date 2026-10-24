@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { format } from "date-fns";
 import { motion } from "framer-motion";
 import {
   ArrowRight,
@@ -24,15 +23,14 @@ import {
   surface,
 } from "@/features/dashboard/dashboard-ui";
 import {
-  formatFollowUpDateTime,
-  getFollowUpsDue,
-  hasSeenFollowUpDialogThisHour,
-  markFollowUpDialogSeenThisHour,
-  toDateOnly,
-} from "@/lib/partner-meetings";
-import { partnersService } from "@/services/api";
+  canShowFollowUpDialog,
+  markFollowUpDialogDismissed,
+} from "@/lib/follow-up-dialog-storage";
+import { fetchFollowUps } from "@/lib/follow-ups-api-client";
+import type { FollowUpApiItem } from "@/lib/follow-up-api-types";
+import { formatFollowUpDateTime } from "@/lib/partner-meetings";
+import { useAuthStore } from "@/store/auth-store";
 import { cn } from "@/lib/utils";
-import type { PartnerFollowUpItem } from "@/types";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -43,11 +41,27 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-function FollowUpCard({ item }: { item: PartnerFollowUpItem }) {
-  const { partner, meeting } = item;
-  const isOverdue =
-    toDateOnly(meeting.followUpAt!) <
-    toDateOnly(new Date().toISOString());
+function urgencyLabel(item: FollowUpApiItem): string {
+  if (item.urgency === "overdue") return "Overdue";
+  if (item.urgency === "re_engage") return "Re-engage";
+  return "Due today";
+}
+
+function urgencyStyle(item: FollowUpApiItem): { background: string; color: string } {
+  if (item.urgency === "overdue" || item.urgency === "re_engage") {
+    return {
+      background: "rgba(163,59,59,0.14)",
+      color: "#A33B3B",
+    };
+  }
+  return {
+    background: "rgba(176,125,42,0.16)",
+    color: "#8A6A2F",
+  };
+}
+
+function FollowUpCard({ item }: { item: FollowUpApiItem }) {
+  const chip = urgencyStyle(item);
 
   return (
     <motion.li
@@ -69,7 +83,7 @@ function FollowUpCard({ item }: { item: PartnerFollowUpItem }) {
               className={cn(displayClass, "text-lg font-semibold leading-snug")}
               style={{ color: INK.primary }}
             >
-              {partner.name}
+              {item.partnerName}
             </p>
             <p
               className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm"
@@ -77,31 +91,25 @@ function FollowUpCard({ item }: { item: PartnerFollowUpItem }) {
             >
               <span className="inline-flex items-center gap-1">
                 <MapPin className="h-3.5 w-3.5 shrink-0" />
-                {partner.city}
-                {partner.state ? `, ${partner.state}` : ""}
+                {item.city}
+                {item.state ? `, ${item.state}` : ""}
               </span>
               <span className="inline-flex items-center gap-1">
                 <Building2 className="h-3.5 w-3.5 shrink-0" />
-                {partner.stage}
+                {item.stage}
               </span>
             </p>
+            {item.relationshipOwnerName ? (
+              <p className="text-xs" style={{ color: INK.muted }}>
+                Relationship Owner: {item.relationshipOwnerName}
+              </p>
+            ) : null}
           </div>
           <span
             className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
-            style={{
-              background: isOverdue
-                ? "rgba(163,59,59,0.14)"
-                : meeting.outcome === "lost"
-                  ? "rgba(163,59,59,0.14)"
-                  : "rgba(176,125,42,0.16)",
-              color: isOverdue || meeting.outcome === "lost" ? "#A33B3B" : "#8A6A2F",
-            }}
+            style={chip}
           >
-            {isOverdue
-              ? "Overdue"
-              : meeting.outcome === "lost"
-                ? "Re-engage"
-                : "Due today"}
+            {urgencyLabel(item)}
           </span>
         </div>
       </div>
@@ -120,34 +128,34 @@ function FollowUpCard({ item }: { item: PartnerFollowUpItem }) {
               Scheduled for
             </p>
             <p className="text-sm font-semibold" style={{ color: INK.primary }}>
-              {formatFollowUpDateTime(meeting.followUpAt!)}
+              {formatFollowUpDateTime(item.followUpAt)}
             </p>
           </div>
         </div>
 
-        {meeting.followUpNotes ? (
+        {item.followUpNotes ? (
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
               Follow-up notes
             </p>
             <p className="mt-1 text-sm leading-relaxed" style={{ color: INK.secondary }}>
-              {meeting.followUpNotes}
+              {item.followUpNotes}
             </p>
           </div>
         ) : null}
 
-        {meeting.notes ? (
+        {item.meetingNotes ? (
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
               Last meeting notes
             </p>
             <p className="mt-1 text-sm leading-relaxed" style={{ color: INK.secondary }}>
-              {meeting.notes}
+              {item.meetingNotes}
             </p>
           </div>
         ) : null}
 
-        {meeting.lostReason ? (
+        {item.lostReason ? (
           <div
             className="rounded-xl px-3 py-2.5 text-sm"
             style={{
@@ -156,7 +164,7 @@ function FollowUpCard({ item }: { item: PartnerFollowUpItem }) {
             }}
           >
             <span className="font-semibold text-destructive">Deal lost: </span>
-            {meeting.lostReason}
+            {item.lostReason}
           </div>
         ) : null}
 
@@ -164,16 +172,16 @@ function FollowUpCard({ item }: { item: PartnerFollowUpItem }) {
           className="flex flex-wrap gap-x-4 gap-y-1 border-t pt-3 text-xs"
           style={{ borderColor: LINE.subtle, color: INK.muted }}
         >
-          <span>{partner.primaryContact.name}</span>
+          <span>{item.primaryContactName}</span>
           <span className="inline-flex items-center gap-1">
             <Phone className="h-3 w-3" />
-            {partner.primaryContact.phone}
+            {item.primaryContactPhone}
           </span>
-          <span>{partner.primaryContact.email}</span>
+          <span>{item.primaryContactEmail}</span>
         </div>
 
         <Link
-          href={`/partners/${partner.id}`}
+          href={`/partners/${item.partnerId}`}
           className="inline-flex items-center gap-1.5 text-sm font-semibold transition-opacity hover:opacity-80"
           style={{ color: BRAND[700] }}
         >
@@ -187,53 +195,32 @@ function FollowUpCard({ item }: { item: PartnerFollowUpItem }) {
 
 export function PartnerFollowUpDialog() {
   const pathname = usePathname();
+  const currentUser = useAuthStore((s) => s.user);
+  const adminUserId = currentUser?.id;
   const [open, setOpen] = useState(false);
-  const [now, setNow] = useState(() => new Date());
 
-  const { data: partners } = useQuery({
-    queryKey: ["partners"],
-    queryFn: () => partnersService.getAll(),
+  const { data: dueFollowUps = [] } = useQuery({
+    queryKey: ["follow-ups", adminUserId],
+    queryFn: () => fetchFollowUps(),
+    enabled: Boolean(adminUserId),
   });
 
-  const dueFollowUps = useMemo(
-    () => getFollowUpsDue(partners ?? [], now),
-    [partners, now]
-  );
-
   const dueTodayCount = useMemo(
-    () =>
-      dueFollowUps.filter(
-        (item) =>
-          toDateOnly(item.meeting.followUpAt!) === toDateOnly(now.toISOString())
-      ).length,
-    [dueFollowUps, now]
+    () => dueFollowUps.filter((item) => item.urgency === "due_today").length,
+    [dueFollowUps]
   );
 
-  const hourKeyRef = useRef(format(new Date(), "yyyy-MM-dd-HH"));
-
   useEffect(() => {
-    const tick = () => {
-      const next = new Date();
-      const nextKey = format(next, "yyyy-MM-dd-HH");
-      if (nextKey !== hourKeyRef.current) {
-        hourKeyRef.current = nextKey;
-        setNow(next);
-      }
-    };
-    tick();
-    const interval = window.setInterval(tick, 30 * 1000);
-    return () => window.clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    if (!partners?.length) return;
+    if (!adminUserId) return;
     if (dueFollowUps.length === 0) return;
-    if (hasSeenFollowUpDialogThisHour(now)) return;
+    if (!canShowFollowUpDialog(adminUserId)) return;
     setOpen(true);
-  }, [pathname, partners, dueFollowUps.length, now]);
+  }, [pathname, adminUserId, dueFollowUps.length]);
 
   const dismiss = () => {
-    markFollowUpDialogSeenThisHour(now);
+    if (adminUserId) {
+      markFollowUpDialogDismissed(adminUserId);
+    }
     setOpen(false);
   };
 
@@ -275,7 +262,7 @@ export function PartnerFollowUpDialog() {
 
         <ul className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
           {dueFollowUps.map((item) => (
-            <FollowUpCard key={`${item.partner.id}-${item.meeting.id}`} item={item} />
+            <FollowUpCard key={`${item.partnerId}-${item.meetingId}`} item={item} />
           ))}
         </ul>
 
@@ -289,7 +276,7 @@ export function PartnerFollowUpDialog() {
             onClick={dismiss}
             className="rounded-full"
           >
-            Remind me in an hour
+            Remind me in 3 hours
           </Button>
           <Button
             type="button"

@@ -340,6 +340,24 @@ describe("whatsapp registration conversation engine", () => {
     expect(result.conversation.currentStep).toBe("AWAITING_STREAM");
   });
 
+  it("asks for the interested stream with the live registration copy", () => {
+    let conversation = beginAtNameStep();
+    conversation = turn(conversation, { text: "Aarav Sharma" }).conversation;
+    conversation = turn(conversation, { text: "aarav@example.com" }).conversation;
+    conversation = turn(conversation, {
+      interactiveId: classInteractiveId(REGISTRATION_CLASS_OPTIONS[0]!),
+    }).conversation;
+    conversation = turn(conversation, {
+      interactiveId: genderInteractiveId("Male"),
+    }).conversation;
+    const result = turn(conversation, {
+      interactiveId: boardInteractiveId(REGISTRATION_BOARD_OPTIONS[0]!),
+    });
+    const streamPrompt = result.actions.find((action) => action.type === "BUTTONS");
+    expect(streamPrompt?.body).toBe("And what stream are you interested in?");
+    expect(streamPrompt?.body).not.toContain("current stream");
+  });
+
   it("accepts Science, Commerce, and Arts streams", () => {
     for (const stream of REGISTRATION_STREAM_OPTIONS) {
       let conversation = beginAtNameStep();

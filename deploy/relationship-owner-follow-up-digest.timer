@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily Career Uttsav Relationship Owner follow-up digest (10:00 AM IST)
+
+[Timer]
+OnCalendar=*-*-* 10:00:00 Asia/Kolkata
+Persistent=true
+Unit=relationship-owner-follow-up-digest.service
+
+[Install]
+WantedBy=timers.target

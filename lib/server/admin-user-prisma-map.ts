@@ -17,6 +17,7 @@ export type PrismaAdminUserRecord = {
   passwordHash: string;
   authVersion: number;
   lastLogin: Date | null;
+  relationshipSpocId?: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -74,6 +75,7 @@ export function mapPrismaAdminUserToApi(record: PrismaAdminUserRecord): User {
     name: record.name,
     email: record.email,
     phone: record.phone ?? undefined,
+    relationshipSpocId: record.relationshipSpocId ?? undefined,
     avatar: record.avatar ?? undefined,
     role: mapPrismaAdminRoleToApi(record.role),
     roleId: record.roleId,

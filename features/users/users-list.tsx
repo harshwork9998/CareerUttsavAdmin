@@ -12,7 +12,7 @@ import { toast } from "sonner";
 
 
 
-import { usersService } from "@/services/api";
+import { spocsService, usersService } from "@/services/api";
 
 import { isSuperuser } from "@/lib/access-control";
 
@@ -147,6 +147,14 @@ export function UsersList() {
     enabled: isSuperuser(currentUser),
 
   });
+
+  const spocsQuery = useQuery({
+    queryKey: ["spocs"],
+    queryFn: () => spocsService.getAll(),
+    enabled: isSuperuser(currentUser),
+  });
+
+  const spocs = spocsQuery.data ?? [];
 
 
 
@@ -366,6 +374,18 @@ export function UsersList() {
 
   };
 
+  const handleRelationshipOwnerChange = async (
+    user: User,
+    relationshipSpocId: string | null
+  ) => {
+    if (user.status !== "Active") return;
+    await updateMutation.mutateAsync({
+      id: user.id,
+      data: { relationshipSpocId },
+    });
+    toast.success("Relationship Owner mapping updated");
+  };
+
 
 
   const handleConfirm = async () => {
@@ -447,6 +467,72 @@ export function UsersList() {
             </div>
 
           </div>
+
+        );
+
+      },
+
+    },
+
+    {
+
+      id: "relationshipOwner",
+
+      header: "Relationship Owner",
+
+      cell: ({ row }) => {
+
+        const user = row.original;
+
+        if (user.status !== "Active") {
+
+          return <span className="text-sm text-muted-foreground">—</span>;
+
+        }
+
+        return (
+
+          <Select
+
+            value={user.relationshipSpocId ?? "__none__"}
+
+            onValueChange={(v) =>
+
+              handleRelationshipOwnerChange(
+
+                user,
+
+                v === "__none__" ? null : v
+
+              )
+
+            }
+
+          >
+
+            <SelectTrigger className="h-8 min-w-[220px] max-w-[280px]">
+
+              <SelectValue placeholder="Unassigned" />
+
+            </SelectTrigger>
+
+            <SelectContent>
+
+              <SelectItem value="__none__">Unassigned</SelectItem>
+
+              {spocs.map((spoc) => (
+
+                <SelectItem key={spoc.id} value={spoc.id}>
+
+                  {spoc.name} · {spoc.organization} · {spoc.email} · {spoc.phone}
+
+                </SelectItem>
+
+              ))}
+
+            </SelectContent>
+
+          </Select>
 
         );
 

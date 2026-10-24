@@ -666,7 +666,7 @@ function streamButtonActions(): WhatsAppBotAction[] {
   return [
     {
       type: "BUTTONS",
-      body: "And what’s your current stream?",
+      body: "And what stream are you interested in?",
       buttons: REGISTRATION_STREAM_OPTIONS.map((stream) => ({
         id: streamInteractiveId(stream),
         title: stream,
