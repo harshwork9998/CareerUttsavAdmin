@@ -35,15 +35,28 @@ type MetaWebhookMessage = {
   };
 };
 
+type MetaWebhookStatusError = {
+  code?: number;
+  title?: string;
+  message?: string;
+  href?: string;
+  error_data?: {
+    details?: string;
+  };
+};
+
+type MetaWebhookStatus = {
+  id?: string;
+  status?: string;
+  timestamp?: string;
+  recipient_id?: string;
+  errors?: MetaWebhookStatusError[];
+};
+
 type MetaWebhookChangeValue = {
   messaging_product?: string;
   messages?: MetaWebhookMessage[];
-  statuses?: Array<{
-    id?: string;
-    status?: string;
-    timestamp?: string;
-    recipient_id?: string;
-  }>;
+  statuses?: MetaWebhookStatus[];
 };
 
 type MetaWebhookChange = {
@@ -203,11 +216,48 @@ export function extractNormalizedWhatsAppMessages(
   return messages;
 }
 
+export type WhatsAppDeliveryErrorDiagnostics = {
+  deliveryErrorCode?: number;
+  deliveryErrorTitle?: string;
+  deliveryErrorMessage?: string;
+  deliveryErrorDetails?: string;
+};
+
+function sanitizeDeliveryError(
+  error: MetaWebhookStatusError
+): WhatsAppDeliveryErrorDiagnostics {
+  const details = error.error_data?.details;
+  return {
+    deliveryErrorCode:
+      typeof error.code === "number" ? error.code : undefined,
+    deliveryErrorTitle:
+      typeof error.title === "string" && error.title.trim()
+        ? error.title.trim()
+        : undefined,
+    deliveryErrorMessage:
+      typeof error.message === "string" && error.message.trim()
+        ? error.message.trim()
+        : undefined,
+    deliveryErrorDetails:
+      typeof details === "string" && details.trim() ? details.trim() : undefined,
+  };
+}
+
+export function extractDeliveryErrorsFromWebhookStatus(
+  errors: MetaWebhookStatusError[] | undefined
+): WhatsAppDeliveryErrorDiagnostics[] {
+  if (!errors?.length) {
+    return [];
+  }
+  return errors.map(sanitizeDeliveryError);
+}
+
 export type NormalizedWhatsAppStatus = {
   messageId: string;
   status: string;
   recipientId?: string;
   timestamp?: string;
+  deliveryErrors?: WhatsAppDeliveryErrorDiagnostics[];
 };
 
 export function extractNormalizedWhatsAppStatuses(
@@ -221,11 +271,15 @@ export function extractNormalizedWhatsAppStatuses(
         if (!status.id || !status.status) {
           continue;
         }
+        const deliveryErrors = extractDeliveryErrorsFromWebhookStatus(
+          status.errors
+        );
         statuses.push({
           messageId: status.id,
           status: status.status,
           recipientId: status.recipient_id,
           timestamp: status.timestamp,
+          ...(deliveryErrors.length > 0 ? { deliveryErrors } : {}),
         });
       }
     }
@@ -237,11 +291,28 @@ export function extractNormalizedWhatsAppStatuses(
 export function safeLogWhatsAppDeliveryStatus(
   status: NormalizedWhatsAppStatus
 ): void {
-  console.info("[whatsapp-webhook] delivery status", {
+  const base = {
     messageId: status.messageId,
     status: status.status,
     recipient: status.recipientId ? maskWaId(status.recipientId) : undefined,
     timestamp: status.timestamp,
+  };
+
+  if (status.status !== "failed" || !status.deliveryErrors?.length) {
+    console.info("[whatsapp-webhook] delivery status", base);
+    return;
+  }
+
+  const first = status.deliveryErrors[0]!;
+  console.info("[whatsapp-webhook] delivery status", {
+    ...base,
+    deliveryErrorCode: first.deliveryErrorCode,
+    deliveryErrorTitle: first.deliveryErrorTitle,
+    deliveryErrorMessage: first.deliveryErrorMessage,
+    deliveryErrorDetails: first.deliveryErrorDetails,
+    ...(status.deliveryErrors.length > 1
+      ? { deliveryErrorCount: status.deliveryErrors.length }
+      : {}),
   });
 }
 

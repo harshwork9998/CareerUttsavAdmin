@@ -243,8 +243,95 @@ describe("safeLogWhatsAppDeliveryStatus", () => {
       recipient: "****1181",
       timestamp: "1504902988",
     });
+    expect(logArgs[1]).not.toHaveProperty("deliveryErrorCode");
     expect(JSON.stringify(logArgs)).not.toContain("16315551181");
     infoSpy.mockRestore();
+  });
+
+  it("logs Meta delivery failure diagnostics for failed status", () => {
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+    safeLogWhatsAppDeliveryStatus({
+      messageId: "wamid.failed",
+      status: "failed",
+      recipientId: "919876543210",
+      timestamp: "1504902999",
+      deliveryErrors: [
+        {
+          deliveryErrorCode: 131047,
+          deliveryErrorTitle: "Re-engagement message",
+          deliveryErrorMessage: "Message failed to send",
+          deliveryErrorDetails: "Recipient phone number not on WhatsApp",
+        },
+      ],
+    });
+
+    expect(infoSpy).toHaveBeenCalledOnce();
+    const logPayload = infoSpy.mock.calls[0]![1] as Record<string, unknown>;
+    expect(logPayload).toMatchObject({
+      messageId: "wamid.failed",
+      status: "failed",
+      recipient: "****3210",
+      deliveryErrorCode: 131047,
+      deliveryErrorTitle: "Re-engagement message",
+      deliveryErrorMessage: "Message failed to send",
+      deliveryErrorDetails: "Recipient phone number not on WhatsApp",
+    });
+    expect(JSON.stringify(logPayload)).not.toContain("919876543210");
+    infoSpy.mockRestore();
+  });
+});
+
+describe("extractNormalizedWhatsAppStatuses failed delivery", () => {
+  it("extracts errors array from failed status webhook", () => {
+    const payload = parseMetaWebhookPayload(
+      JSON.stringify({
+        object: "whatsapp_business_account",
+        entry: [
+          {
+            changes: [
+              {
+                value: {
+                  messaging_product: "whatsapp",
+                  statuses: [
+                    {
+                      id: "wamid.failed",
+                      status: "failed",
+                      timestamp: "1504902999",
+                      recipient_id: "16315551181",
+                      errors: [
+                        {
+                          code: 131026,
+                          title: "Message undeliverable",
+                          message: "Undeliverable",
+                          error_data: { details: "User is not valid" },
+                          href: "https://developers.facebook.com/docs/whatsapp/cloud-api/support/error-codes/",
+                        },
+                      ],
+                    },
+                  ],
+                },
+                field: "messages",
+              },
+            ],
+          },
+        ],
+      })
+    );
+    expect(payload).not.toBeNull();
+    const statuses = extractNormalizedWhatsAppStatuses(payload!);
+    expect(statuses[0]).toMatchObject({
+      messageId: "wamid.failed",
+      status: "failed",
+      deliveryErrors: [
+        {
+          deliveryErrorCode: 131026,
+          deliveryErrorTitle: "Message undeliverable",
+          deliveryErrorMessage: "Undeliverable",
+          deliveryErrorDetails: "User is not valid",
+        },
+      ],
+    });
+    expect(JSON.stringify(statuses)).not.toContain("developers.facebook.com");
   });
 });
 
