@@ -117,6 +117,10 @@ vi.mock("@/lib/server/registration-service", () => ({
   })),
 }));
 
+vi.mock("@/lib/server/registration-check-in", () => ({
+  checkInRegistrationForApi: vi.fn(),
+}));
+
 vi.mock("@/lib/server/partner-service", () => ({
   listPartnersForApi: vi.fn(async () => []),
   createPartnerForApi: vi.fn(),
@@ -161,6 +165,7 @@ import {
   GET as registrationByIdGet,
   PATCH as registrationPatch,
 } from "@/app/api/registrations/[id]/route";
+import { POST as registrationCheckInPost } from "@/app/api/registrations/check-in/route";
 import { GET as partnersGet, POST as partnersPost } from "@/app/api/partners/route";
 import {
   DELETE as partnerDelete,
@@ -192,6 +197,7 @@ import {
   listRegistrationsForApi,
   patchRegistrationForApi,
 } from "@/lib/server/registration-service";
+import { checkInRegistrationForApi } from "@/lib/server/registration-check-in";
 import {
   deletePartnerForApi,
   listPartnersForApi,
@@ -320,6 +326,51 @@ describe("P0-01 API authorization", () => {
       );
       expect(response.status).toBe(401);
       expect(patchRegistrationForApi).not.toHaveBeenCalled();
+    });
+
+    it("POST /api/registrations/check-in without session returns 401", async () => {
+      noSession();
+      const response = await registrationCheckInPost(
+        new Request("http://localhost/api/registrations/check-in", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            eventId: "evt-001",
+            qrPayload: "CU-BLR-2026-00042",
+          }),
+        })
+      );
+      expect(response.status).toBe(401);
+      expect(checkInRegistrationForApi).not.toHaveBeenCalled();
+    });
+
+    it("POST /api/registrations/check-in with Admin session returns 200", async () => {
+      adminCookie(activeUser.id);
+      vi.mocked(checkInRegistrationForApi).mockResolvedValue({
+        ok: true,
+        data: {
+          id: "reg-001",
+          registrationNumber: "CU-BLR-2026-00042",
+          studentName: "Test Student",
+          status: "Checked In",
+          eventId: "evt-001",
+          eventTitle: "Event",
+          alreadyCheckedIn: false,
+          checkInTime: "2026-04-10T09:00:00.000Z",
+        },
+      });
+      const response = await registrationCheckInPost(
+        new Request("http://localhost/api/registrations/check-in", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            eventId: "evt-001",
+            qrPayload: "CU-BLR-2026-00042",
+          }),
+        })
+      );
+      expect(response.status).toBe(200);
+      expect(checkInRegistrationForApi).toHaveBeenCalledOnce();
     });
 
     it("POST /api/registrations without Admin session passes isAdminRequest false", async () => {

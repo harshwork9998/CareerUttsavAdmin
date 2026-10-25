@@ -12,6 +12,7 @@ import { canonicalizeClassLabel } from "@/lib/registration-validation";
 import { registrationSourceLabel } from "@/lib/registration-source";
 import { registrationSourceSearchText } from "@/lib/registration-attempt";
 import { formatDateTime } from "@/lib/utils";
+import { StatusChip } from "@/components/shared";
 import type { ColumnDef } from "@/components/shared";
 import type { Registration, RegistrationKind } from "@/types";
 
@@ -66,11 +67,12 @@ const sourceColumn: ColumnDef<Registration, unknown> = {
 const statusColumn: ColumnDef<Registration, unknown> = {
   accessorKey: "status",
   header: "Status",
-  cell: ({ row }) => (
-    <span className="whitespace-nowrap text-sm">
-      {row.original.status || "—"}
-    </span>
-  ),
+  cell: ({ row }) =>
+    row.original.status ? (
+      <StatusChip status={row.original.status} className="whitespace-nowrap" />
+    ) : (
+      <span className="whitespace-nowrap text-sm">—</span>
+    ),
 };
 
 export function buildRegistrationColumns(

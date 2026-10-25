@@ -1,4 +1,5 @@
 import type { RegistrationAttemptRecord } from "@/lib/registration-attempt";
+import type { RegistrationCheckInView } from "@/lib/server/registration-check-in-types";
 import type { CreateRegistrationInput } from "@/lib/registration-validation";
 import type { Registration } from "@/types";
 
@@ -59,4 +60,36 @@ export async function updateRegistrationApi(
 export async function deleteRegistrationApi(id: string): Promise<void> {
   const res = await fetch(`/api/registrations/${id}`, { method: "DELETE" });
   await parseJson<{ success: boolean }>(res);
+}
+
+export type RegistrationCheckInRequest = {
+  eventId: string;
+  qrPayload?: string;
+  registrationNumber?: string;
+  registrationId?: string;
+};
+
+export async function checkInRegistrationApi(
+  body: RegistrationCheckInRequest
+): Promise<RegistrationCheckInView> {
+  const res = await fetch("/api/registrations/check-in", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const message =
+      typeof payload.error === "string"
+        ? payload.error
+        : `Check-in failed (${res.status})`;
+    const error = new Error(message) as Error & {
+      status?: number;
+      code?: string;
+    };
+    error.status = res.status;
+    error.code = typeof payload.code === "string" ? payload.code : undefined;
+    throw error;
+  }
+  return payload as RegistrationCheckInView;
 }

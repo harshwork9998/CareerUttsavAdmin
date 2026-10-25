@@ -1,4 +1,7 @@
-import { Prisma } from "@/lib/generated/prisma/client";
+import {
+  Prisma,
+  RegistrationStatus as PrismaRegistrationStatus,
+} from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/server/prisma";
 import { isStudentRegistration } from "@/lib/registration-kinds";
 import {
@@ -18,6 +21,7 @@ import {
   mapApiStatusToPrisma,
   mapPrismaRegistrationToApi,
   mapPrismaRegistrationsToApi,
+  mapPrismaStatusToApi,
   studentNormalizedFields,
   type PrismaRegistrationRecord,
 } from "@/lib/server/registration-prisma-map";
@@ -183,6 +187,96 @@ export async function getPrismaRegistration(
     include: registrationInclude,
   });
   return record ? mapPrismaRegistrationToApi(record) : null;
+}
+
+export async function getPrismaRegistrationByNumber(
+  registrationNumber: string
+): Promise<Registration | null> {
+  const record = await prisma.registration.findUnique({
+    where: { registrationNumber },
+    include: registrationInclude,
+  });
+  return record ? mapPrismaRegistrationToApi(record) : null;
+}
+
+export async function checkInPrismaRegistration(input: {
+  eventId: string;
+  registrationNumber?: string;
+  registrationId?: string;
+}): Promise<
+  | { outcome: "checked_in"; registration: Registration }
+  | { outcome: "already_checked_in"; registration: Registration }
+  | { outcome: "not_found" }
+  | { outcome: "event_mismatch"; registration: Registration }
+> {
+  const number = input.registrationNumber?.trim();
+  const id = input.registrationId?.trim();
+  if (!number && !id) {
+    return { outcome: "not_found" };
+  }
+
+  const record = number
+    ? await prisma.registration.findUnique({
+        where: { registrationNumber: number },
+        include: registrationInclude,
+      })
+    : await prisma.registration.findUnique({
+        where: { id: id! },
+        include: registrationInclude,
+      });
+
+  if (!record) {
+    return { outcome: "not_found" };
+  }
+
+  const registration = mapPrismaRegistrationToApi(record);
+  if (registration.eventId !== input.eventId) {
+    return { outcome: "event_mismatch", registration };
+  }
+
+  if (registration.status === "Checked In") {
+    return { outcome: "already_checked_in", registration };
+  }
+
+  const now = new Date();
+  const updated = await prisma.registration.updateMany({
+    where: {
+      id: record.id,
+      status: PrismaRegistrationStatus.Confirmed,
+    },
+    data: {
+      status: PrismaRegistrationStatus.CheckedIn,
+      checkInTime: now,
+      updatedAt: now,
+    },
+  });
+
+  if (updated.count === 0) {
+    const refreshed = await prisma.registration.findUnique({
+      where: { id: record.id },
+      include: registrationInclude,
+    });
+    if (!refreshed) {
+      return { outcome: "not_found" };
+    }
+    const reread = mapPrismaRegistrationToApi(refreshed);
+    if (mapPrismaStatusToApi(refreshed.status) === "Checked In") {
+      return { outcome: "already_checked_in", registration: reread };
+    }
+    return { outcome: "already_checked_in", registration: reread };
+  }
+
+  const after = await prisma.registration.findUnique({
+    where: { id: record.id },
+    include: registrationInclude,
+  });
+  if (!after) {
+    return { outcome: "not_found" };
+  }
+  return {
+    outcome: "checked_in",
+    registration: mapPrismaRegistrationToApi(after),
+  };
 }
 
 function prismaStudentBaseWhere(input: {

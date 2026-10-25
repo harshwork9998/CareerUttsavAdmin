@@ -25,6 +25,7 @@ import {
   filterRegistrationsForEventCatalog,
   registrationMatchesEventFilter,
 } from "@/lib/registration-event-links";
+import { REGISTRATION_STATUSES } from "@/constants";
 import { getCurrentEvents } from "@/lib/current-events";
 import {
   buildRegistrationSeminarFilterOptions,
@@ -141,6 +142,7 @@ export function RegistrationsList() {
   const [seminarFilter, setSeminarFilter] = useState<string[]>([]);
   const [cityFilter, setCityFilter] = useState("all");
   const [genderFilter, setGenderFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [selectedRegistration, setSelectedRegistration] =
     useState<Registration | null>(null);
@@ -305,6 +307,7 @@ export function RegistrationsList() {
     setSeminarFilter([]);
     setCityFilter("all");
     setGenderFilter("all");
+    setStatusFilter("all");
     setPage(1);
   }, [activeKind]);
 
@@ -331,6 +334,8 @@ export function RegistrationsList() {
         if (city !== cityFilter) return false;
       }
 
+      if (statusFilter !== "all" && r.status !== statusFilter) return false;
+
       if (!query) return true;
       return registrationMatchesSearch(r, query, eventTitleById);
     });
@@ -344,6 +349,7 @@ export function RegistrationsList() {
     seminarFilter,
     cityFilter,
     genderFilter,
+    statusFilter,
     eventTitleById,
   ]);
 
@@ -424,6 +430,7 @@ export function RegistrationsList() {
     setSeminarFilter([]);
     setCityFilter("all");
     setGenderFilter("all");
+    setStatusFilter("all");
     setSearch("");
     setPage(1);
   };
@@ -436,7 +443,8 @@ export function RegistrationsList() {
     boardFilter !== "all" ||
     seminarFilter.length > 0 ||
     cityFilter !== "all" ||
-    genderFilter !== "all";
+    genderFilter !== "all" ||
+    statusFilter !== "all";
 
   const filterConfig = useMemo((): FilterConfig[] => {
     const filters: FilterConfig[] = [
@@ -451,6 +459,22 @@ export function RegistrationsList() {
         },
         options: eventOptions,
         placeholder: "All events",
+      },
+      {
+        id: "status",
+        label: "Status",
+        value: statusFilter,
+        onChange: (v: string) => {
+          setStatusFilter(v);
+          setPage(1);
+        },
+        options: [
+          { label: "All", value: "all" },
+          ...REGISTRATION_STATUSES.map((status) => ({
+            label: status,
+            value: status,
+          })),
+        ],
       },
     ];
 
@@ -549,6 +573,7 @@ export function RegistrationsList() {
     cityOptions,
     genderFilter,
     genderOptions,
+    statusFilter,
   ]);
 
   if (isLoading) {

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
+import Link from "next/link";
 import {
   CalendarDays,
   Clock,
@@ -12,6 +13,7 @@ import {
   Handshake,
   MapPin,
   Presentation,
+  QrCode,
   Trash2,
   Users,
 } from "lucide-react";
@@ -55,10 +57,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Event, EventSeminar, OperatingCity, Registration } from "@/types";
 
+/**
+ * Live check-in count: primary source is status. Legacy imports may have
+ * checkInTime while status stayed Confirmed — still counted for display only.
+ */
 function isCheckedIn(registration: Registration): boolean {
-  return (
-    registration.status === "Checked In" || Boolean(registration.checkInTime)
-  );
+  if (registration.status === "Checked In") return true;
+  return Boolean(registration.checkInTime);
 }
 
 function formatSeminarTime(time: string | null | undefined): string {
@@ -235,6 +240,16 @@ export function EventDetail({ eventId }: EventDetailProps) {
           ) : null}
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
+          <Button
+            variant="default"
+            className="rounded-full"
+            asChild
+          >
+            <Link href={`/events/${eventId}/check-in`}>
+              <QrCode className="h-4 w-4" />
+              Event Check-in
+            </Link>
+          </Button>
           <Button
             variant="outline"
             className="rounded-full border-[rgba(212,209,200,0.85)] bg-white"

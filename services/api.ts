@@ -26,6 +26,7 @@ import {
   mockDashboardData,
 } from "@/lib/mock-data";
 import {
+  checkInRegistrationApi,
   createRegistrationApi,
   deleteRegistrationApi,
   fetchAllRegistrations,
@@ -105,6 +106,12 @@ export const registrationsService = {
   update: (id: string, data: Partial<Registration>) =>
     simulate(updateRegistrationApi(id, data)),
   delete: (id: string) => simulate(deleteRegistrationApi(id)),
+  checkIn: (body: {
+    eventId: string;
+    qrPayload?: string;
+    registrationNumber?: string;
+    registrationId?: string;
+  }) => simulate(checkInRegistrationApi(body)),
 };
 
 export const universitiesService = {

@@ -23,6 +23,18 @@ export function formatDateTime(date: string | Date): string {
   }).format(new Date(date));
 }
 
+/** Event check-in display (Asia/Kolkata). */
+export function formatDateTimeKolkata(date: string | Date): string {
+  return new Intl.DateTimeFormat("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(date));
+}
+
 export function formatNumber(num: number): string {
   return new Intl.NumberFormat("en-IN").format(num);
 }
