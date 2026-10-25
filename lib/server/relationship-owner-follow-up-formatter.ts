@@ -7,6 +7,8 @@ import type { PartnerFollowUpItem } from "@/types";
 
 export const RELATIONSHIP_OWNER_DIGEST_MAX_BODY_CHARS = 2800;
 
+export const RELATIONSHIP_OWNER_DIGEST_UNIVERSITY_SEPARATOR = " • ";
+
 function urgencyLabel(
   urgency: ReturnType<typeof followUpUrgency>
 ): string {
@@ -29,6 +31,14 @@ function formatFollowUpDateLabel(followUpAt: string): string {
     year: "numeric",
     timeZone: "Asia/Kolkata",
   }).format(calendar);
+}
+
+export function sanitizeMetaTemplateParameterText(value: string): string {
+  return value
+    .replace(/\r\n|\r|\n/g, " ")
+    .replace(/\t/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export function formatDigestContactLine(
@@ -56,18 +66,31 @@ export function formatUniversityDigestEntry(
     asOfIstDate,
     meeting.outcome
   );
-  const lines = [`${index}. ${partner.name.trim()}`];
-  const contactLine = formatDigestContactLine(
-    partner.primaryContact?.name,
-    partner.primaryContact?.phone
-  );
-  if (contactLine) {
-    lines.push(contactLine);
+
+  const segments: string[] = [`${index}. ${partner.name.trim()}`];
+
+  const contactName = (partner.primaryContact?.name ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const contactPhone = (partner.primaryContact?.phone ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (contactName) {
+    segments.push(contactName);
   }
-  lines.push(
-    `${urgencyLabel(urgency)} | ${formatFollowUpDateLabel(meeting.followUpAt!)}`
-  );
-  return lines.join("\n");
+  if (contactPhone) {
+    segments.push(contactPhone);
+  }
+
+  segments.push(urgencyLabel(urgency));
+  segments.push(formatFollowUpDateLabel(meeting.followUpAt!));
+
+  return sanitizeMetaTemplateParameterText(segments.join(" | "));
+}
+
+function joinUniversityEntries(entries: string[]): string {
+  return entries.join(RELATIONSHIP_OWNER_DIGEST_UNIVERSITY_SEPARATOR);
 }
 
 export function buildRelationshipOwnerFollowUpDigestText(input: {
@@ -82,9 +105,10 @@ export function buildRelationshipOwnerFollowUpDigestText(input: {
   const entries: string[] = [];
   for (let i = 0; i < input.items.length; i += 1) {
     const entry = formatUniversityDigestEntry(input.items[i]!, i + 1, asOfIstDate);
-    const candidate = entries.length === 0
-      ? entry
-      : `${entries.join("\n\n")}\n\n${entry}`;
+    const candidate =
+      entries.length === 0
+        ? entry
+        : `${joinUniversityEntries(entries)}${RELATIONSHIP_OWNER_DIGEST_UNIVERSITY_SEPARATOR}${entry}`;
     if (candidate.length > RELATIONSHIP_OWNER_DIGEST_MAX_BODY_CHARS) {
       break;
     }
@@ -92,12 +116,12 @@ export function buildRelationshipOwnerFollowUpDigestText(input: {
   }
 
   let overflowNote = "";
-  let details = entries.join("\n\n");
+  let details = joinUniversityEntries(entries);
   const overflowCount = count - entries.length;
   if (overflowCount > 0) {
     overflowNote = `+ ${overflowCount} more follow-up(s) in the Admin Portal.`;
     while (entries.length > 0) {
-      const candidate = `${entries.join("\n\n")}\n\n${overflowNote}`;
+      const candidate = `${joinUniversityEntries(entries)}${RELATIONSHIP_OWNER_DIGEST_UNIVERSITY_SEPARATOR}${overflowNote}`;
       if (candidate.length <= RELATIONSHIP_OWNER_DIGEST_MAX_BODY_CHARS) {
         details = candidate;
         break;
@@ -112,10 +136,10 @@ export function buildRelationshipOwnerFollowUpDigestText(input: {
   }
 
   return {
-    ownerName: input.ownerName,
+    ownerName: sanitizeMetaTemplateParameterText(input.ownerName),
     itemCount: count,
-    details: details.trim(),
-    overflowNote,
+    details: sanitizeMetaTemplateParameterText(details),
+    overflowNote: sanitizeMetaTemplateParameterText(overflowNote),
   };
 }
 
@@ -123,7 +147,7 @@ export function buildRelationshipOwnerFollowUpDigestText(input: {
  * Approved Meta template body variables:
  * {{1}} Relationship Owner name only
  * {{2}} Total due follow-up count only
- * {{3}} Compact university list only (optional overflow line at end)
+ * {{3}} Single-line university list (overflow suffix on same line)
  */
 export const RELATIONSHIP_OWNER_FOLLOWUP_TEMPLATE_VARIABLE_DOCS = {
   bodyParameters: ["ownerName", "itemCount", "universityListBlock"],

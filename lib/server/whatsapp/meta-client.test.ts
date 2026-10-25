@@ -9,6 +9,7 @@ import {
   sendWhatsAppButtons,
   sendWhatsAppImage,
   sendWhatsAppList,
+  sendWhatsAppTemplate,
   sendWhatsAppText,
   setMetaClientFetchForTests,
   uploadWhatsAppMedia,
@@ -189,6 +190,98 @@ describe("meta client outbound requests", () => {
       text: "ok",
     });
     expect(result).toEqual({ success: true, messageId: "wamid.success" });
+  });
+
+  it("sendWhatsAppTemplate sends body parameters only (no button component)", async () => {
+    const fetchMock = captureFetch(async (_url, init) => {
+      const body = JSON.parse(String(init?.body));
+      expect(body.type).toBe("template");
+      expect(body.template.components).toEqual([
+        {
+          type: "body",
+          parameters: [
+            { type: "text", text: "Owner A" },
+            { type: "text", text: "2" },
+            {
+              type: "text",
+              text:
+                "1. ABC University | Rahul Sharma | 9876543210 | Due today | 24 Oct 2026",
+            },
+          ],
+        },
+      ]);
+      expect(
+        body.template.components.some(
+          (component: { type: string }) => component.type === "button"
+        )
+      ).toBe(false);
+      return mockJsonResponse(200, {
+        messages: [{ id: "wamid.template" }],
+      });
+    });
+
+    const result = await sendWhatsAppTemplate({
+      to: TEST_RECIPIENT,
+      templateName: "relationship_owner_followup_digest",
+      languageCode: "en",
+      components: [
+        {
+          type: "body",
+          parameters: [
+            { type: "text", text: "Owner A" },
+            { type: "text", text: "2" },
+            {
+              type: "text",
+              text:
+                "1. ABC University | Rahul Sharma | 9876543210 | Due today | 24 Oct 2026",
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(result).toEqual({ success: true, messageId: "wamid.template" });
+  });
+
+  it("logs Meta template diagnostics without secrets on failure", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    captureFetch(async () =>
+      mockJsonResponse(400, {
+        error: {
+          message: "(#132018) Template validation error",
+          code: 132018,
+          error_subcode: 0,
+          error_data: {
+            details: "Param text cannot have new-line/tab characters",
+          },
+        },
+      })
+    );
+
+    const result = await sendWhatsAppTemplate({
+      to: TEST_RECIPIENT,
+      templateName: "relationship_owner_followup_digest",
+      languageCode: "en",
+      components: [
+        {
+          type: "body",
+          parameters: [{ type: "text", text: "x" }],
+        },
+      ],
+    });
+
+    expect(result).toMatchObject({
+      success: false,
+      errorCode: "META_CLIENT_ERROR",
+      metaErrorCode: 132018,
+    });
+    const logPayload = warnSpy.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(logPayload.metaErrorMessage).toContain("132018");
+    expect(logPayload.metaErrorDataDetails).toContain("new-line");
+    expect(logPayload.recipient).not.toBe(TEST_RECIPIENT);
+    expect(JSON.stringify(logPayload)).not.toContain(TEST_ACCESS_TOKEN);
+    warnSpy.mockRestore();
   });
 
   it("normalizes Meta 4xx failures safely", async () => {

@@ -112,11 +112,16 @@ describe("processRelationshipOwnerFollowUpDigestTest", () => {
     expect(result.templateName).toBe(TEMPLATE);
     expect(result.recipientPhoneMasked).toBe("******3210");
     expect(sendTemplate).toHaveBeenCalledOnce();
-    expect(sendTemplate.mock.calls[0]?.[0]).toMatchObject({
+    const sendInput = sendTemplate.mock.calls[0]?.[0];
+    expect(sendInput).toMatchObject({
       to: "919876543210",
       templateName: TEMPLATE,
       languageCode: "en",
     });
+    const detailsParam =
+      sendInput?.components?.[0]?.parameters?.[2]?.text ?? "";
+    expect(detailsParam).not.toMatch(/\n|\r|\t/);
+    expect(detailsParam).toContain("1. Example University");
     expect(listDistinctOwnerSpocIdsWithPartners).not.toHaveBeenCalled();
     expect(findUniqueDigest).not.toHaveBeenCalled();
     expect(upsertDigest).not.toHaveBeenCalled();

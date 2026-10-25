@@ -6,6 +6,7 @@ import {
 } from "@/lib/server/whatsapp/meta-client-config";
 import {
   extractMetaErrorCode,
+  extractMetaErrorDiagnostics,
   normalizeMetaHttpFailure,
   normalizeMetaNetworkFailure,
   type NormalizedMetaError,
@@ -167,11 +168,15 @@ async function metaGraphRequest(input: {
 
     if (!response.ok) {
       const failure = normalizeMetaHttpFailure(response.status, body);
+      const diagnostics = extractMetaErrorDiagnostics(body);
       safeLogMetaOutboundFailure({
         actionType: input.actionType,
         recipient,
         httpStatus: failure.httpStatus,
         metaErrorCode: failure.metaErrorCode,
+        metaErrorSubcode: failure.metaErrorSubcode ?? diagnostics.metaErrorSubcode,
+        metaErrorMessage: diagnostics.metaErrorMessage,
+        metaErrorDataDetails: diagnostics.metaErrorDataDetails,
         errorCode: failure.errorCode,
       });
       return { ok: false, failure: { success: false, ...failure } };
@@ -209,6 +214,9 @@ function safeLogMetaOutboundFailure(input: {
   errorCode: string;
   httpStatus?: number;
   metaErrorCode?: number;
+  metaErrorSubcode?: number;
+  metaErrorMessage?: string;
+  metaErrorDataDetails?: string;
 }): void {
   console.warn("[whatsapp-meta] outbound failure", {
     actionType: input.actionType,
@@ -216,6 +224,9 @@ function safeLogMetaOutboundFailure(input: {
     errorCode: input.errorCode,
     httpStatus: input.httpStatus,
     metaErrorCode: input.metaErrorCode,
+    metaErrorSubcode: input.metaErrorSubcode,
+    metaErrorMessage: input.metaErrorMessage,
+    metaErrorDataDetails: input.metaErrorDataDetails,
   });
 }
 

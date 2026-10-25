@@ -7,6 +7,7 @@ import {
 import { prisma } from "@/lib/server/prisma";
 import {
   buildRelationshipOwnerFollowUpDigestText,
+  sanitizeMetaTemplateParameterText,
 } from "@/lib/server/relationship-owner-follow-up-formatter";
 import {
   readRelationshipOwnerFollowUpTemplateLanguage,
@@ -63,6 +64,32 @@ export function maskRelationshipOwnerRecipientPhone(
 }
 
 type SendTemplate = typeof sendWhatsAppTemplate;
+
+function relationshipOwnerFollowUpTemplateComponents(formatted: {
+  ownerName: string;
+  itemCount: number;
+  details: string;
+}) {
+  return [
+    {
+      type: "body" as const,
+      parameters: [
+        {
+          type: "text" as const,
+          text: sanitizeMetaTemplateParameterText(formatted.ownerName),
+        },
+        {
+          type: "text" as const,
+          text: sanitizeMetaTemplateParameterText(String(formatted.itemCount)),
+        },
+        {
+          type: "text" as const,
+          text: sanitizeMetaTemplateParameterText(formatted.details),
+        },
+      ],
+    },
+  ];
+}
 
 export async function processRelationshipOwnerFollowUpDigests(input?: {
   now?: Date;
@@ -202,16 +229,7 @@ export async function processRelationshipOwnerFollowUpDigests(input?: {
       to: recipientPhone,
       templateName,
       languageCode,
-      components: [
-        {
-          type: "body",
-          parameters: [
-            { type: "text", text: formatted.ownerName },
-            { type: "text", text: String(formatted.itemCount) },
-            { type: "text", text: formatted.details },
-          ],
-        },
-      ],
+      components: relationshipOwnerFollowUpTemplateComponents(formatted),
     });
 
     if (result.success) {
@@ -341,16 +359,7 @@ export async function processRelationshipOwnerFollowUpDigestTest(input: {
     to: recipientPhone,
     templateName,
     languageCode,
-    components: [
-      {
-        type: "body",
-        parameters: [
-          { type: "text", text: formatted.ownerName },
-          { type: "text", text: String(formatted.itemCount) },
-          { type: "text", text: formatted.details },
-        ],
-      },
-    ],
+    components: relationshipOwnerFollowUpTemplateComponents(formatted),
   });
 
   if (result.success) {
