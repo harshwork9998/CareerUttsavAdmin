@@ -41,10 +41,26 @@ function printReport(
     );
   }
 
-  if (report.missingRetainedProfiles.length > 0) {
-    console.log("\n=== Missing retained profiles (not in database) ===");
-    for (const profile of report.missingRetainedProfiles) {
-      console.log(`${profile.name}\t${profile.organization}`);
+  if (report.missingRetainedIds.length > 0) {
+    console.log("\n=== Missing retained SPOC ids (not in database) ===");
+    for (const id of report.missingRetainedIds) {
+      console.log(id);
+    }
+  }
+
+  if (report.retainedNameMismatches.length > 0) {
+    console.log("\n=== Retained SPOC name mismatches ===");
+    for (const row of report.retainedNameMismatches) {
+      console.log(
+        `${row.id}\texpected=${row.expectedName}\tfound=${row.actualName}`
+      );
+    }
+  }
+
+  if (report.plannedOrganizationUpdates.length > 0) {
+    console.log("\n=== Planned organisation updates on execute ===");
+    for (const row of report.plannedOrganizationUpdates) {
+      console.log(`${row.id}\t${row.from}\t=>\t${row.to}`);
     }
   }
 
