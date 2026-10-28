@@ -6,12 +6,13 @@ import {
 } from "@/lib/server/partner-follow-up-resolver";
 import { prisma } from "@/lib/server/prisma";
 import {
-  buildRelationshipOwnerFollowUpDigestText,
-  sanitizeMetaTemplateParameterText,
+  buildRelationshipOwnerFollowUpDigestPayload,
+  buildRelationshipOwnerFollowUpTemplateBodyParameters,
 } from "@/lib/server/relationship-owner-follow-up-formatter";
 import {
+  isRelationshipOwnerFollowUpTemplateConfigured,
   readRelationshipOwnerFollowUpTemplateLanguage,
-  readRelationshipOwnerFollowUpTemplateName,
+  resolveRelationshipOwnerFollowUpTemplateName,
 } from "@/lib/server/relationship-owner-follow-up-config";
 import {
   sendWhatsAppTemplate,
@@ -34,6 +35,8 @@ export type RelationshipOwnerFollowUpTestResult = {
   ownerName: string;
   recipientPhoneMasked: string | null;
   followUpCount: number;
+  visibleFollowUpCount: number;
+  overflowCount: number;
   templateName: string | null;
   status: RelationshipOwnerFollowUpTestSendStatus;
   reason?: string;
@@ -65,28 +68,13 @@ export function maskRelationshipOwnerRecipientPhone(
 
 type SendTemplate = typeof sendWhatsAppTemplate;
 
-function relationshipOwnerFollowUpTemplateComponents(formatted: {
-  ownerName: string;
-  itemCount: number;
-  details: string;
-}) {
+function relationshipOwnerFollowUpTemplateComponents(
+  payload: ReturnType<typeof buildRelationshipOwnerFollowUpDigestPayload>
+) {
   return [
     {
       type: "body" as const,
-      parameters: [
-        {
-          type: "text" as const,
-          text: sanitizeMetaTemplateParameterText(formatted.ownerName),
-        },
-        {
-          type: "text" as const,
-          text: sanitizeMetaTemplateParameterText(String(formatted.itemCount)),
-        },
-        {
-          type: "text" as const,
-          text: sanitizeMetaTemplateParameterText(formatted.details),
-        },
-      ],
+      parameters: buildRelationshipOwnerFollowUpTemplateBodyParameters(payload),
     },
   ];
 }
@@ -97,7 +85,6 @@ export async function processRelationshipOwnerFollowUpDigests(input?: {
 }): Promise<RelationshipOwnerFollowUpProcessorSummary> {
   const now = input?.now ?? new Date();
   const digestDate = istCalendarDateFromDate(now);
-  const templateName = readRelationshipOwnerFollowUpTemplateName();
   const languageCode = readRelationshipOwnerFollowUpTemplateLanguage();
   const sendTemplate = input?.sendTemplate ?? sendWhatsAppTemplate;
 
@@ -109,7 +96,7 @@ export async function processRelationshipOwnerFollowUpDigests(input?: {
     reasons: {},
   };
 
-  if (!templateName) {
+  if (!isRelationshipOwnerFollowUpTemplateConfigured()) {
     increment(summary.reasons, "template_not_configured");
     return summary;
   }
@@ -142,6 +129,9 @@ export async function processRelationshipOwnerFollowUpDigests(input?: {
     }
 
     const items = await listDueFollowUpsForOwner({ ownerSpocId, asOf: now });
+    const templateNameForRun =
+      resolveRelationshipOwnerFollowUpTemplateName(items.length) ??
+      resolveRelationshipOwnerFollowUpTemplateName(1);
     if (items.length === 0) {
       summary.skipped += 1;
       increment(summary.reasons, "zero_follow_ups");
@@ -152,7 +142,7 @@ export async function processRelationshipOwnerFollowUpDigests(input?: {
           digestDate,
           recipientPhone: spoc.phone,
           itemCount: 0,
-          templateName,
+          templateName: templateNameForRun ?? "unconfigured",
           status: "SKIPPED",
           attemptedAt: now,
           skipReason: "zero_follow_ups",
@@ -165,6 +155,15 @@ export async function processRelationshipOwnerFollowUpDigests(input?: {
           updatedAt: now,
         },
       });
+      continue;
+    }
+
+    const templateName = resolveRelationshipOwnerFollowUpTemplateName(
+      items.length
+    );
+    if (!templateName) {
+      summary.skipped += 1;
+      increment(summary.reasons, "template_not_configured");
       continue;
     }
 
@@ -195,7 +194,7 @@ export async function processRelationshipOwnerFollowUpDigests(input?: {
       continue;
     }
 
-    const formatted = buildRelationshipOwnerFollowUpDigestText({
+    const payload = buildRelationshipOwnerFollowUpDigestPayload({
       ownerName: spoc.name,
       items,
       asOf: now,
@@ -229,7 +228,7 @@ export async function processRelationshipOwnerFollowUpDigests(input?: {
       to: recipientPhone,
       templateName,
       languageCode,
-      components: relationshipOwnerFollowUpTemplateComponents(formatted),
+      components: relationshipOwnerFollowUpTemplateComponents(payload),
     });
 
     if (result.success) {
@@ -276,7 +275,6 @@ export async function processRelationshipOwnerFollowUpDigestTest(input: {
 }): Promise<RelationshipOwnerFollowUpTestResult> {
   const now = input?.now ?? new Date();
   const ownerSpocId = input.ownerSpocId.trim();
-  const templateName = readRelationshipOwnerFollowUpTemplateName();
   const languageCode = readRelationshipOwnerFollowUpTemplateLanguage();
   const sendTemplate = input.sendTemplate ?? sendWhatsAppTemplate;
 
@@ -286,7 +284,9 @@ export async function processRelationshipOwnerFollowUpDigestTest(input: {
     ownerName: "",
     recipientPhoneMasked: null as string | null,
     followUpCount: 0,
-    templateName,
+    visibleFollowUpCount: 0,
+    overflowCount: 0,
+    templateName: null as string | null,
   };
 
   if (!ownerSpocId) {
@@ -297,7 +297,7 @@ export async function processRelationshipOwnerFollowUpDigestTest(input: {
     };
   }
 
-  if (!templateName) {
+  if (!isRelationshipOwnerFollowUpTemplateConfigured()) {
     return {
       ...base,
       status: "skipped",
@@ -326,16 +326,37 @@ export async function processRelationshipOwnerFollowUpDigestTest(input: {
   const recipientPhoneMasked = maskRelationshipOwnerRecipientPhone(spoc.phone);
 
   const items = await listDueFollowUpsForOwner({ ownerSpocId, asOf: now });
+  const templateName = resolveRelationshipOwnerFollowUpTemplateName(
+    items.length
+  );
   if (items.length === 0) {
     return {
       ...base,
       ownerName,
       recipientPhoneMasked,
       followUpCount: 0,
+      templateName,
       status: "skipped",
       reason: "zero_follow_ups",
     };
   }
+
+  if (!templateName) {
+    return {
+      ...base,
+      ownerName,
+      recipientPhoneMasked,
+      followUpCount: items.length,
+      status: "skipped",
+      reason: "template_not_configured",
+    };
+  }
+
+  const payload = buildRelationshipOwnerFollowUpDigestPayload({
+    ownerName: spoc.name,
+    items,
+    asOf: now,
+  });
 
   const recipientPhone = normalizeRecipientPhone(spoc.phone);
   if (!recipientPhone) {
@@ -344,22 +365,19 @@ export async function processRelationshipOwnerFollowUpDigestTest(input: {
       ownerName,
       recipientPhoneMasked,
       followUpCount: items.length,
+      visibleFollowUpCount: payload.visibleFollowUpCount,
+      overflowCount: payload.overflowCount,
+      templateName,
       status: "skipped",
       reason: "missing_phone",
     };
   }
 
-  const formatted = buildRelationshipOwnerFollowUpDigestText({
-    ownerName: spoc.name,
-    items,
-    asOf: now,
-  });
-
   const result: MetaSendResult = await sendTemplate({
     to: recipientPhone,
     templateName,
     languageCode,
-    components: relationshipOwnerFollowUpTemplateComponents(formatted),
+    components: relationshipOwnerFollowUpTemplateComponents(payload),
   });
 
   if (result.success) {
@@ -368,6 +386,9 @@ export async function processRelationshipOwnerFollowUpDigestTest(input: {
       ownerName,
       recipientPhoneMasked,
       followUpCount: items.length,
+      visibleFollowUpCount: payload.visibleFollowUpCount,
+      overflowCount: payload.overflowCount,
+      templateName,
       status: "sent",
       messageId: result.messageId,
     };
@@ -378,6 +399,9 @@ export async function processRelationshipOwnerFollowUpDigestTest(input: {
     ownerName,
     recipientPhoneMasked,
     followUpCount: items.length,
+    visibleFollowUpCount: payload.visibleFollowUpCount,
+    overflowCount: payload.overflowCount,
+    templateName,
     status: "failed",
     reason: result.errorCode ?? "send_failed",
     errorCode: result.errorCode,

@@ -1,5 +1,6 @@
 import { isIndianStateOrUt } from "@/lib/indian-states-uts";
 import { validateIndianMobileOnWrite } from "@/lib/indian-mobile";
+import { isPartnerPortalEmail } from "@/lib/partner-invite";
 import type { Partner, PartnerContact, RelationshipOwner } from "@/types";
 
 export function validatePartnerName(name: unknown): string | null {
@@ -26,12 +27,14 @@ export function validatePartnerState(state: unknown): string | null {
 function normalizeContactPhones(
   next: PartnerContact | undefined,
   previous: PartnerContact | undefined,
-  label: string
+  label: string,
+  options?: { requirePhoneWhenPartial?: boolean }
 ): { ok: true; contact: PartnerContact | undefined } | { ok: false; error: string } {
   if (!next) return { ok: true, contact: next };
 
   const nextPhone = next.phone?.trim() ?? "";
   const prevPhone = previous?.phone?.trim() ?? "";
+  const requireWhenPartial = options?.requirePhoneWhenPartial ?? true;
 
   // Incomplete draft contact with no phone yet
   if (!nextPhone && !prevPhone) {
@@ -39,7 +42,9 @@ function normalizeContactPhones(
   }
 
   const checked = validateIndianMobileOnWrite(next.phone, previous?.phone, {
-    required: Boolean(nextPhone || next.name?.trim() || next.email?.trim()),
+    required: requireWhenPartial
+      ? Boolean(nextPhone || next.name?.trim() || next.email?.trim())
+      : Boolean(nextPhone),
     label,
   });
   if (!checked.ok) return checked;
@@ -66,10 +71,15 @@ export function validatePartnerContactPhones(
     const result = normalizeContactPhones(
       next.secondaryContact,
       previous?.secondaryContact,
-      "Secondary contact mobile"
+      "Secondary contact mobile",
+      { requirePhoneWhenPartial: false }
     );
     if (!result.ok) return result;
     if (result.contact) patch.secondaryContact = result.contact;
+    const email = (patch.secondaryContact ?? next.secondaryContact).email?.trim() ?? "";
+    if (email && !isPartnerPortalEmail(email)) {
+      return { ok: false, error: "Enter a valid secondary contact email" };
+    }
   }
 
   if (next.relationshipOwner) {

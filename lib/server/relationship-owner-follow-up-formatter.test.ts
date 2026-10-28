@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildRelationshipOwnerFollowUpDigestPayload,
   buildRelationshipOwnerFollowUpDigestText,
+  buildRelationshipOwnerFollowUpOverflowLine,
+  buildRelationshipOwnerFollowUpTemplateBodyParameters,
   formatDigestContactLine,
   formatUniversityDigestEntry,
-  RELATIONSHIP_OWNER_DIGEST_MAX_BODY_CHARS,
-  RELATIONSHIP_OWNER_DIGEST_UNIVERSITY_SEPARATOR,
+  formatUniversityFollowUpLine,
+  RELATIONSHIP_OWNER_DIGEST_MAX_VISIBLE_FOLLOW_UPS,
   sanitizeMetaTemplateParameterText,
 } from "@/lib/server/relationship-owner-follow-up-formatter";
 import type { Partner, PartnerFollowUpItem } from "@/types";
@@ -69,59 +72,77 @@ function assertSingleLineMetaParameter(value: string): void {
   expect(value).not.toMatch(/\n/);
   expect(value).not.toMatch(/\r/);
   expect(value).not.toMatch(/\t/);
-  expect(value).not.toContain("  ");
+  expect(value).not.toContain("undefined");
+  expect(value).not.toContain("null");
+  expect(value).not.toContain("| |");
 }
 
 describe("relationship owner digest formatter", () => {
   const asOf = new Date("2026-10-24T10:00:00+05:30");
 
-  it("formats a single university on one line with pipes", () => {
-    const formatted = buildRelationshipOwnerFollowUpDigestText({
+  it("formats a single follow-up line without static list numbering", () => {
+    const payload = buildRelationshipOwnerFollowUpDigestPayload({
       ownerName: "Priya Owner",
       items: [item({ followUpAt: "2026-10-24T11:00:00" })],
       asOf,
     });
 
-    expect(formatted.ownerName).toBe("Priya Owner");
-    expect(formatted.itemCount).toBe(1);
-    expect(formatted.details).toBe(
-      "1. ABC University | Rahul Sharma | 9876543210 | Due today | 24 Oct 2026"
-    );
-    assertSingleLineMetaParameter(formatted.details);
-    expect(formatted.details).not.toContain("rahul@example");
-    expect(formatted.details).not.toContain("Internal meeting notes");
+    expect(payload.ownerName).toBe("Priya Owner");
+    expect(payload.followUpCount).toBe(1);
+    expect(payload.visibleFollowUpCount).toBe(1);
+    expect(payload.overflowCount).toBe(0);
+    expect(payload.followUpLines).toEqual([
+      "ABC University | Rahul Sharma | 9876543210 | Due today | 24 Oct 2026",
+    ]);
+    payload.followUpLines.forEach(assertSingleLineMetaParameter);
   });
 
-  it("joins multiple universities with the bullet separator", () => {
-    const formatted = buildRelationshipOwnerFollowUpDigestText({
+  it("returns separate parameters for multiple follow-ups (max 5 visible)", () => {
+    const items = Array.from({ length: 9 }, (_, index) =>
+      item({
+        id: `p-${index}`,
+        name: `University ${index + 1}`,
+        followUpAt: "2026-10-20T10:00:00",
+      })
+    );
+
+    const payload = buildRelationshipOwnerFollowUpDigestPayload({
       ownerName: "Owner",
-      items: [
-        item({ id: "p1", name: "ABC University", followUpAt: "2026-10-20T10:00:00" }),
-        item({
-          id: "p2",
-          name: "XYZ University",
-          followUpAt: "2026-10-24T11:00:00",
-          primaryContact: {
-            name: "Priya Rao",
-            designation: "",
-            phone: "9988776655",
-            email: "priya@example.edu",
-          },
-        }),
-      ],
+      items,
       asOf,
     });
 
-    expect(formatted.details).toContain(
-      "1. ABC University | Rahul Sharma | 9876543210 | Overdue | 20 Oct 2026"
+    expect(payload.followUpCount).toBe(9);
+    expect(payload.visibleFollowUpCount).toBe(5);
+    expect(payload.overflowCount).toBe(4);
+    expect(payload.followUpLines).toHaveLength(5);
+    expect(payload.overflowLine).toBe(
+      "+ 4 more follow-ups available in the Admin Portal"
     );
-    expect(formatted.details).toContain(
-      "2. XYZ University | Priya Rao | 9988776655 | Due today | 24 Oct 2026"
+
+    const parameters = buildRelationshipOwnerFollowUpTemplateBodyParameters(
+      payload
     );
-    expect(formatted.details.split(RELATIONSHIP_OWNER_DIGEST_UNIVERSITY_SEPARATOR)).toHaveLength(
-      2
+    expect(parameters).toHaveLength(8);
+    expect(parameters[1]?.text).toBe("9");
+    parameters.forEach((row) => assertSingleLineMetaParameter(row.text));
+  });
+
+  it("uses singular overflow grammar for one extra follow-up", () => {
+    expect(buildRelationshipOwnerFollowUpOverflowLine(1)).toBe(
+      "+ 1 more follow-up available in the Admin Portal"
     );
-    assertSingleLineMetaParameter(formatted.details);
+    const payload = buildRelationshipOwnerFollowUpDigestPayload({
+      ownerName: "Owner",
+      items: Array.from({ length: 6 }, (_, index) =>
+        item({ id: `p-${index}`, followUpAt: "2026-10-20T10:00:00" })
+      ),
+      asOf,
+    });
+    expect(payload.overflowCount).toBe(1);
+    expect(payload.overflowLine).toBe(
+      "+ 1 more follow-up available in the Admin Portal"
+    );
   });
 
   it("handles missing contact name cleanly on one line", () => {
@@ -135,12 +156,10 @@ describe("relationship owner digest formatter", () => {
         email: "x@example.edu",
       },
     });
-    const entry = formatUniversityDigestEntry(row, 1, "2026-10-24");
+    const entry = formatUniversityFollowUpLine(row, "2026-10-24");
     expect(entry).toBe(
-      "1. ABC University | 9988776655 | Re-engage | 24 Oct 2026"
+      "ABC University | 9988776655 | Re-engage | 24 Oct 2026"
     );
-    expect(entry).not.toContain("undefined");
-    expect(entry).not.toContain("| |");
     assertSingleLineMetaParameter(entry);
   });
 
@@ -161,7 +180,7 @@ describe("relationship owner digest formatter", () => {
       1,
       "2026-10-24"
     );
-    expect(entry).toBe("1. ABC University | Priya Rao | Due today | 24 Oct 2026");
+    expect(entry).toBe("ABC University | Priya Rao | Due today | 24 Oct 2026");
   });
 
   it("omits contact segments when both name and phone are missing", () => {
@@ -174,18 +193,16 @@ describe("relationship owner digest formatter", () => {
         email: "x@example.edu",
       },
     });
-    const entry = formatUniversityDigestEntry(row, 2, "2026-10-24");
-    expect(entry).toBe("2. ABC University | Due today | 24 Oct 2026");
-    expect(entry).not.toContain("| |");
+    const entry = formatUniversityFollowUpLine(row, "2026-10-24");
+    expect(entry).toBe("ABC University | Due today | 24 Oct 2026");
   });
 
-  it("keeps total count while truncating list with single-line overflow", () => {
-    const many = Array.from({ length: 80 }, (_, index) =>
+  it("caps visible follow-ups at five while keeping full total count", () => {
+    const many = Array.from({ length: 20 }, (_, index) =>
       item({
         id: `p-${index}`,
-        name: `University Number ${index + 1} With A Long Name For Testing`,
+        name: `University Number ${index + 1}`,
         followUpAt: "2026-10-20T10:00:00",
-        followUpNotes: "Should not appear",
       })
     );
 
@@ -195,17 +212,12 @@ describe("relationship owner digest formatter", () => {
       asOf,
     });
 
-    expect(formatted.itemCount).toBe(80);
-    expect(formatted.details.length).toBeLessThanOrEqual(
-      RELATIONSHIP_OWNER_DIGEST_MAX_BODY_CHARS
+    expect(formatted.itemCount).toBe(20);
+    expect(formatted.visibleFollowUpCount).toBe(
+      RELATIONSHIP_OWNER_DIGEST_MAX_VISIBLE_FOLLOW_UPS
     );
-    assertSingleLineMetaParameter(formatted.details);
-    expect(formatted.overflowNote).toMatch(/\+\s+\d+\s+more follow-up/);
-    expect(formatted.details).toContain(formatted.overflowNote);
-    expect(formatted.details).toContain(
-      `${RELATIONSHIP_OWNER_DIGEST_UNIVERSITY_SEPARATOR}${formatted.overflowNote}`
-    );
-    expect(formatted.details).not.toMatch(/\n/);
+    expect(formatted.overflowCount).toBe(15);
+    expect(formatted.followUpLines).toHaveLength(5);
   });
 
   it("sanitizes embedded line breaks in defensive pass", () => {

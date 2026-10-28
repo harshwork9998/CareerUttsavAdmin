@@ -207,9 +207,6 @@ function isChapter1Complete(partner: Partner): boolean {
       partner.primaryContact?.name?.trim() &&
       partner.primaryContact?.phone?.trim() &&
       partner.primaryContact?.email?.trim() &&
-      partner.secondaryContact?.name?.trim() &&
-      partner.secondaryContact?.phone?.trim() &&
-      partner.secondaryContact?.email?.trim() &&
       isRelationshipOwnerReady(partner.relationshipOwner)
   );
 }
@@ -1141,31 +1138,20 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       if (phoneErr) next.primary = phoneErr;
     }
     if (
-      !secondary.name.trim() ||
-      !secondary.phone.trim() ||
-      !secondary.email.trim()
+      secondary.email.trim() &&
+      !isPartnerPortalEmail(secondary.email)
     ) {
-      next.secondary = "Secondary contact needs name, phone & email";
-    } else if (!isPartnerPortalEmail(secondary.email)) {
       next.secondary = "Enter a valid secondary contact email";
     } else {
       const phoneErr = mobileErrorForSubmit(
         secondary.phone,
-        partner?.secondaryContact?.phone ?? ""
+        partner?.secondaryContact?.phone ?? "",
+        { required: false }
       );
       if (phoneErr) next.secondary = phoneErr;
     }
     if (!spocChoice) {
       next.spoc = "Select a SPOC";
-    } else if (spocChoice === NEW_SPOC) {
-      if (!managerName.trim()) next.mName = "Required";
-      if (!spocOrganization.trim()) next.mOrg = "Required";
-      if (!managerPhone.trim()) next.mPhone = "Required";
-      else {
-        const phoneErr = mobileErrorForSubmit(managerPhone, "");
-        if (phoneErr) next.mPhone = phoneErr;
-      }
-      if (!managerEmail.trim()) next.mEmail = "Required";
     } else if (!spocs.some((s) => s.id === spocChoice)) {
       next.spoc = "Select a SPOC";
     }
@@ -2244,15 +2230,20 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
 function contactFieldHasError(
   error: string | undefined,
   key: keyof PartnerContact,
-  value: PartnerContact
+  value: PartnerContact,
+  optional?: boolean
 ): boolean {
   if (!error || key === "designation") return false;
+  if (optional && key !== "email" && key !== "phone") {
+    return false;
+  }
   if (key === "email" && error.toLowerCase().includes("valid")) {
-    return !value.email.trim() || !isPartnerPortalEmail(value.email);
+    return Boolean(value.email.trim()) && !isPartnerPortalEmail(value.email);
   }
   if (key === "phone" && error.toLowerCase().includes("mobile")) {
-    return true;
+    return Boolean(value.phone.trim());
   }
+  if (optional) return false;
   return !value[key]?.trim();
 }
 
@@ -2279,11 +2270,13 @@ function ContactFields({
   value,
   onChange,
   error,
+  optional,
 }: {
   title: string;
   value: PartnerContact;
   onChange: (v: PartnerContact) => void;
   error?: string;
+  optional?: boolean;
 }) {
   return (
     <div className="space-y-3">
@@ -2299,7 +2292,7 @@ function ContactFields({
             ["email", "Email"],
           ] as const
         ).map(([key, label]) => {
-          const fieldError = contactFieldHasError(error, key, value);
+          const fieldError = contactFieldHasError(error, key, value, optional);
           return (
             <div
               key={key}
@@ -2406,6 +2399,7 @@ function ChapterPartnerDetails(props: {
           value={props.secondary}
           onChange={props.setSecondary}
           error={props.errors.secondary}
+          optional
         />
         <FieldError message={props.errors.secondary} />
       </div>
@@ -2438,7 +2432,6 @@ function ChapterPartnerDetails(props: {
                         : spoc.name}
                     </SelectItem>
                   ))}
-                  <SelectItem value={NEW_SPOC}>Create new SPOC</SelectItem>
                 </SelectContent>
               </Select>
               <FieldError message={props.errors.spoc} />

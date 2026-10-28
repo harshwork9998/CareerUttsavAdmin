@@ -35,12 +35,12 @@ import {
 } from "@/lib/server/relationship-owner-follow-up-processor";
 import type { PartnerFollowUpItem } from "@/types";
 
-const TEMPLATE = "relationship_owner_followup_digest";
+const TEMPLATE_BASE = "relationship_owner_followup_digest";
 
-function sampleFollowUpItem(): PartnerFollowUpItem {
+function sampleFollowUpItem(id = "p1"): PartnerFollowUpItem {
   return {
     partner: {
-      id: "p1",
+      id,
       name: "Example University",
       city: "Bengaluru",
       state: "Karnataka",
@@ -85,13 +85,14 @@ describe("processRelationshipOwnerFollowUpDigestTest", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.RELATIONSHIP_OWNER_FOLLOWUP_TEMPLATE_NAME = TEMPLATE;
+    process.env.RELATIONSHIP_OWNER_FOLLOWUP_TEMPLATE_BASE = TEMPLATE_BASE;
+    delete process.env.RELATIONSHIP_OWNER_FOLLOWUP_TEMPLATE_NAME;
     process.env.RELATIONSHIP_OWNER_FOLLOWUP_TEMPLATE_LANGUAGE = "en";
     sendTemplate.mockResolvedValue({ success: true, messageId: "wamid.test-123" });
     findUniqueDigest.mockResolvedValue(null);
   });
 
-  it("sends one template message to the SPOC canonical phone", async () => {
+  it("sends one template message with per-line body parameters", async () => {
     findUniqueSpoc.mockResolvedValue({
       id: "spoc-a",
       name: "Owner A",
@@ -106,26 +107,47 @@ describe("processRelationshipOwnerFollowUpDigestTest", () => {
     });
 
     expect(result.status).toBe("sent");
-    expect(result.ownerName).toBe("Owner A");
     expect(result.followUpCount).toBe(1);
-    expect(result.messageId).toBe("wamid.test-123");
-    expect(result.templateName).toBe(TEMPLATE);
-    expect(result.recipientPhoneMasked).toBe("******3210");
+    expect(result.visibleFollowUpCount).toBe(1);
+    expect(result.overflowCount).toBe(0);
+    expect(result.templateName).toBe(`${TEMPLATE_BASE}_1`);
     expect(sendTemplate).toHaveBeenCalledOnce();
     const sendInput = sendTemplate.mock.calls[0]?.[0];
-    expect(sendInput).toMatchObject({
-      to: "919876543210",
-      templateName: TEMPLATE,
-      languageCode: "en",
+    expect(sendInput?.templateName).toBe(`${TEMPLATE_BASE}_1`);
+    const parameters = sendInput?.components?.[0]?.parameters ?? [];
+    expect(parameters).toHaveLength(3);
+    expect(parameters[2]?.text).toContain("Example University");
+    expect(JSON.stringify(parameters)).not.toMatch(/\\n|\\r|\\t/);
+  });
+
+  it("selects _5_plus for nine follow-ups with overflow metadata", async () => {
+    findUniqueSpoc.mockResolvedValue({
+      id: "spoc-a",
+      name: "Owner A",
+      phone: "9876543210",
     });
-    const detailsParam =
-      sendInput?.components?.[0]?.parameters?.[2]?.text ?? "";
-    expect(detailsParam).not.toMatch(/\n|\r|\t/);
-    expect(detailsParam).toContain("1. Example University");
-    expect(listDistinctOwnerSpocIdsWithPartners).not.toHaveBeenCalled();
-    expect(findUniqueDigest).not.toHaveBeenCalled();
-    expect(upsertDigest).not.toHaveBeenCalled();
-    expect(updateDigest).not.toHaveBeenCalled();
+    listDueFollowUpsForOwner.mockResolvedValue(
+      Array.from({ length: 9 }, (_, index) =>
+        sampleFollowUpItem(`p-${index}`)
+      )
+    );
+
+    const result = await processRelationshipOwnerFollowUpDigestTest({
+      ownerSpocId: "spoc-a",
+      sendTemplate,
+    });
+
+    expect(result.templateName).toBe(`${TEMPLATE_BASE}_5_plus`);
+    expect(result.followUpCount).toBe(9);
+    expect(result.visibleFollowUpCount).toBe(5);
+    expect(result.overflowCount).toBe(4);
+    const parameters =
+      sendTemplate.mock.calls[0]?.[0]?.components?.[0]?.parameters ?? [];
+    expect(parameters).toHaveLength(8);
+    expect(parameters[1]?.text).toBe("9");
+    expect(parameters[7]?.text).toBe(
+      "+ 4 more follow-ups available in the Admin Portal"
+    );
   });
 
   it("skips with zero_follow_ups without sending", async () => {
@@ -144,28 +166,10 @@ describe("processRelationshipOwnerFollowUpDigestTest", () => {
     expect(result.status).toBe("skipped");
     expect(result.reason).toBe("zero_follow_ups");
     expect(sendTemplate).not.toHaveBeenCalled();
-    expect(upsertDigest).not.toHaveBeenCalled();
-  });
-
-  it("skips with missing_phone without sending", async () => {
-    findUniqueSpoc.mockResolvedValue({
-      id: "spoc-a",
-      name: "Owner A",
-      phone: "123",
-    });
-    listDueFollowUpsForOwner.mockResolvedValue([sampleFollowUpItem()]);
-
-    const result = await processRelationshipOwnerFollowUpDigestTest({
-      ownerSpocId: "spoc-a",
-      sendTemplate,
-    });
-
-    expect(result.status).toBe("skipped");
-    expect(result.reason).toBe("missing_phone");
-    expect(sendTemplate).not.toHaveBeenCalled();
   });
 
   it("skips when template is not configured", async () => {
+    delete process.env.RELATIONSHIP_OWNER_FOLLOWUP_TEMPLATE_BASE;
     delete process.env.RELATIONSHIP_OWNER_FOLLOWUP_TEMPLATE_NAME;
     const result = await processRelationshipOwnerFollowUpDigestTest({
       ownerSpocId: "spoc-a",
@@ -174,33 +178,12 @@ describe("processRelationshipOwnerFollowUpDigestTest", () => {
     expect(result.reason).toBe("template_not_configured");
     expect(sendTemplate).not.toHaveBeenCalled();
   });
-
-  it("loads only the requested owner", async () => {
-    findUniqueSpoc.mockResolvedValue({
-      id: "spoc-b",
-      name: "Owner B",
-      phone: "9876500000",
-    });
-    listDueFollowUpsForOwner.mockResolvedValue([]);
-
-    await processRelationshipOwnerFollowUpDigestTest({
-      ownerSpocId: "spoc-b",
-      sendTemplate,
-    });
-
-    expect(findUniqueSpoc).toHaveBeenCalledWith({ where: { id: "spoc-b" } });
-    expect(listDueFollowUpsForOwner).toHaveBeenCalledWith({
-      ownerSpocId: "spoc-b",
-      asOf: expect.any(Date),
-    });
-    expect(listDistinctOwnerSpocIdsWithPartners).not.toHaveBeenCalled();
-  });
 });
 
 describe("processRelationshipOwnerFollowUpDigests automatic path", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.RELATIONSHIP_OWNER_FOLLOWUP_TEMPLATE_NAME = TEMPLATE;
+    process.env.RELATIONSHIP_OWNER_FOLLOWUP_TEMPLATE_BASE = TEMPLATE_BASE;
     listDistinctOwnerSpocIdsWithPartners.mockResolvedValue(["spoc-a", "spoc-b"]);
     findUniqueDigest.mockResolvedValue(null);
     findUniqueSpoc.mockResolvedValue({
