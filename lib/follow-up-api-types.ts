@@ -4,7 +4,7 @@ export type FollowUpApiItem = {
   city: string;
   state: string;
   stage: string;
-  urgency: "overdue" | "due_today" | "re_engage";
+  urgency: "overdue" | "due_today" | "scheduled" | "re_engage";
   followUpAt: string;
   followUpNotes?: string;
   meetingNotes?: string;

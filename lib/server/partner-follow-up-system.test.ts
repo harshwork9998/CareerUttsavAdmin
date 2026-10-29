@@ -103,7 +103,7 @@ const superuser: User = {
 };
 
 describe("partner follow-up eligibility", () => {
-  it("includes due and overdue in_discussion and lost meetings only", () => {
+  it("includes due, overdue, and scheduled in_discussion and lost meetings only", () => {
     const asOf = new Date("2026-07-21T12:00:00+05:30");
     const items = collectDueFollowUpsFromPartners(
       [
@@ -126,13 +126,20 @@ describe("partner follow-up eligibility", () => {
               createdAt: "2026-07-19T00:00:00.000Z",
               updatedAt: "2026-07-19T00:00:00.000Z",
             },
+            {
+              id: "m3",
+              meetingAt: "2026-07-19T10:00:00",
+              outcome: "in_discussion",
+              followUpAt: "2026-07-25T10:00:00",
+              createdAt: "2026-07-19T00:00:00.000Z",
+              updatedAt: "2026-07-19T00:00:00.000Z",
+            },
           ],
         }),
       ],
       asOf
     );
-    expect(items).toHaveLength(1);
-    expect(items[0]?.meeting.id).toBe("m1");
+    expect(items.map((row) => row.meeting.id)).toEqual(["m1", "m3"]);
   });
 });
 
@@ -140,6 +147,94 @@ describe("owner-scoped follow-up resolver", () => {
   beforeEach(() => {
     vi.mocked(findAdminUserRelationshipSpocId).mockReset();
     vi.mocked(listPartnersForApi).mockReset();
+  });
+
+  it("popup and WhatsApp paths share collectDueFollowUpsFromPartners eligibility", async () => {
+    vi.mocked(findAdminUserRelationshipSpocId).mockResolvedValue("spoc-a");
+    vi.mocked(listPartnersForApi).mockResolvedValue([
+      partner({
+        id: "p-overdue",
+        meetings: [
+          {
+            id: "m1",
+            meetingAt: "2026-10-20T10:00:00",
+            outcome: "in_discussion",
+            followUpAt: "2026-10-24T10:00:00",
+            createdAt: "2026-10-20T00:00:00.000Z",
+            updatedAt: "2026-10-20T00:00:00.000Z",
+          },
+        ],
+      }),
+      partner({
+        id: "p-scheduled",
+        meetings: [
+          {
+            id: "m2",
+            meetingAt: "2026-10-20T10:00:00",
+            outcome: "in_discussion",
+            followUpAt: "2026-11-03T10:00:00",
+            createdAt: "2026-10-20T00:00:00.000Z",
+            updatedAt: "2026-10-20T00:00:00.000Z",
+          },
+        ],
+      }),
+      partner({
+        id: "p-other-owner",
+        relationshipOwner: {
+          ...partner({ id: "x" }).relationshipOwner!,
+          spocId: "spoc-b",
+        },
+        meetings: [
+          {
+            id: "m3",
+            meetingAt: "2026-10-20T10:00:00",
+            outcome: "in_discussion",
+            followUpAt: "2026-11-10T10:00:00",
+            createdAt: "2026-10-20T00:00:00.000Z",
+            updatedAt: "2026-10-20T00:00:00.000Z",
+          },
+        ],
+      }),
+    ]);
+
+    const asOf = new Date("2026-10-29T10:00:00+05:30");
+    const fromAdmin = await listDueFollowUpsForAdminUser({ user: userA, asOf });
+    const expected = collectDueFollowUpsFromPartners(
+      [
+        partner({
+          id: "p-overdue",
+          meetings: [
+            {
+              id: "m1",
+              meetingAt: "2026-10-20T10:00:00",
+              outcome: "in_discussion",
+              followUpAt: "2026-10-24T10:00:00",
+              createdAt: "2026-10-20T00:00:00.000Z",
+              updatedAt: "2026-10-20T00:00:00.000Z",
+            },
+          ],
+        }),
+        partner({
+          id: "p-scheduled",
+          meetings: [
+            {
+              id: "m2",
+              meetingAt: "2026-10-20T10:00:00",
+              outcome: "in_discussion",
+              followUpAt: "2026-11-03T10:00:00",
+              createdAt: "2026-10-20T00:00:00.000Z",
+              updatedAt: "2026-10-20T00:00:00.000Z",
+            },
+          ],
+        }),
+      ],
+      asOf
+    );
+    expect(fromAdmin).toEqual(expected);
+    expect(fromAdmin.map((row) => row.partner.id)).toEqual([
+      "p-overdue",
+      "p-scheduled",
+    ]);
   });
 
   it("returns zero rows for unmapped normal admin users", async () => {

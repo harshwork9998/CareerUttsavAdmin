@@ -44,6 +44,7 @@ import {
 function urgencyLabel(item: FollowUpApiItem): string {
   if (item.urgency === "overdue") return "Overdue";
   if (item.urgency === "re_engage") return "Re-engage";
+  if (item.urgency === "scheduled") return "Scheduled";
   return "Due today";
 }
 
@@ -52,6 +53,12 @@ function urgencyStyle(item: FollowUpApiItem): { background: string; color: strin
     return {
       background: "rgba(163,59,59,0.14)",
       color: "#A33B3B",
+    };
+  }
+  if (item.urgency === "scheduled") {
+    return {
+      background: "rgba(42,79,140,0.12)",
+      color: "#2A4F8C",
     };
   }
   return {
@@ -209,6 +216,10 @@ export function PartnerFollowUpDialog() {
     () => dueFollowUps.filter((item) => item.urgency === "due_today").length,
     [dueFollowUps]
   );
+  const scheduledCount = useMemo(
+    () => dueFollowUps.filter((item) => item.urgency === "scheduled").length,
+    [dueFollowUps]
+  );
 
   useEffect(() => {
     if (!adminUserId) return;
@@ -253,8 +264,10 @@ export function PartnerFollowUpDialog() {
               {dueFollowUps.length} follow-up
               {dueFollowUps.length === 1 ? "" : "s"} need attention
               {dueTodayCount > 0
-                ? ` (${dueTodayCount} due today)`
-                : " (including overdue)"}
+                ? ` (${dueTodayCount} due today${scheduledCount > 0 ? `, ${scheduledCount} scheduled` : ""})`
+                : scheduledCount > 0
+                  ? ` (${scheduledCount} scheduled)`
+                  : " (including overdue)"}
               .
             </DialogDescription>
           </DialogHeader>

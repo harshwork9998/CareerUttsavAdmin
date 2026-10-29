@@ -1,19 +1,12 @@
 import {
   followUpUrgency,
+  followUpUrgencyDisplayLabel,
   toFollowUpDateOnly,
 } from "@/lib/server/partner-follow-up-eligibility";
 import { istCalendarDateFromDate } from "@/lib/server/ist-calendar";
 import type { PartnerFollowUpItem } from "@/types";
 
 export const RELATIONSHIP_OWNER_DIGEST_MAX_VISIBLE_FOLLOW_UPS = 5;
-
-function urgencyLabel(
-  urgency: ReturnType<typeof followUpUrgency>
-): string {
-  if (urgency === "overdue") return "Overdue";
-  if (urgency === "re_engage") return "Re-engage";
-  return "Due today";
-}
 
 function formatFollowUpDateLabel(followUpAt: string): string {
   const day = toFollowUpDateOnly(followUpAt);
@@ -80,7 +73,7 @@ export function formatUniversityFollowUpLine(
     segments.push(contactPhone);
   }
 
-  segments.push(urgencyLabel(urgency));
+  segments.push(followUpUrgencyDisplayLabel(urgency));
   segments.push(formatFollowUpDateLabel(meeting.followUpAt!));
 
   return sanitizeMetaTemplateParameterText(segments.join(" | "));
