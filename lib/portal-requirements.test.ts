@@ -3,7 +3,10 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { deliverableOptionLabel } from "@/constants/partner-deliverables";
+import {
+  BOOK_AD_PLUS2_OPTIONS,
+  deliverableOptionLabel,
+} from "@/constants/partner-deliverables";
 import {
   normalizePortalRepresentatives,
   representativesShownInViewDocs,
@@ -135,6 +138,7 @@ describe("representative fields for View Docs", () => {
       "utf8"
     );
     expect(docs).toContain('label: "Event Representatives"');
+    expect(docs).toContain("Speaker details for each panel discussion");
   });
 });
 
@@ -226,12 +230,22 @@ describe("uploads", () => {
 describe("advertisement labels", () => {
   it("shows the required Careers After +2 dimensions", () => {
     expect(deliverableOptionLabel("full page")).toBe(
-      'Full Page (6.5" W × 4.75" H)'
+      'Full Page (6.5" W × 9.5" H)'
     );
     expect(deliverableOptionLabel("half page")).toBe(
-      'Half Page (6.5" W × 9.5" H)'
+      'Half Page (6.5" W × 4.75" H)'
     );
     expect(deliverableOptionLabel("full page")).not.toMatch(/MB|PDF|PNG/i);
+  });
+
+  it("keeps stored option keys while correcting display dimensions only", () => {
+    expect(BOOK_AD_PLUS2_OPTIONS).toEqual(["half page", "full page"]);
+    expect(deliverableOptionLabel("FULL PAGE")).toBe(
+      'Full Page (6.5" W × 9.5" H)'
+    );
+    expect(deliverableOptionLabel("HALF PAGE")).toBe(
+      'Half Page (6.5" W × 4.75" H)'
+    );
   });
 });
 

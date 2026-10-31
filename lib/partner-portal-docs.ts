@@ -6,6 +6,7 @@ import type {
 } from "@/types";
 
 import { isValidIndianMobile } from "@/lib/indian-mobile";
+import { isPartnerSpeakerComplete } from "@/lib/partner-pending-state";
 
 function isValidRepPhone(phone: string): boolean {
   return isValidIndianMobile(phone);
@@ -137,7 +138,7 @@ export const PORTAL_SUBMISSION_ITEMS = [
   },
   {
     key: "speaker_details" as const,
-    label: "Speaker details for each seminar",
+    label: "Speaker details for each panel discussion",
     type: "speakers" as const,
   },
   {
@@ -200,6 +201,22 @@ function allottedSeminars(
   return (assignments ?? []).filter((a) => a.slots > 0);
 }
 
+export function arePortalSpeakerDetailsComplete(
+  partner: Pick<Partner, "portalSeminarSpeakers" | "seminarSlotAssignments">
+): boolean {
+  const seminars = allottedSeminars(partner.seminarSlotAssignments);
+  if (seminars.length === 0) return false;
+
+  return seminars.every((slot) =>
+    (partner.portalSeminarSpeakers ?? []).some(
+      (row) =>
+        row.eventId === slot.eventId &&
+        row.seminarId === slot.seminarId &&
+        row.speakers.some((speaker) => isPartnerSpeakerComplete(speaker))
+    )
+  );
+}
+
 export function getPartnerPortalUploadStatus(
   partner: Pick<
     Partner,
@@ -219,17 +236,7 @@ export function getPartnerPortalUploadStatus(
   const writeupDoc = findDoc(docs, "souvenir_writeup");
   const adDoc = findDoc(docs, "ad_creative");
 
-  const seminars = allottedSeminars(partner.seminarSlotAssignments);
-  const speakersComplete =
-    seminars.length === 0 ||
-    seminars.every((slot) =>
-      (partner.portalSeminarSpeakers ?? []).some(
-        (row) =>
-          row.eventId === slot.eventId &&
-          row.seminarId === slot.seminarId &&
-          row.speakers.some((s) => s.name.trim())
-      )
-    );
+  const speakersComplete = arePortalSpeakerDetailsComplete(partner);
 
   const eventIds =
     partner.eventIds?.length > 0
@@ -301,7 +308,7 @@ export function getPartnerPortalUploadStatus(
     },
     {
       key: "speaker_details",
-      label: "Speaker details for each seminar",
+      label: "Speaker details for each panel discussion",
       complete: speakersComplete,
       uploaded: speakersComplete,
       kind: "speakers",

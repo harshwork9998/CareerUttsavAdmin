@@ -14,8 +14,8 @@ export const BOOK_AD_PLUS2_OPTION_LABELS: Record<
   (typeof BOOK_AD_PLUS2_OPTIONS)[number],
   string
 > = {
-  "full page": 'Full Page (6.5" W × 4.75" H)',
-  "half page": 'Half Page (6.5" W × 9.5" H)',
+  "full page": 'Full Page (6.5" W × 9.5" H)',
+  "half page": 'Half Page (6.5" W × 4.75" H)',
 };
 
 export function deliverableOptionLabel(
