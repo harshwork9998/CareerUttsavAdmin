@@ -64,8 +64,6 @@ export type SeminarTopicChoice = {
   hall: number | null;
   selected: boolean;
   locked: boolean;
-  slots: number;
-  remainingCapacity: number;
 };
 
 export type SeminarTopicEventGroup = {
@@ -209,13 +207,6 @@ export function buildPartnerSeminarTopicCatalog(input: {
       const selected = held != null;
       const panelistSlots = seminar.panelistSlots ?? null;
       const otherSeats = others.get(seminar.id) ?? 0;
-      const configured =
-        typeof panelistSlots === "number" &&
-        Number.isInteger(panelistSlots) &&
-        panelistSlots >= 0;
-      const remainingCapacity = configured
-        ? Math.max(0, panelistSlots - otherSeats - (selected ? held.slots : 0))
-        : 0;
       const openForNew =
         !selected &&
         typeof panelistSlots === "number" &&
@@ -236,8 +227,6 @@ export function buildPartnerSeminarTopicCatalog(input: {
         hall: seminar.hall ?? null,
         selected,
         locked: selected && baseline.has(key),
-        slots: selected ? held.slots : 1,
-        remainingCapacity,
       });
     }
 

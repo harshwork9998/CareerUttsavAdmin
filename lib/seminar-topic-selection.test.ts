@@ -77,10 +77,20 @@ describe("partner seminar topic catalog", () => {
     });
     const topics = catalog.events[0]?.topics ?? [];
     expect(topics.map((row) => row.seminarId)).toEqual(["open"]);
-    expect(topics[0]).toMatchObject({
-      selected: false,
-      remainingCapacity: 2,
-    });
+    expect(Object.keys(topics[0] ?? {}).sort()).toEqual([
+      "date",
+      "endTime",
+      "eventId",
+      "hall",
+      "locked",
+      "selected",
+      "seminarId",
+      "startTime",
+      "title",
+    ]);
+    expect(JSON.stringify(topics)).not.toMatch(
+      /remainingCapacity|panelistSlots|occupancy|"slots"/
+    );
     expect(catalog.events[0]).toMatchObject({
       allocated: 3,
       selected: 0,
@@ -153,10 +163,21 @@ describe("partner seminar topic catalog", () => {
         },
       ],
     });
-    expect(other.events[0]?.topics[0]).toMatchObject({
-      seminarId: "open",
-      remainingCapacity: 1,
+    expect(other.events[0]?.topics.map((row) => row.seminarId)).toEqual(["open"]);
+    expect(JSON.stringify(other.events[0]?.topics)).not.toMatch(
+      /remainingCapacity|panelistSlots|occupancy|"slots"/
+    );
+    const blocked = buildPartnerSeminarTopicCatalog({
+      partner: partner({ id: "other", eventPartnerships: [{ eventId, seminarSlotCount: 1 }] }),
+      events: events([seminar("open", 2, "Open topic")]),
+      partners: [
+        {
+          id: "legacy",
+          seminarSlotAssignments: [{ eventId, seminarId: "open", slots: 2 }],
+        },
+      ],
     });
+    expect(blocked.events[0]?.topics).toEqual([]);
   });
 
   it("offers no picker when nothing is allocated", () => {
