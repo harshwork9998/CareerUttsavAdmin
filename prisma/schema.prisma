@@ -453,6 +453,8 @@ model PartnerSeminarSlotAssignment {
   seminarId     String
   slots         Int
   seminarTitle  String?
+  /// Null while the partner has selected this topic but not confirmed it.
+  confirmedAt   DateTime?
 
   partnership PartnerEventPartnership @relation(fields: [partnershipId], references: [id], onDelete: Cascade)
   seminar     Seminar                 @relation(fields: [seminarId], references: [id], onDelete: Restrict)

@@ -53,6 +53,8 @@ import {
   surface,
 } from "@/features/dashboard/dashboard-ui";
 import { SeminarRoundTable } from "@/features/seminars/seminar-round-table";
+import { SeminarPartnerActions } from "@/features/seminars/seminar-partner-actions";
+import { adminListsSeminar } from "@/lib/seminar-admin";
 import { cn, generateId } from "@/lib/utils";
 import type {
   Event,
@@ -182,6 +184,7 @@ export function SeminarsView() {
     const list: SeminarRow[] = [];
     for (const event of events) {
       for (const seminar of event.seminars ?? []) {
+        if (!adminListsSeminar(seminar)) continue;
         list.push({
           key: rosterSessionKey(event.id, seminar.id),
           event,
@@ -740,6 +743,18 @@ export function SeminarsView() {
                           selectedId={selectedSpeakerId}
                           seatMeta={seatMeta}
                           onSeatClick={handleSeatClick}
+                        />
+                        <SeminarPartnerActions
+                          event={active.event}
+                          seminar={active.seminar}
+                          events={events}
+                          partners={partners}
+                          onChanged={() => {
+                            void queryClient.invalidateQueries({ queryKey: ["partners"] });
+                            void queryClient.invalidateQueries({
+                              queryKey: ["seminar-rosters"],
+                            });
+                          }}
                         />
                       </div>
 

@@ -98,6 +98,8 @@ function pendingItemsFor(entry: CommunicationHistorySource): string[] | undefine
   if (keys.length === 0) return undefined;
   return keys.map((key) => {
     if (PENDING_LABEL_BY_KEY[key]) return PENDING_LABEL_BY_KEY[key];
+    if (key.startsWith("topics-confirm:")) return "Confirm Panel Discussion topics";
+    if (key.startsWith("topics:")) return "Select Panel Discussion topics";
     if (key.startsWith("speaker:")) return "Speaker details";
     if (key.startsWith("representatives:")) return "Event representatives";
     return key;

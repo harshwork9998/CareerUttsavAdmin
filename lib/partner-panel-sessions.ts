@@ -56,8 +56,8 @@ export function panelSessionsForPartner(
         eventId: assignment.eventId,
         seminarId: assignment.seminarId,
         topic:
-          assignment.seminarTitle?.trim() ||
           seminar?.title?.trim() ||
+          assignment.seminarTitle?.trim() ||
           "Panel Discussion",
         dateLabel: sessionDateLabel(seminar?.date),
         timeLabel: sessionTimeLabel(seminar?.startTime, seminar?.endTime),

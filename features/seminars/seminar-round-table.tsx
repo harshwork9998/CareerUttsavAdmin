@@ -187,9 +187,13 @@ export function SeminarRoundTable({
                 ? meta.partnerName.split(" ").slice(0, 2).join(" ")
                 : `Seat ${seat.index + 1}`);
           const subLabel =
-            !isMod && meta?.awaitingSpeaker && meta.partnerName
-              ? "Partner seat"
-              : null;
+            !isMod && meta?.confirmation
+              ? meta.confirmation === "Confirmed"
+                ? "Confirmed"
+                : "Pending"
+              : !isMod && meta?.awaitingSpeaker && meta.partnerName
+                ? "Partner seat"
+                : null;
 
           return (
             <button

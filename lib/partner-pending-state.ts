@@ -1,4 +1,5 @@
 import { isValidIndianMobile } from "@/lib/indian-mobile";
+import { seminarTopicWorkflowForEvent } from "@/lib/seminar-topic-completion";
 import type {
   Partner,
   PartnerDeliverable,
@@ -16,7 +17,12 @@ export type PendingItem = {
   section?: string;
 };
 
-export type ReadinessStatus = "Complete" | "Not Applicable" | "Confirmed";
+export type ReadinessStatus =
+  | "Complete"
+  | "Not Applicable"
+  | "Confirmed"
+  | "Pending"
+  | "Pending Confirmation";
 
 export type ReadinessLine = {
   label: string;
@@ -37,6 +43,11 @@ export type PendingPartnershipInput = {
   eventTitle?: string;
   deliverables: PartnerDeliverable[];
   representativeSlotCount: number;
+  seminarSlotCount?: number | null;
+  assignments?: readonly Pick<
+    PartnerSeminarSlotAssignment,
+    "eventId" | "seminarId" | "slots" | "confirmedAt"
+  >[] | null;
   sessions: PanelSessionView[];
   portalFasciaName?: string | null;
   portalWebsiteUrl?: string | null;
@@ -194,6 +205,25 @@ export function pendingItemsForPartnership(
     });
   }
 
+  const topics = seminarTopicWorkflowForEvent({
+    eventId: input.eventId,
+    seminarSlotCount: input.seminarSlotCount,
+    assignments: input.assignments,
+  });
+  if (topics.status === "selecting") {
+    items.push({
+      key: `topics:${input.eventId}`,
+      label: `Select Panel Discussion topics (${topics.selected} of ${topics.allocated} selected)`,
+      section: "topics",
+    });
+  } else if (topics.status === "confirming") {
+    items.push({
+      key: `topics-confirm:${input.eventId}`,
+      label: "Confirm Panel Discussion topics",
+      section: "topics",
+    });
+  }
+
   for (const session of input.sessions) {
     if (sessionComplete(input, session)) continue;
     items.push({
@@ -238,7 +268,19 @@ export function readinessLinesForPartnership(
       plus2AdApplicable(deliverables)
   );
   const otherApplicable = Boolean(included(deliverables, "smsMailerCampaign"));
-  const panelApplicable = input.sessions.length > 0;
+  const topics = seminarTopicWorkflowForEvent({
+    eventId: input.eventId,
+    seminarSlotCount: input.seminarSlotCount,
+    assignments: input.assignments,
+  });
+  const panelStatus: ReadinessStatus =
+    topics.status === "not_applicable"
+      ? "Not Applicable"
+      : topics.status === "selecting"
+        ? "Pending"
+        : topics.status === "confirming"
+          ? "Pending Confirmation"
+          : "Confirmed";
   const speakersApplicable = input.sessions.length > 0;
   const representativesApplicable = input.representativeSlotCount > 0;
 
@@ -253,7 +295,7 @@ export function readinessLinesForPartnership(
     },
     {
       label: "Panel Discussion",
-      status: panelApplicable ? "Confirmed" : "Not Applicable",
+      status: panelStatus,
     },
     {
       label: "Speaker details",

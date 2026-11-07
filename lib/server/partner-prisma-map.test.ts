@@ -98,6 +98,7 @@ function baseRecord(
             seminarId: "sem-001-a",
             slots: 1,
             seminarTitle: "Stream selection",
+            confirmedAt: null,
           },
         ],
       },

@@ -5,6 +5,7 @@ import { panelSessionsForPartner } from "@/lib/partner-panel-sessions";
 import {
   notifyAfterAccessAccepted,
   notifyAfterAllocationChange,
+  notifyConfirmedSeminarCommunications,
   notifyReadinessTransition,
   notifySpeakerReceived,
   processPartnerCommunicationReminders,
@@ -397,9 +398,29 @@ describe("partner communication delivery", () => {
     const store = createMemoryPartnerCommunicationLogStore();
     const send = mailer(accepted("panel-1"));
     const allocated = partner({
+      eventPartnerships: [
+        {
+          eventId: "evt-001",
+          deliverables: [deliverable("logoB2C", true), deliverable("smsMailerCampaign", true)],
+          seminarSlotCount: 2,
+          representativeSlotCount: 0,
+        },
+      ],
       seminarSlotAssignments: [
-        { eventId: "evt-001", seminarId: "sem-001", slots: 1, seminarTitle: "Design careers" },
-        { eventId: "evt-001", seminarId: "sem-002", slots: 1, seminarTitle: "Scholarships" },
+        {
+          eventId: "evt-001",
+          seminarId: "sem-001",
+          slots: 1,
+          seminarTitle: "Stale design title",
+          confirmedAt: "2026-11-01T00:00:00.000Z",
+        },
+        {
+          eventId: "evt-001",
+          seminarId: "sem-002",
+          slots: 1,
+          seminarTitle: "Stale scholarship title",
+          confirmedAt: "2026-11-01T00:00:00.000Z",
+        },
       ],
     });
     await notifyAfterAccessAccepted(allocated, { events, store, send });
@@ -412,6 +433,8 @@ describe("partner communication delivery", () => {
     ]);
     expect(send.mock.calls[0]?.[0].text).toContain("Design careers");
     expect(send.mock.calls[0]?.[0].text).toContain("Scholarships");
+    expect(send.mock.calls[0]?.[0].text).not.toContain("Stale design title");
+    expect(send.mock.calls[0]?.[0].text).not.toContain("Stale scholarship title");
     expect(send.mock.calls[0]?.[0].text).toContain("To be confirmed");
     expect(send.mock.calls[0]?.[0].text).toContain("19 December 2026");
     expect(send.mock.calls[0]?.[0].text).toContain("Hall 2");
@@ -422,8 +445,22 @@ describe("partner communication delivery", () => {
       partner({ seminarSlotAssignments: [] }),
       partner({
         id: "partner-002",
+        eventPartnerships: [
+          {
+            eventId: "evt-001",
+            deliverables: [deliverable("logoB2C", true), deliverable("smsMailerCampaign", true)],
+            seminarSlotCount: 1,
+            representativeSlotCount: 0,
+          },
+        ],
         seminarSlotAssignments: [
-          { eventId: "evt-001", seminarId: "sem-002", slots: 1, seminarTitle: "Scholarships" },
+          {
+            eventId: "evt-001",
+            seminarId: "sem-002",
+            slots: 1,
+            seminarTitle: "Stale scholarship title",
+            confirmedAt: "2026-11-02T00:00:00.000Z",
+          },
         ],
         portalSeminarSpeakers: [
           {
@@ -533,8 +570,8 @@ describe("partner communication delivery", () => {
     const sessions = panelSessionsForPartner(
       partner({
         seminarSlotAssignments: [
-          { eventId: "evt-001", seminarId: "sem-001", slots: 1, seminarTitle: "Design careers" },
-          { eventId: "evt-001", seminarId: "sem-002", slots: 1 },
+          { eventId: "evt-001", seminarId: "sem-001", slots: 1, seminarTitle: "Stale design title" },
+          { eventId: "evt-001", seminarId: "sem-002", slots: 1, seminarTitle: "Stale scholarship title" },
         ],
       }),
       [fair()]
@@ -545,5 +582,427 @@ describe("partner communication delivery", () => {
     ]);
     expect(sessions[0]?.dateLabel).toBeNull();
     expect(sessions[1]?.hallLabel).toBe("Hall 2");
+  });
+});
+
+function seminarPartner(input: {
+  id?: string;
+  slotCount: number;
+  assignments: NonNullable<Partner["seminarSlotAssignments"]>;
+  speakers?: Partner["portalSeminarSpeakers"];
+  withLogo?: boolean;
+}): Partner {
+  return partner({
+    id: input.id,
+    eventPartnerships: [
+      {
+        eventId: "evt-001",
+        deliverables: [deliverable("logoB2C", true), deliverable("smsMailerCampaign", true)],
+        seminarSlotCount: input.slotCount,
+        representativeSlotCount: 0,
+      },
+    ],
+    seminarSlotAssignments: input.assignments,
+    portalSeminarSpeakers: input.speakers,
+    ...(input.withLogo
+      ? {
+          portalDocuments: [
+            {
+              id: "logo-1",
+              kind: "logo",
+              label: "Logo",
+              fileName: "logo.png",
+              mimeType: "image/png",
+              url: "https://example.com/logo.png",
+              fileSizeBytes: 10,
+              uploadedAt: "2026-11-04T00:00:00.000Z",
+            },
+          ],
+        }
+      : {}),
+  });
+}
+
+function seat(
+  seminarId: string,
+  confirmedAt: string | null,
+  seminarTitle = "Snapshot title"
+): NonNullable<Partner["seminarSlotAssignments"]>[number] {
+  return { eventId: "evt-001", seminarId, slots: 1, seminarTitle, confirmedAt };
+}
+
+describe("seminar workflow communications", () => {
+  it("includes open topic selection and confirmation in the 72-hour reminder", async () => {
+    const events = [fair()];
+    const selecting = seminarPartner({
+      slotCount: 3,
+      assignments: [seat("sem-001", null)],
+    });
+    const selectSend = mailer(accepted("topics"));
+    const selected = await processPartnerCommunicationReminders({
+      now: new Date("2026-11-04T00:00:00.000Z"),
+      automationEnabledAt: "2026-10-01T00:00:00.000Z",
+      partners: [selecting],
+      events,
+      store: createMemoryPartnerCommunicationLogStore(),
+      send: selectSend,
+    });
+    expect(selected.sent).toBe(1);
+    expect(selectSend.mock.calls[0]?.[0].text).toContain(
+      "Select Panel Discussion topics (1 of 3 selected)"
+    );
+
+    const confirming = seminarPartner({
+      slotCount: 3,
+      assignments: [seat("sem-001", null), seat("sem-002", null), seat("sem-003", null)],
+    });
+    const confirmSend = mailer(accepted("confirm-topics"));
+    await processPartnerCommunicationReminders({
+      now: new Date("2026-11-04T00:00:00.000Z"),
+      automationEnabledAt: "2026-10-01T00:00:00.000Z",
+      partners: [confirming],
+      events: [
+        fair({
+          seminars: [
+            ...(fair().seminars ?? []),
+            {
+              id: "sem-003",
+              title: "Admissions",
+              date: null,
+              startTime: null,
+              endTime: null,
+              panelistSlots: 1,
+              hall: null,
+            },
+          ],
+        }),
+      ],
+      store: createMemoryPartnerCommunicationLogStore(),
+      send: confirmSend,
+    });
+    expect(confirmSend.mock.calls[0]?.[0].text).toContain("Confirm Panel Discussion topics");
+
+    const none = seminarPartner({ slotCount: 0, assignments: [] });
+    const noneSend = mailer(accepted("no-topics"));
+    await processPartnerCommunicationReminders({
+      now: new Date("2026-11-04T00:00:00.000Z"),
+      automationEnabledAt: "2026-10-01T00:00:00.000Z",
+      partners: [none],
+      events,
+      store: createMemoryPartnerCommunicationLogStore(),
+      send: noneSend,
+    });
+    expect(noneSend.mock.calls[0]?.[0].text).not.toContain("Panel Discussion topics");
+  });
+
+  it("sends panel and speaker mail only after the confirmed assignment set changes", async () => {
+    const events = [fair()];
+    const store = createMemoryPartnerCommunicationLogStore();
+    const send = mailer(accepted("seminar-mail"));
+    const partial = seminarPartner({
+      slotCount: 3,
+      assignments: [seat("sem-001", null)],
+    });
+    await notifyConfirmedSeminarCommunications(partial, { events, store, send });
+    await notifyAfterAllocationChange(partner({ seminarSlotAssignments: [] }), partial, {
+      events,
+      store,
+      send,
+    });
+    const unconfirmed = seminarPartner({
+      slotCount: 2,
+      assignments: [seat("sem-001", null), seat("sem-002", null)],
+    });
+    await notifyConfirmedSeminarCommunications(unconfirmed, { events, store, send });
+    expect(send).not.toHaveBeenCalled();
+
+    const confirmed = seminarPartner({
+      slotCount: 2,
+      assignments: [
+        seat("sem-001", "2026-11-08T01:00:00.000Z"),
+        seat("sem-002", "2026-11-08T01:00:00.000Z"),
+      ],
+    });
+    await notifyConfirmedSeminarCommunications(confirmed, { events, store, send });
+    expect(send.mock.calls.map((call) => call[0].subject)).toEqual([
+      "Your Career Uttsav Panel Discussion Slot is Ready for Confirmation",
+      "Who Will Represent Example Institute on the Career Uttsav Stage?",
+    ]);
+    expect(send.mock.calls[0]?.[0].text).toContain("Design careers");
+    expect(send.mock.calls[0]?.[0].text).toContain("Scholarships");
+    expect(send.mock.calls[0]?.[0].text).not.toContain("Snapshot title");
+
+    send.mockClear();
+    await notifyConfirmedSeminarCommunications(confirmed, { events, store, send });
+    expect(send).not.toHaveBeenCalled();
+
+    const completeSpeakers = seminarPartner({
+      slotCount: 1,
+      assignments: [seat("sem-002", "2026-11-08T02:00:00.000Z")],
+      speakers: [
+        {
+          eventId: "evt-001",
+          seminarId: "sem-002",
+          updatedAt: "2026-11-08T02:00:00.000Z",
+          speakers: [completeSpeaker],
+        },
+      ],
+    });
+    await notifyConfirmedSeminarCommunications(completeSpeakers, {
+      events,
+      store: createMemoryPartnerCommunicationLogStore(),
+      send,
+    });
+    expect(send.mock.calls.map((call) => call[0].subject)).toEqual([
+      "Your Career Uttsav Panel Discussion Slot is Ready for Confirmation",
+    ]);
+  });
+
+  it("sends a new panel and speaker request when the confirmed set changes", async () => {
+    const events = [fair()];
+    const store = createMemoryPartnerCommunicationLogStore();
+    const send = mailer(accepted("changed-set"));
+    const topicA = seminarPartner({
+      slotCount: 1,
+      assignments: [seat("sem-001", "2026-11-08T01:00:00.000Z")],
+      speakers: [
+        {
+          eventId: "evt-001",
+          seminarId: "sem-001",
+          updatedAt: "2026-11-08T01:00:00.000Z",
+          speakers: [completeSpeaker],
+        },
+      ],
+    });
+    await notifyConfirmedSeminarCommunications(topicA, { events, store, send });
+    expect(send).toHaveBeenCalledTimes(1);
+    const firstLogs = await store.listForPartner(topicA.id);
+
+    send.mockClear();
+    const topicB = seminarPartner({
+      slotCount: 1,
+      assignments: [seat("sem-002", "2026-11-08T03:00:00.000Z")],
+      speakers: topicA.portalSeminarSpeakers,
+    });
+    await notifyConfirmedSeminarCommunications(topicB, { events, store, send });
+    expect(send.mock.calls.map((call) => call[0].subject)).toEqual([
+      "Your Career Uttsav Panel Discussion Slot is Ready for Confirmation",
+      "Who Will Represent Example Institute on the Career Uttsav Stage?",
+    ]);
+    expect(send.mock.calls[0]?.[0].text).toContain("Scholarships");
+    const logs = await store.listForPartner(topicB.id);
+    expect(logs.map((entry) => entry.metadata?.assignmentFingerprint)).toEqual(
+      expect.arrayContaining([
+        firstLogs[0]?.metadata?.assignmentFingerprint,
+        "sem-002",
+      ])
+    );
+    expect(logs.some((entry) => entry.metadata?.assignmentFingerprint === "sem-001")).toBe(
+      true
+    );
+  });
+
+  it("does not mail an increased allocation until the new topics are confirmed", async () => {
+    const catalogue = fair({
+      seminars: [
+        ...(fair().seminars ?? []),
+        {
+          id: "sem-003",
+          title: "Admissions",
+          date: "2026-12-20",
+          startTime: "12:00",
+          endTime: "13:00",
+          panelistSlots: 2,
+          hall: 1,
+        },
+        {
+          id: "sem-004",
+          title: "Careers",
+          date: "2026-12-20",
+          startTime: "14:00",
+          endTime: "15:00",
+          panelistSlots: 2,
+          hall: 2,
+        },
+      ],
+    });
+    const store = createMemoryPartnerCommunicationLogStore();
+    const send = mailer(accepted("allocation-growth"));
+    const original = seminarPartner({
+      slotCount: 2,
+      assignments: [
+        seat("sem-001", "2026-11-01T00:00:00.000Z"),
+        seat("sem-002", "2026-11-01T00:00:00.000Z"),
+      ],
+      speakers: [
+        {
+          eventId: "evt-001",
+          seminarId: "sem-001",
+          updatedAt: "2026-11-01T00:00:00.000Z",
+          speakers: [completeSpeaker],
+        },
+        {
+          eventId: "evt-001",
+          seminarId: "sem-002",
+          updatedAt: "2026-11-01T00:00:00.000Z",
+          speakers: [completeSpeaker],
+        },
+      ],
+    });
+    await notifyConfirmedSeminarCommunications(original, { events: [catalogue], store, send });
+    expect(send).toHaveBeenCalledTimes(1);
+    send.mockClear();
+
+    const pendingIncrease = seminarPartner({
+      slotCount: 4,
+      assignments: [
+        ...original.seminarSlotAssignments!,
+        seat("sem-003", null),
+        seat("sem-004", null),
+      ],
+      speakers: original.portalSeminarSpeakers,
+    });
+    await notifyConfirmedSeminarCommunications(pendingIncrease, {
+      events: [catalogue],
+      store,
+      send,
+    });
+    expect(send).not.toHaveBeenCalled();
+
+    const confirmedIncrease = seminarPartner({
+      slotCount: 4,
+      assignments: [
+        seat("sem-001", "2026-11-01T00:00:00.000Z"),
+        seat("sem-002", "2026-11-01T00:00:00.000Z"),
+        seat("sem-003", "2026-11-08T04:00:00.000Z"),
+        seat("sem-004", "2026-11-08T04:00:00.000Z"),
+      ],
+      speakers: original.portalSeminarSpeakers,
+    });
+    await notifyConfirmedSeminarCommunications(confirmedIncrease, {
+      events: [catalogue],
+      store,
+      send,
+    });
+    expect(send.mock.calls.map((call) => call[0].subject)).toEqual([
+      "Your Career Uttsav Panel Discussion Slot is Ready for Confirmation",
+      "Who Will Represent Example Institute on the Career Uttsav Stage?",
+    ]);
+    expect(send.mock.calls[0]?.[0].text).toContain("Admissions");
+    expect(send.mock.calls[0]?.[0].text).toContain("Careers");
+    const logs = await store.listForPartner(original.id);
+    expect(logs.map((entry) => entry.metadata?.assignmentFingerprint)).toEqual(
+      expect.arrayContaining(["sem-001+sem-002", "sem-001+sem-002+sem-003+sem-004"])
+    );
+    expect(
+      logs.find((entry) => entry.communicationType === "SPEAKER_DETAILS_REQUEST")?.metadata
+        ?.incompleteSpeakerSeminarIds
+    ).toEqual(["sem-003", "sem-004"]);
+  });
+
+  it("keeps participation readiness closed until topics and current speakers are complete", async () => {
+    const events = [fair()];
+    const store = createMemoryPartnerCommunicationLogStore();
+    const send = mailer(accepted("readiness"));
+    const selecting = seminarPartner({ slotCount: 1, assignments: [] });
+    const logoOnly = seminarPartner({ slotCount: 1, assignments: [], withLogo: true });
+    await notifyReadinessTransition(selecting, logoOnly, { events, store, send });
+    expect(send).not.toHaveBeenCalled();
+
+    const confirmedWithoutSpeaker = seminarPartner({
+      slotCount: 1,
+      assignments: [seat("sem-001", "2026-11-08T01:00:00.000Z")],
+      withLogo: true,
+    });
+    await notifyReadinessTransition(logoOnly, confirmedWithoutSpeaker, { events, store, send });
+    expect(send).not.toHaveBeenCalled();
+
+    const ready = seminarPartner({
+      slotCount: 1,
+      assignments: [seat("sem-001", "2026-11-08T01:00:00.000Z")],
+      speakers: [
+        {
+          eventId: "evt-001",
+          seminarId: "sem-001",
+          updatedAt: "2026-11-08T02:00:00.000Z",
+          speakers: [completeSpeaker],
+        },
+      ],
+      withLogo: true,
+    });
+    await notifyReadinessTransition(confirmedWithoutSpeaker, ready, { events, store, send });
+    expect(send.mock.calls[0]?.[0].text).toContain("Panel Discussion — Confirmed");
+    expect(send.mock.calls[0]?.[0].text).toContain("Speaker details — Complete");
+
+    send.mockClear();
+    const moved = seminarPartner({
+      slotCount: 1,
+      assignments: [seat("sem-002", "2026-11-08T03:00:00.000Z")],
+      speakers: ready.portalSeminarSpeakers,
+      withLogo: true,
+    });
+    await notifyReadinessTransition(ready, moved, { events, store, send });
+    expect(send).not.toHaveBeenCalled();
+
+    const readyAgain = seminarPartner({
+      slotCount: 1,
+      assignments: [seat("sem-002", "2026-11-08T03:00:00.000Z")],
+      speakers: [
+        {
+          eventId: "evt-001",
+          seminarId: "sem-002",
+          updatedAt: "2026-11-08T04:00:00.000Z",
+          speakers: [completeSpeaker],
+        },
+      ],
+      withLogo: true,
+    });
+    await notifyReadinessTransition(moved, readyAgain, { events, store, send });
+    expect(send).toHaveBeenCalledTimes(1);
+    const logs = await store.listForPartner(ready.id);
+    expect(
+      logs
+        .filter((entry) => entry.communicationType === "PARTICIPATION_READINESS")
+        .map((entry) => entry.metadata?.assignmentFingerprint)
+    ).toEqual(["sem-001", "sem-002"]);
+  });
+
+  it("lets a manual send use the current seminars even after an older automatic log", async () => {
+    const events = [fair()];
+    const store = createMemoryPartnerCommunicationLogStore();
+    const send = mailer(accepted("manual-current"));
+    const previous = seminarPartner({
+      slotCount: 1,
+      assignments: [seat("sem-001", "2026-11-01T00:00:00.000Z")],
+    });
+    await notifyConfirmedSeminarCommunications(previous, { events, store, send });
+    send.mockClear();
+
+    const current = seminarPartner({
+      slotCount: 1,
+      assignments: [seat("sem-002", null, "Old topic A")],
+    });
+    const panel = await sendManualPartnerReminder({
+      partner: current,
+      type: "PANEL_DISCUSSION_DETAILS",
+      events,
+      store,
+      send,
+    });
+    expect(panel.ok).toBe(true);
+    expect(send.mock.calls[0]?.[0].text).toContain("Scholarships");
+    expect(send.mock.calls[0]?.[0].text).not.toContain("Old topic A");
+
+    const speaker = await sendManualPartnerReminder({
+      partner: current,
+      type: "SPEAKER_DETAILS_REQUEST",
+      events,
+      store,
+      send,
+    });
+    expect(speaker.ok).toBe(true);
+    expect(send.mock.calls.map((call) => call[0].subject)).toContain(
+      "Who Will Represent Example Institute on the Career Uttsav Stage?"
+    );
   });
 });

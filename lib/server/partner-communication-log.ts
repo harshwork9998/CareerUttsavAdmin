@@ -15,6 +15,9 @@ export type PartnerCommunicationMetadata = {
   pendingKeys?: string[];
   pendingLabels?: string[];
   seminarIds?: string[];
+  incompleteSpeakerSeminarIds?: string[];
+  assignmentFingerprint?: string;
+  confirmationTimestamp?: string;
 };
 
 export type PartnerCommunicationLogEntry = {
@@ -58,6 +61,11 @@ function cleanList(values: string[] | undefined): string[] {
   return (values ?? []).filter((value) => typeof value === "string" && value.trim());
 }
 
+function cleanString(value: string | undefined): string | undefined {
+  const trimmed = value?.trim() ?? "";
+  return trimmed || undefined;
+}
+
 function sanitizeMetadata(
   metadata: PartnerCommunicationMetadata | null | undefined
 ): PartnerCommunicationMetadata | null {
@@ -65,13 +73,26 @@ function sanitizeMetadata(
   const pendingKeys = cleanList(metadata.pendingKeys);
   const pendingLabels = cleanList(metadata.pendingLabels);
   const seminarIds = cleanList(metadata.seminarIds);
-  if (pendingKeys.length === 0 && pendingLabels.length === 0 && seminarIds.length === 0) {
+  const incompleteSpeakerSeminarIds = cleanList(metadata.incompleteSpeakerSeminarIds);
+  const assignmentFingerprint = cleanString(metadata.assignmentFingerprint);
+  const confirmationTimestamp = cleanString(metadata.confirmationTimestamp);
+  if (
+    pendingKeys.length === 0 &&
+    pendingLabels.length === 0 &&
+    seminarIds.length === 0 &&
+    incompleteSpeakerSeminarIds.length === 0 &&
+    !assignmentFingerprint &&
+    !confirmationTimestamp
+  ) {
     return null;
   }
   return {
     ...(pendingKeys.length ? { pendingKeys } : {}),
     ...(pendingLabels.length ? { pendingLabels } : {}),
     ...(seminarIds.length ? { seminarIds } : {}),
+    ...(incompleteSpeakerSeminarIds.length ? { incompleteSpeakerSeminarIds } : {}),
+    ...(assignmentFingerprint ? { assignmentFingerprint } : {}),
+    ...(confirmationTimestamp ? { confirmationTimestamp } : {}),
   };
 }
 

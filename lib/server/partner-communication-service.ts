@@ -1,7 +1,6 @@
 import { sendEmail, type SendEmailResult } from "@/lib/email";
 import { resolveEventPartnerships } from "@/lib/partner-event-config";
 import {
-  allocationSignature,
   isAutomaticReminderEligible,
   meaningfulPartnerActivity,
   readPartnerCommunicationAutomationEnabledAt,
@@ -10,6 +9,7 @@ import {
   type PartnerManualReminderType,
 } from "@/lib/partner-communication-policy";
 import { panelSessionsForPartner } from "@/lib/partner-panel-sessions";
+import { assignmentFingerprint } from "@/lib/seminar-topic-completion";
 import {
   completedSpeakerSeminarIds,
   dedupePendingItems,
@@ -91,6 +91,8 @@ function pendingFor(
     eventId: partnership.eventId,
     deliverables: partnership.deliverables ?? [],
     representativeSlotCount: partnership.representativeSlotCount ?? 0,
+    seminarSlotCount: partnership.seminarSlotCount,
+    assignments: partner.seminarSlotAssignments,
     sessions: sessions.filter((session) => session.eventId === partnership.eventId),
     portalFasciaName: partner.portalFasciaName,
     portalWebsiteUrl: partner.portalWebsiteUrl,
@@ -107,6 +109,10 @@ function mergeReadiness(groups: ReadinessLine[][]): ReadinessLine[] {
     const statuses = groups.map(
       (group) => group.find((line) => line.label === label)?.status
     );
+    if (statuses.includes("Pending")) return { label, status: "Pending" as const };
+    if (statuses.includes("Pending Confirmation")) {
+      return { label, status: "Pending Confirmation" as const };
+    }
     if (statuses.includes("Confirmed")) return { label, status: "Confirmed" as const };
     if (statuses.includes("Complete")) return { label, status: "Complete" as const };
     return { label, status: "Not Applicable" as const };
@@ -181,6 +187,9 @@ async function logAccepted(input: {
   pendingKeys?: string[];
   pendingLabels?: string[];
   seminarIds?: string[];
+  incompleteSpeakerSeminarIds?: string[];
+  assignmentFingerprint?: string;
+  confirmationTimestamp?: string;
 }): Promise<void> {
   const eventIds = input.eventIds.length > 0 ? input.eventIds : [null];
   for (const eventId of eventIds) {
@@ -196,6 +205,15 @@ async function logAccepted(input: {
         ...(input.pendingKeys?.length ? { pendingKeys: input.pendingKeys } : {}),
         ...(input.pendingLabels?.length ? { pendingLabels: input.pendingLabels } : {}),
         ...(input.seminarIds?.length ? { seminarIds: input.seminarIds } : {}),
+        ...(input.incompleteSpeakerSeminarIds?.length
+          ? { incompleteSpeakerSeminarIds: input.incompleteSpeakerSeminarIds }
+          : {}),
+        ...(input.assignmentFingerprint
+          ? { assignmentFingerprint: input.assignmentFingerprint }
+          : {}),
+        ...(input.confirmationTimestamp
+          ? { confirmationTimestamp: input.confirmationTimestamp }
+          : {}),
       },
     });
   }
@@ -413,6 +431,49 @@ export async function sendManualPartnerReminder(input: {
   return { ok: true, messageId: result.id };
 }
 
+function confirmedAssignments(partner: Partner): Partner["seminarSlotAssignments"] {
+  return (partner.seminarSlotAssignments ?? []).filter(
+    (row) => row.slots > 0 && Boolean(row.confirmedAt?.trim())
+  );
+}
+
+function confirmedFingerprint(partner: Partner, eventId: string): string {
+  return assignmentFingerprint(
+    (confirmedAssignments(partner) ?? [])
+      .filter((row) => row.eventId === eventId)
+      .map((row) => row.seminarId)
+  );
+}
+
+function confirmationTimestampFor(
+  partner: Partner,
+  seminarIds: readonly string[]
+): string | undefined {
+  const stamps = (partner.seminarSlotAssignments ?? [])
+    .filter(
+      (row) => seminarIds.includes(row.seminarId) && Boolean(row.confirmedAt?.trim())
+    )
+    .map((row) => row.confirmedAt!.trim())
+    .sort();
+  return stamps.at(-1);
+}
+
+function fingerprintAlreadySent(
+  logs: PartnerCommunicationLogEntry[],
+  eventId: string,
+  type: PartnerCommunicationType,
+  fingerprint: string
+): boolean {
+  return logs.some(
+    (entry) =>
+      entry.outcome === "accepted" &&
+      entry.triggerType === "AUTOMATIC" &&
+      entry.eventId === eventId &&
+      entry.communicationType === type &&
+      entry.metadata?.assignmentFingerprint === fingerprint
+  );
+}
+
 async function sendAutomaticPanelAndSpeaker(input: {
   partner: Partner;
   events: Event[];
@@ -422,9 +483,10 @@ async function sendAutomaticPanelAndSpeaker(input: {
   eventIds?: string[];
 }): Promise<void> {
   if (!input.partner.portalInviteSentAt || input.partner.portalAccessEnabled !== true) return;
-  const sessions = panelSessionsForPartner(input.partner, input.events).filter(
-    (session) => !input.eventIds || input.eventIds.includes(session.eventId)
-  );
+  const sessions = panelSessionsForPartner(
+    { seminarSlotAssignments: confirmedAssignments(input.partner) },
+    input.events
+  ).filter((session) => !input.eventIds || input.eventIds.includes(session.eventId));
   if (sessions.length === 0) return;
   const logs = await input.store.listForPartner(input.partner.id);
   const logo = await loadPartnerEmailLogo();
@@ -433,15 +495,16 @@ async function sendAutomaticPanelAndSpeaker(input: {
     ...new Set(
       sessions
         .map((session) => session.eventId)
-        .filter(
-          (eventId) =>
-            acceptedLogs(logs, eventId, "PANEL_DISCUSSION_DETAILS", "AUTOMATIC").length === 0
-        )
+        .filter((eventId) => {
+          const fingerprint = confirmedFingerprint(input.partner, eventId);
+          return (
+            fingerprint !== "none" &&
+            !fingerprintAlreadySent(logs, eventId, "PANEL_DISCUSSION_DETAILS", fingerprint)
+          );
+        })
     ),
   ];
-  const panelSessions = sessions.filter((session) =>
-    panelEventIds.includes(session.eventId)
-  );
+  const panelSessions = sessions.filter((session) => panelEventIds.includes(session.eventId));
   if (panelSessions.length > 0) {
     const message = buildPanelDiscussionDetailsEmail({
       institutionName: input.partner.name,
@@ -456,37 +519,48 @@ async function sendAutomaticPanelAndSpeaker(input: {
       logo,
     });
     if (result?.ok && result.outcome === "accepted") {
-      await logAccepted({
-        store: input.store,
-        partnerId: input.partner.id,
-        eventIds: panelEventIds,
-        communicationType: "PANEL_DISCUSSION_DETAILS",
-        triggerType: "AUTOMATIC",
-        sentAt: input.now.toISOString(),
-        messageId: result.id,
-        recipientEmail: recipientFor(input.partner) ?? "",
-      });
+      for (const eventId of panelEventIds) {
+        const seminarIds = panelSessions
+          .filter((session) => session.eventId === eventId)
+          .map((session) => session.seminarId);
+        await logAccepted({
+          store: input.store,
+          partnerId: input.partner.id,
+          eventIds: [eventId],
+          communicationType: "PANEL_DISCUSSION_DETAILS",
+          triggerType: "AUTOMATIC",
+          sentAt: input.now.toISOString(),
+          messageId: result.id,
+          recipientEmail: recipientFor(input.partner) ?? "",
+          seminarIds,
+          assignmentFingerprint: assignmentFingerprint(seminarIds),
+          confirmationTimestamp: confirmationTimestampFor(input.partner, seminarIds),
+        });
+      }
     }
   }
 
   const freshLogs = await input.store.listForPartner(input.partner.id);
   const partnerships = partnershipsOf(input.partner);
-  const speakerEventIds = [
-    ...new Set(
-      sessions
-        .filter((session) => {
-          const partnership = partnerships.find((row) => row.eventId === session.eventId);
-          if (!partnership) return false;
-          const pending = pendingFor(input.partner, partnership, [session]);
-          return (
-            pending.some((item) => item.section === "speakers") &&
-            acceptedLogs(freshLogs, session.eventId, "SPEAKER_DETAILS_REQUEST", "AUTOMATIC")
-              .length === 0
-          );
-        })
-        .map((session) => session.eventId)
-    ),
-  ];
+  const incompleteByEvent = new Map<string, string[]>();
+  for (const session of sessions) {
+    const partnership = partnerships.find((row) => row.eventId === session.eventId);
+    if (!partnership) continue;
+    const pending = pendingFor(input.partner, partnership, [session]);
+    if (!pending.some((item) => item.section === "speakers")) continue;
+    const ids = incompleteByEvent.get(session.eventId) ?? [];
+    ids.push(session.seminarId);
+    incompleteByEvent.set(session.eventId, ids);
+  }
+  const speakerEventIds = [...incompleteByEvent.keys()].filter((eventId) => {
+    const fingerprint = assignmentFingerprint(incompleteByEvent.get(eventId) ?? []);
+    return !fingerprintAlreadySent(
+      freshLogs,
+      eventId,
+      "SPEAKER_DETAILS_REQUEST",
+      fingerprint
+    );
+  });
   if (speakerEventIds.length === 0) return;
   const message = buildSpeakerDetailsRequestEmail({
     institutionName: input.partner.name,
@@ -500,17 +574,44 @@ async function sendAutomaticPanelAndSpeaker(input: {
     logo,
   });
   if (result?.ok && result.outcome === "accepted") {
-    await logAccepted({
-      store: input.store,
-      partnerId: input.partner.id,
-      eventIds: speakerEventIds,
-      communicationType: "SPEAKER_DETAILS_REQUEST",
-      triggerType: "AUTOMATIC",
-      sentAt: input.now.toISOString(),
-      messageId: result.id,
-      recipientEmail: recipientFor(input.partner) ?? "",
-    });
+    for (const eventId of speakerEventIds) {
+      const seminarIds = incompleteByEvent.get(eventId) ?? [];
+      await logAccepted({
+        store: input.store,
+        partnerId: input.partner.id,
+        eventIds: [eventId],
+        communicationType: "SPEAKER_DETAILS_REQUEST",
+        triggerType: "AUTOMATIC",
+        sentAt: input.now.toISOString(),
+        messageId: result.id,
+        recipientEmail: recipientFor(input.partner) ?? "",
+        seminarIds,
+        incompleteSpeakerSeminarIds: seminarIds,
+        assignmentFingerprint: assignmentFingerprint(seminarIds),
+      });
+    }
   }
+}
+
+export async function notifyConfirmedSeminarCommunications(
+  partner: Partner,
+  deps?: {
+    events?: Event[];
+    store?: PartnerCommunicationLogStore;
+    send?: SendMail;
+    now?: Date;
+    eventIds?: string[];
+  }
+): Promise<void> {
+  const events = deps?.events ?? (await listEventsForApi());
+  await sendAutomaticPanelAndSpeaker({
+    partner,
+    events,
+    eventIds: deps?.eventIds,
+    store: deps?.store ?? createPartnerCommunicationLogStore(),
+    send: deps?.send ?? sendEmail,
+    now: deps?.now ?? new Date(),
+  });
 }
 
 export async function notifyAfterAccessAccepted(
@@ -523,15 +624,8 @@ export async function notifyAfterAccessAccepted(
   }
 ): Promise<void> {
   if (!partner.portalInviteSentAt || partner.portalAccessEnabled !== true) return;
-  if ((partner.seminarSlotAssignments ?? []).every((row) => row.slots <= 0)) return;
-  const events = deps?.events ?? (await listEventsForApi());
-  await sendAutomaticPanelAndSpeaker({
-    partner,
-    events,
-    store: deps?.store ?? createPartnerCommunicationLogStore(),
-    send: deps?.send ?? sendEmail,
-    now: deps?.now ?? new Date(),
-  });
+  if ((confirmedAssignments(partner) ?? []).length === 0) return;
+  await notifyConfirmedSeminarCommunications(partner, deps);
 }
 
 export async function notifyAfterAllocationChange(
@@ -549,21 +643,12 @@ export async function notifyAfterAllocationChange(
       ...(before.seminarSlotAssignments ?? []).map((row) => row.eventId),
       ...(after.seminarSlotAssignments ?? []).map((row) => row.eventId),
     ]),
-  ].filter(
-    (eventId) =>
-      allocationSignature(before, eventId) === 0 &&
-      allocationSignature(after, eventId) > 0
-  );
-  if (eventIds.length === 0) return;
-  const events = deps?.events ?? (await listEventsForApi());
-  await sendAutomaticPanelAndSpeaker({
-    partner: after,
-    events,
-    eventIds,
-    store: deps?.store ?? createPartnerCommunicationLogStore(),
-    send: deps?.send ?? sendEmail,
-    now: deps?.now ?? new Date(),
+  ].filter((eventId) => {
+    const next = confirmedFingerprint(after, eventId);
+    return next !== "none" && next !== confirmedFingerprint(before, eventId);
   });
+  if (eventIds.length === 0) return;
+  await notifyConfirmedSeminarCommunications(after, { ...deps, eventIds });
 }
 
 export async function notifySpeakerReceived(
@@ -653,11 +738,15 @@ export async function notifyReadinessTransition(
   if (ready.length === 0) return;
   const store = deps?.store ?? createPartnerCommunicationLogStore();
   const logs = await store.listForPartner(after.id);
-  const unsent = ready.filter(
-    (partnership) =>
-      acceptedLogs(logs, partnership.eventId, "PARTICIPATION_READINESS", "AUTOMATIC")
-        .length === 0
-  );
+  const unsent = ready.filter((partnership) => {
+    const fingerprint = confirmedFingerprint(after, partnership.eventId);
+    return !fingerprintAlreadySent(
+      logs,
+      partnership.eventId,
+      "PARTICIPATION_READINESS",
+      fingerprint
+    );
+  });
   if (unsent.length === 0) return;
   const lines = mergeReadiness(
     unsent.map((partnership) =>
@@ -665,6 +754,8 @@ export async function notifyReadinessTransition(
         eventId: partnership.eventId,
         deliverables: partnership.deliverables ?? [],
         representativeSlotCount: partnership.representativeSlotCount ?? 0,
+        seminarSlotCount: partnership.seminarSlotCount,
+        assignments: after.seminarSlotAssignments,
         sessions: afterSessions.filter((session) => session.eventId === partnership.eventId),
         portalFasciaName: after.portalFasciaName,
         portalWebsiteUrl: after.portalWebsiteUrl,
@@ -689,16 +780,24 @@ export async function notifyReadinessTransition(
     logo,
   });
   if (!result?.ok || result.outcome !== "accepted") return;
-  await logAccepted({
-    store,
-    partnerId: after.id,
-    eventIds: unsent.map((partnership) => partnership.eventId),
-    communicationType: "PARTICIPATION_READINESS",
-    triggerType: "AUTOMATIC",
-    sentAt: (deps?.now ?? new Date()).toISOString(),
-    messageId: result.id,
-    recipientEmail: recipientFor(after) ?? "",
-  });
+  for (const partnership of unsent) {
+    const seminarIds = (confirmedAssignments(after) ?? [])
+      .filter((row) => row.eventId === partnership.eventId)
+      .map((row) => row.seminarId);
+    await logAccepted({
+      store,
+      partnerId: after.id,
+      eventIds: [partnership.eventId],
+      communicationType: "PARTICIPATION_READINESS",
+      triggerType: "AUTOMATIC",
+      sentAt: (deps?.now ?? new Date()).toISOString(),
+      messageId: result.id,
+      recipientEmail: recipientFor(after) ?? "",
+      seminarIds,
+      assignmentFingerprint: assignmentFingerprint(seminarIds),
+      confirmationTimestamp: confirmationTimestampFor(after, seminarIds),
+    });
+  }
 }
 
 function automationEnabledAtFor(deps?: {

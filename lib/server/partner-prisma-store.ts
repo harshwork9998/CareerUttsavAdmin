@@ -12,6 +12,8 @@ import {
   mapPrismaPartnersToApi,
   type PrismaPartnerRecord,
 } from "@/lib/server/partner-prisma-map";
+import { SEMINAR_WRONG_EVENT, SeminarAllocationWriteError } from "@/lib/seminar-allocation";
+import { assertSeminarCapacityInTransaction } from "@/lib/server/seminar-capacity-lock";
 import { prisma } from "@/lib/server/prisma";
 import { listEventsForApi } from "@/lib/server/event-service";
 import type { Partner } from "@/types";
@@ -58,12 +60,13 @@ async function assertPartnerRelationsValid(partner: Partner): Promise<void> {
   if (seminarIds.size > 0) {
     const seminars = await prisma.seminar.findMany({
       where: { id: { in: [...seminarIds] } },
-      select: { id: true },
+      select: { id: true, eventId: true },
     });
-    const found = new Set(seminars.map((seminar) => seminar.id));
-    for (const seminarId of seminarIds) {
-      if (!found.has(seminarId)) {
-        throw new Error(`Unknown seminar id: ${seminarId}`);
+    const found = new Map(seminars.map((seminar) => [seminar.id, seminar.eventId]));
+    for (const assignment of partner.seminarSlotAssignments ?? []) {
+      if (assignment.slots <= 0) continue;
+      if (found.get(assignment.seminarId) !== assignment.eventId) {
+        throw new SeminarAllocationWriteError(400, SEMINAR_WRONG_EVENT);
       }
     }
   }
@@ -162,6 +165,7 @@ export async function createPrismaPartner(partner: Partner): Promise<Partner> {
   const data = mapPartnerSourceToPrisma(partner);
 
   await prisma.$transaction(async (tx) => {
+    await assertSeminarCapacityInTransaction(tx, partner);
     await tx.partner.create({ data });
     await replacePartnerRelations(tx, partner);
   });
@@ -178,6 +182,7 @@ export async function updatePrismaPartner(partner: Partner): Promise<Partner> {
   const data = mapPartnerSourceToPrisma(partner);
 
   await prisma.$transaction(async (tx) => {
+    await assertSeminarCapacityInTransaction(tx, partner);
     await tx.partner.update({
       where: { id: partner.id },
       data: {

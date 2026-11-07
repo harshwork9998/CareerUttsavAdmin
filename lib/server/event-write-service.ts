@@ -9,6 +9,7 @@ import {
 } from "@/lib/server/event-prisma-write-store";
 import { listPrismaEvents } from "@/lib/server/event-prisma-store";
 import { isPrismaEventWritePersistence } from "@/lib/server/event-write-persistence-mode";
+import { invalidPanelistSlotsMessage } from "@/lib/seminar-schedule";
 import { EventWriteError, isEventWriteError } from "@/lib/server/event-write-errors";
 import { prunePartnersForEventCatalog } from "@/lib/server/partner-service";
 import { pruneSeminarRostersForEventCatalog } from "@/lib/server/seminar-roster-service";
@@ -38,6 +39,14 @@ function toWriteResult<T>(promise: Promise<T>): Promise<EventWriteResult<T>> {
     });
 }
 
+function panelistSlotsError(seminars: Event["seminars"] | undefined): string | null {
+  for (const seminar of seminars ?? []) {
+    const message = invalidPanelistSlotsMessage(seminar.panelistSlots);
+    if (message) return message;
+  }
+  return null;
+}
+
 function pruneJsonRegistrationsForEventCatalog(events: Event[]): void {
   const validEventIds = new Set(events.map((event) => event.id));
   const registrations = loadRawRegistrations();
@@ -52,6 +61,11 @@ export async function createEventForApi(
 ): Promise<EventWriteResult<Event>> {
   if (isPrismaEventWritePersistence()) {
     return toWriteResult(createPrismaEventForApi(input));
+  }
+
+  const panelistError = panelistSlotsError(input.seminars);
+  if (panelistError) {
+    return { ok: false, status: 400, error: panelistError };
   }
 
   const city = input.city?.trim() ?? "";
@@ -90,6 +104,13 @@ export async function patchEventForApi(
 ): Promise<EventWriteResult<Event>> {
   if (isPrismaEventWritePersistence()) {
     return toWriteResult(patchPrismaEventForApi(eventId, patch));
+  }
+
+  if (patch.seminars) {
+    const panelistError = panelistSlotsError(patch.seminars);
+    if (panelistError) {
+      return { ok: false, status: 400, error: panelistError };
+    }
   }
 
   if (patch.city !== undefined && patch.city.trim().length < 2) {

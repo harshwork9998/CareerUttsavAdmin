@@ -97,7 +97,11 @@ export interface EventSeminar {
   startTime: string | null;
   /** HH:mm, or null when the end time is not decided. */
   endTime: string | null;
-  /** Null means panelist capacity is not decided yet. */
+  /**
+   * Null means panelist capacity is not decided yet.
+   * 0 means the seminar deliberately has no partner panelists.
+   * 1 or more is the number of partner panelist seats.
+   */
   panelistSlots: number | null;
   /** 1-based auditorium number, or null when the hall is not decided. */
   hall: number | null;
@@ -436,8 +440,13 @@ export interface PartnerSeminarSlotAssignment {
   eventId: string;
   seminarId: string;
   slots: number;
-  /** Snapshot of the seminar title when seats were allotted */
+  /** Snapshot of the seminar title when seats were allotted. Title text only. */
   seminarTitle?: string;
+  /**
+   * When the partner confirmed this topic.
+   * Null means the selection is saved but still editable by the partner.
+   */
+  confirmedAt?: string | null;
 }
 
 export type SeminarSpeakerStatus = "Confirmed" | "Invited" | "Tentative";

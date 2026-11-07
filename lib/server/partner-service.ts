@@ -5,6 +5,15 @@ import {
   partnerNeedsEventLinkPrune,
   prunePartnerEventLinks,
 } from "@/lib/partner-event-config";
+import {
+  SeminarAllocationWriteError,
+  decideSeminarClaims,
+  occupancyBySeminar,
+  preserveSeminarConfirmation,
+  seminarAllocationSignature,
+} from "@/lib/seminar-allocation";
+import { withSeminarAllocationLock } from "@/lib/server/seminar-allocation-lock";
+import { resolvePartnershipsForImport } from "@/lib/server/partner-prisma-import-map";
 import { isPrismaPartnerPersistence } from "@/lib/server/partner-persistence-mode";
 import {
   createPrismaPartner,
@@ -20,8 +29,11 @@ import {
   savePartners,
 } from "@/lib/server/partners-persistence";
 import { validatePartnerContactPhones } from "@/lib/partner-validation";
-import { seminarAllocationIncreaseError } from "@/lib/seminar-schedule";
 import { listEventsForApi } from "@/lib/server/event-service";
+import {
+  normalizePartnerSeminarConfirmations,
+  preserveAssignmentConfirmation,
+} from "@/lib/seminar-assignment-confirmation";
 import type { Event, Partner } from "@/types";
 
 export type PartnerWriteResult =
@@ -32,70 +44,161 @@ export type PartnerDeleteResult =
   | { ok: true; partners: Partner[] }
   | { ok: false; status: number; error: string };
 
+function presentPartner(partner: Partner): Partner {
+  return normalizePartnerSeminarConfirmations(partner);
+}
+
 export async function listPartnersForApi(): Promise<Partner[]> {
-  if (isPrismaPartnerPersistence()) {
-    return listPrismaPartners();
-  }
-  return loadPartners();
+  const partners = isPrismaPartnerPersistence()
+    ? await listPrismaPartners()
+    : loadPartners();
+  return partners.map(presentPartner);
 }
 
 export async function getPartnerByIdForApi(id: string): Promise<Partner | null> {
-  if (isPrismaPartnerPersistence()) {
-    return getPrismaPartnerById(id);
-  }
-  return loadPartners().find((partner) => partner.id === id) ?? null;
+  const partner = isPrismaPartnerPersistence()
+    ? await getPrismaPartnerById(id)
+    : loadPartners().find((row) => row.id === id) ?? null;
+  return partner ? presentPartner(partner) : null;
 }
 
 export async function findPartnersByPortalLoginForApi(
   login: string
 ): Promise<Partner[]> {
   if (isPrismaPartnerPersistence()) {
-    return findPrismaPartnersByPortalLogin(login);
+    return (await findPrismaPartnersByPortalLogin(login)).map(presentPartner);
   }
 
   const where = portalLoginLookupFilter(login);
   if (!where) return [];
 
-  return loadPartners().filter((partner) => {
-    return partner.portalLogin?.trim().toLowerCase() === where.portalLoginNormalized;
+  return loadPartners()
+    .filter((partner) => {
+      return partner.portalLogin?.trim().toLowerCase() === where.portalLoginNormalized;
+    })
+    .map(presentPartner);
+}
+
+function partnershipCounts(partner: Partner) {
+  return resolvePartnershipsForImport(partner).map((partnership) => ({
+    eventId: partnership.eventId,
+    seminarSlotCount: partnership.seminarSlotCount ?? 0,
+  }));
+}
+
+async function seminarCatalog() {
+  const events = await listEventsForApi();
+  return events.flatMap((event) =>
+    (event.seminars ?? []).map((seminar) => ({
+      id: seminar.id,
+      eventId: event.id,
+      panelistSlots: seminar.panelistSlots,
+    }))
+  );
+}
+
+async function allocationVerdict(
+  existing: Partner,
+  next: Partner
+): Promise<PartnerWriteResult | null> {
+  const confirmationChanged =
+    (next.seminarSlotsConfirmedAt?.trim() ?? "") !==
+    (existing.seminarSlotsConfirmedAt?.trim() ?? "");
+  if (
+    seminarAllocationSignature(existing) === seminarAllocationSignature(next) &&
+    !confirmationChanged
+  ) {
+    return null;
+  }
+  const [seminars, partners] = await Promise.all([
+    seminarCatalog(),
+    listPartnersForApi(),
+  ]);
+  const decision = decideSeminarClaims({
+    existingAssignments: existing.seminarSlotAssignments ?? [],
+    nextAssignments: next.seminarSlotAssignments ?? [],
+    previousPartnerships: partnershipCounts(existing),
+    nextPartnerships: partnershipCounts(next),
+    seminars,
+    otherOccupancy: occupancyBySeminar(partners, next.id),
   });
+  if (!decision.ok) {
+    return { ok: false, status: decision.status, error: decision.error };
+  }
+  return null;
+}
+
+function emptyAllocationBaseline(partner: Partner): Partner {
+  return {
+    ...partner,
+    seminarSlotAssignments: [],
+    eventPartnerships: (partner.eventPartnerships ?? []).map((partnership) => ({
+      ...partnership,
+      seminarSlotCount: 0,
+    })),
+    seminarSlotsConfirmedAt: undefined,
+  };
+}
+
+function writeError(error: unknown, fallback: string): PartnerWriteResult {
+  if (error instanceof SeminarAllocationWriteError) {
+    return { ok: false, status: error.status, error: error.message };
+  }
+  return {
+    ok: false,
+    status: 400,
+    error: error instanceof Error ? error.message : fallback,
+  };
 }
 
 export async function createPartnerForApi(
   partner: Partner
 ): Promise<PartnerWriteResult> {
-  const events = await listEventsForApi();
-  const allocationError = seminarAllocationIncreaseError({
-    existing: [],
-    next: partner.seminarSlotAssignments ?? [],
-    seminars: events.flatMap((event) => event.seminars ?? []),
+  return withSeminarAllocationLock(async () => {
+    const verdict = await allocationVerdict(emptyAllocationBaseline(partner), partner);
+    if (verdict) return verdict;
+    return createPartnerRecord(partner);
   });
-  if (allocationError) {
-    return { ok: false, status: 400, error: allocationError };
-  }
+}
 
+async function createPartnerRecord(
+  partner: Partner
+): Promise<PartnerWriteResult> {
   if (isPrismaPartnerPersistence()) {
     try {
-      const created = await createPrismaPartner(partner);
-      return { ok: true, partner: created };
+      const created = await createPrismaPartner(presentPartner(partner));
+      return { ok: true, partner: presentPartner(created) };
     } catch (error) {
-      return {
-        ok: false,
-        status: 400,
-        error:
-          error instanceof Error ? error.message : "Could not create partner",
-      };
+      return writeError(error, "Could not create partner");
     }
   }
 
   const partners = loadPartners();
-  savePartners([partner, ...partners]);
-  return { ok: true, partner };
+  const created = presentPartner(partner);
+  savePartners([created, ...partners]);
+  return { ok: true, partner: created };
 }
 
 export async function updatePartnerForApi(
   id: string,
   patch: Partial<Partner>
+): Promise<PartnerWriteResult> {
+  return withSeminarAllocationLock(() => updatePartnerRecord(id, patch));
+}
+
+/** Partner write without taking the seminar lock. Callers must already hold it. */
+export async function updatePartnerRecordForApi(
+  id: string,
+  patch: Partial<Partner>,
+  options?: { skipAllocationCheck?: boolean }
+): Promise<PartnerWriteResult> {
+  return updatePartnerRecord(id, patch, options);
+}
+
+async function updatePartnerRecord(
+  id: string,
+  patch: Partial<Partner>,
+  options?: { skipAllocationCheck?: boolean }
 ): Promise<PartnerWriteResult> {
   const existing = await getPartnerByIdForApi(id);
   if (!existing) {
@@ -107,35 +210,30 @@ export async function updatePartnerForApi(
     return { ok: false, status: 400, error: phones.error };
   }
 
-  const events = await listEventsForApi();
-  const allocationError = seminarAllocationIncreaseError({
-    existing: existing.seminarSlotAssignments ?? [],
-    next: phones.patch.seminarSlotAssignments ?? existing.seminarSlotAssignments ?? [],
-    seminars: events.flatMap((event) => event.seminars ?? []),
-  });
-  if (allocationError) {
-    return { ok: false, status: 400, error: allocationError };
-  }
-
-  const updated = preservePartnershipActivity(
+  const updated = preserveAssignmentConfirmation(
     existing,
-    applyPartnerCredentialFields(existing, {
-      ...phones.patch,
-      updatedAt: new Date().toISOString(),
-    })
+    preserveSeminarConfirmation(
+      existing,
+      preservePartnershipActivity(
+        existing,
+        applyPartnerCredentialFields(existing, {
+          ...phones.patch,
+          updatedAt: new Date().toISOString(),
+        })
+      )
+    )
   );
+  const verdict = options?.skipAllocationCheck
+    ? null
+    : await allocationVerdict(existing, updated);
+  if (verdict) return verdict;
 
   if (isPrismaPartnerPersistence()) {
     try {
       const saved = await updatePrismaPartner(updated);
-      return { ok: true, partner: saved };
+      return { ok: true, partner: presentPartner(saved) };
     } catch (error) {
-      return {
-        ok: false,
-        status: 400,
-        error:
-          error instanceof Error ? error.message : "Could not update partner",
-      };
+      return writeError(error, "Could not update partner");
     }
   }
 
@@ -159,7 +257,7 @@ export async function deletePartnerForApi(
       return { ok: false, status: 404, error: "Not found" };
     }
     const partners = await deletePrismaPartner(id);
-    return { ok: true, partners };
+    return { ok: true, partners: partners.map(presentPartner) };
   }
 
   const partners = loadPartners();
@@ -168,7 +266,7 @@ export async function deletePartnerForApi(
     return { ok: false, status: 404, error: "Not found" };
   }
   savePartners(next);
-  return { ok: true, partners: next };
+  return { ok: true, partners: next.map(presentPartner) };
 }
 
 export async function prunePartnersForEventCatalog(events: Event[]): Promise<void> {

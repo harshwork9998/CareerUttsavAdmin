@@ -52,7 +52,7 @@ import type {
   Spoc,
   SponsorshipTier,
 } from "@/types";
-import { ChapterSeminarSlots } from "@/features/partners/chapter-seminar-slots";
+import { ChapterSeminarStatus } from "@/features/partners/chapter-seminar-status";
 import {
   ChapterCommercials,
   parseAmount,
@@ -68,20 +68,24 @@ import {
 } from "@/lib/partner-tier";
 import {
   allEventsHaveTier,
-  assignedSlotsForEvent,
   buildEventPackageSummaries,
-  clampSeminarSlotAssignmentsToBudget,
   enrichSeminarSlotAssignments,
   hasPartnershipTier,
   partnerHasEventPackages,
   partnerNeedsEventLinkPrune,
   prunePartnerEventLinks,
   resolveEventPartnerships,
-  seminarSlotAssignmentsMatchBudget,
-  seminarSlotBudgetByEvent,
   syncLegacyPartnerFields,
   upsertEventPartnership,
 } from "@/lib/partner-event-config";
+import {
+  selectedSeminarTopicCount,
+  seminarSlotReductionMessage,
+} from "@/lib/seminar-allocation";
+import {
+  adminJourneyChapterAfterDeliverables,
+  chapter6Continuation,
+} from "@/lib/seminar-admin";
 import {
   isPartnerPortalEmail,
   resolvePortalLogin,
@@ -225,9 +229,7 @@ function maxUnlockedChapter(partner: Partner | null): ChapterId {
   }
   if (!partnerHasEventPackages(partner)) return 4;
   if (!partner.deliverablesConfirmedAt) return 5;
-  if (!partner.seminarSlotsConfirmedAt) return 6;
-  if (!partner.commercialsConfirmedAt) return 7;
-  return 8;
+  return adminJourneyChapterAfterDeliverables(partner);
 }
 
 function startingChapter(partner: Partner | null): ChapterId {
@@ -248,9 +250,7 @@ function startingChapter(partner: Partner | null): ChapterId {
     return 4;
   }
   if (!partner.deliverablesConfirmedAt) return 5;
-  if (!partner.seminarSlotsConfirmedAt) return 6;
-  if (!partner.commercialsConfirmedAt) return 7;
-  return 8;
+  return adminJourneyChapterAfterDeliverables(partner);
 }
 
 export function PartnerJourney({ partnerId }: { partnerId?: string }) {
@@ -267,11 +267,6 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
   const eventsQuery = useQuery({
     queryKey: ["events"],
     queryFn: () => eventsService.getAll(),
-  });
-
-  const allPartnersQuery = useQuery({
-    queryKey: ["partners"],
-    queryFn: () => partnersService.getAll(),
   });
 
   const spocsQuery = useQuery({
@@ -342,8 +337,6 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     return "Mark a meeting as Deal won to unlock partnership details.";
   }, [partner, chapter, canAdvanceFromMeetings]);
 
-  const allPartners = allPartnersQuery.data ?? [];
-
   // Chapter 1
   const [name, setName] = useState("");
   const [city, setCity] = useState("");
@@ -381,8 +374,6 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
   const [notProceedingReason, setNotProceedingReason] = useState("");
   const [notProceedingError, setNotProceedingError] = useState("");
   const [resetOpen, setResetOpen] = useState(false);
-  const [seminarSlotsUiKey, setSeminarSlotsUiKey] = useState(0);
-
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [draftStatus, setDraftStatus] = useState<DraftSaveStatus>("idle");
 
@@ -455,33 +446,6 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       return resolveSpocChoice(partner.relationshipOwner, spocs);
     });
   }, [partner, spocs, spocsQuery.isSuccess]);
-
-  // Keep seminar seat picks aligned with deliverables budgets when allotting seats.
-  useEffect(() => {
-    if (chapter !== 6) return;
-    const activePartnerships = eventPartnerships.filter((ep) =>
-      eventIds.includes(ep.eventId)
-    );
-    const budgets = seminarSlotBudgetByEvent(activePartnerships);
-    setSlotAssignments((prev) => {
-      const next = clampSeminarSlotAssignmentsToBudget(
-        prev.filter((a) => eventIds.includes(a.eventId)),
-        budgets
-      );
-      if (
-        next.length === prev.length &&
-        next.every(
-          (row, index) =>
-            row.eventId === prev[index]?.eventId &&
-            row.seminarId === prev[index]?.seminarId &&
-            row.slots === prev[index]?.slots
-        )
-      ) {
-        return prev;
-      }
-      return next;
-    });
-  }, [chapter, eventIds, eventPartnerships]);
 
   const persistCache = (saved: Partner) => {
     queryClient.setQueryData(["partners", saved.id], saved);
@@ -811,13 +775,11 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       };
     }
     if (chapter === 6) {
-      const events = eventsQuery.data ?? [];
+      const continuation = chapter6Continuation(partner);
       return {
         ...partner,
-        seminarSlotAssignments: enrichSeminarSlotAssignments(
-          slotAssignments.filter((a) => eventIds.includes(a.eventId)),
-          events
-        ),
+        seminarSlotAssignments: continuation.seminarSlotAssignments,
+        seminarSlotsConfirmedAt: continuation.seminarSlotsConfirmedAt,
       };
     }
     if (chapter === 7) {
@@ -1431,6 +1393,16 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
       if (ep.seminarSlotCount < 0) {
         next[`seminar-slots-${ep.eventId}`] = "Invalid slot count";
       }
+      const selectedTopics = selectedSeminarTopicCount(
+        slotAssignments,
+        ep.eventId
+      );
+      if (ep.seminarSlotCount >= 0 && ep.seminarSlotCount < selectedTopics) {
+        next[`seminar-slots-${ep.eventId}`] = seminarSlotReductionMessage(
+          selectedTopics - ep.seminarSlotCount,
+          ep.seminarSlotCount
+        );
+      }
       if (
         !Number.isInteger(ep.representativeSlotCount ?? 0) ||
         (ep.representativeSlotCount ?? 0) < 0
@@ -1455,16 +1427,10 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     });
 
     const legacy = syncLegacyPartnerFields(activePartnerships);
-    const budgets = seminarSlotBudgetByEvent(activePartnerships);
-    const clampedAssignments = clampSeminarSlotAssignmentsToBudget(
-      slotAssignments.filter((a) => eventIds.includes(a.eventId)),
-      budgets
+    const keptAssignments = slotAssignments.filter(
+      (assignment) => eventIds.includes(assignment.eventId) && assignment.slots > 0
     );
-    setSlotAssignments(clampedAssignments);
-    const slotsStillMatchBudget = seminarSlotAssignmentsMatchBudget(
-      clampedAssignments,
-      activePartnerships
-    );
+    setSlotAssignments(keptAssignments);
 
     saveMutation.mutate({
       create: false,
@@ -1474,13 +1440,10 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
         ...legacy,
         eventPartnerships: activePartnerships,
         seminarSlotAssignments: enrichSeminarSlotAssignments(
-          clampedAssignments,
+          keptAssignments,
           eventsQuery.data ?? []
         ),
-        // Re-confirm seminars when budget no longer matches seat picks.
-        seminarSlotsConfirmedAt: slotsStillMatchBudget
-          ? partner.seminarSlotsConfirmedAt
-          : undefined,
+        seminarSlotsConfirmedAt: partner.seminarSlotsConfirmedAt,
         deliverablesConfirmedAt: new Date().toISOString(),
       },
     });
@@ -1488,40 +1451,14 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
 
   const submitChapter6 = () => {
     if (!partner) return;
-    const next: Record<string, string> = {};
-    const activePartnerships = eventPartnerships.filter((ep) =>
-      eventIds.includes(ep.eventId)
-    );
-    const budgets = seminarSlotBudgetByEvent(activePartnerships);
-    const clampedAssignments = clampSeminarSlotAssignmentsToBudget(
-      slotAssignments.filter((a) => eventIds.includes(a.eventId)),
-      budgets
-    );
-    setSlotAssignments(clampedAssignments);
-
-    for (const ep of activePartnerships) {
-      const budget = ep.seminarSlotCount ?? 0;
-      const assigned = assignedSlotsForEvent(clampedAssignments, ep.eventId);
-      if (assigned !== budget) {
-        next[`event-${ep.eventId}`] =
-          budget === 0
-            ? "No seminar seats were set in deliverables — remove any picks for this event"
-            : `Pick exactly ${budget} seminar seat${budget === 1 ? "" : "s"} (currently ${assigned})`;
-      }
-    }
-
-    if (applyFormErrors(setErrors, next)) return;
-
+    const continuation = chapter6Continuation(partner);
     saveMutation.mutate({
       create: false,
       advance: true,
       data: {
         ...partner,
-        seminarSlotAssignments: enrichSeminarSlotAssignments(
-          clampedAssignments,
-          eventsQuery.data ?? []
-        ),
-        seminarSlotsConfirmedAt: new Date().toISOString(),
+        seminarSlotAssignments: continuation.seminarSlotAssignments,
+        seminarSlotsConfirmedAt: continuation.seminarSlotsConfirmedAt,
       },
     });
   };
@@ -1672,8 +1609,9 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     } else if (chapter === 5) {
       setEventPartnerships(resolveEventPartnerships(partner, generateId));
     } else if (chapter === 6) {
-      setSlotAssignments([]);
-      setSeminarSlotsUiKey((key) => key + 1);
+      setSlotAssignments(
+        (partner.seminarSlotAssignments ?? []).map((assignment) => ({ ...assignment }))
+      );
     } else if (chapter === 7) {
       setTotalAmount("");
       setDiscountAmount("");
@@ -1978,21 +1916,9 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
                 )}
 
                 {chapter === 6 && partner && (
-                  <ChapterSeminarSlots
-                    key={seminarSlotsUiKey}
-                    partnerId={partner.id}
-                    eventIds={eventIds}
+                  <ChapterSeminarStatus
+                    partner={partner}
                     events={eventsQuery.data ?? []}
-                    allPartners={allPartners}
-                    assignments={slotAssignments}
-                    setAssignments={setSlotAssignments}
-                    slotBudgetByEvent={seminarSlotBudgetByEvent(
-                      eventPartnerships.filter((ep) =>
-                        eventIds.includes(ep.eventId)
-                      )
-                    )}
-                    seatPickMode
-                    errors={errors}
                   />
                 )}
 

@@ -1,3 +1,4 @@
+import { seminarTitleWithoutConfirmationMarker } from "@/lib/seminar-assignment-confirmation";
 import { Prisma } from "@/lib/generated/prisma/client";
 import type {
   Partner,
@@ -246,7 +247,9 @@ export function mapPartnerSeminarSlotAssignments(
     partnershipId: partnershipId(partner.id, assignment.eventId),
     seminarId: assignment.seminarId,
     slots: assignment.slots,
-    seminarTitle: assignment.seminarTitle ?? null,
+    seminarTitle:
+      seminarTitleWithoutConfirmationMarker(assignment.seminarTitle) ?? null,
+    confirmedAt: parseOptionalDate(assignment.confirmedAt ?? undefined),
   }));
 }
 

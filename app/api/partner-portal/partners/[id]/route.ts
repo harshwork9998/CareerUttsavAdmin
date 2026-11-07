@@ -6,9 +6,11 @@ import {
   notifySpeakerReceived,
 } from "@/lib/server/partner-communication-service";
 import { toPartnerPortalPartnerDto } from "@/lib/server/partner-portal-dto";
+import { portalSpeakerRowsError } from "@/lib/seminar-allocation";
 import { validatePartnerPortalContent } from "@/lib/server/partner-portal-content";
 import { parsePartnerPortalPatch } from "@/lib/server/partner-portal-patch";
 import { requirePartnerPortalServiceAuth } from "@/lib/server/partner-portal-service-auth";
+import { listEventsForApi } from "@/lib/server/event-service";
 import {
   getPartnerByIdForApi,
   updatePartnerForApi,
@@ -34,6 +36,28 @@ export async function PATCH(request: Request, context: RouteContext) {
   const contentError = validatePartnerPortalContent(parsed.patch);
   if (contentError) {
     return NextResponse.json({ error: contentError }, { status: 400 });
+  }
+
+  if (before && Array.isArray(parsed.patch.portalSeminarSpeakers)) {
+    const events = await listEventsForApi();
+    const speakerError = portalSpeakerRowsError({
+      existingSpeakers: before.portalSeminarSpeakers,
+      nextSpeakers: parsed.patch.portalSeminarSpeakers,
+      assignments: before.seminarSlotAssignments,
+      eventIds: before.eventIds,
+      partnershipEventIds: (before.eventPartnerships ?? []).map(
+        (partnership) => partnership.eventId
+      ),
+      seminars: events.flatMap((event) =>
+        (event.seminars ?? []).map((seminar) => ({
+          id: seminar.id,
+          eventId: event.id,
+        }))
+      ),
+    });
+    if (speakerError) {
+      return NextResponse.json({ error: speakerError }, { status: 400 });
+    }
   }
 
   const result = await updatePartnerForApi(id, parsed.patch);

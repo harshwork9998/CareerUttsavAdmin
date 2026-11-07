@@ -16,6 +16,7 @@ export type PartnerPortalPartnerDto = {
   eventPartnerships?: Partner["eventPartnerships"];
   deliverables?: Partner["deliverables"];
   seminarSlotAssignments?: Partner["seminarSlotAssignments"];
+  seminarSlotsConfirmedAt?: string;
   portalLogin?: string;
   hasPortalPassword?: boolean;
   portalPasswordChangedAt?: string;
@@ -54,6 +55,7 @@ export function toPartnerPortalPartnerDto(
     eventPartnerships: partner.eventPartnerships,
     deliverables: partner.deliverables,
     seminarSlotAssignments: partner.seminarSlotAssignments,
+    seminarSlotsConfirmedAt: partner.seminarSlotsConfirmedAt,
     portalLogin: partner.portalLogin,
     hasPortalPassword: partnerHasPortalPassword(partner),
     portalPasswordChangedAt: partner.portalPasswordChangedAt,

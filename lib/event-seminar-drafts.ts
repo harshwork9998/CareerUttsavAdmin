@@ -33,7 +33,8 @@ export function seminarDraftsFromEvent(event: {
     startTime: seminar.startTime ?? "",
     endTime: seminar.endTime ?? "",
     panelistSlots:
-      typeof seminar.panelistSlots === "number" && seminar.panelistSlots >= 1
+      typeof seminar.panelistSlots === "number" &&
+      Number.isInteger(seminar.panelistSlots)
         ? seminar.panelistSlots
         : null,
     hall: typeof seminar.hall === "number" && seminar.hall >= 1 ? seminar.hall : null,

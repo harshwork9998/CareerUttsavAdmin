@@ -65,6 +65,30 @@ export async function partnerPortalAccessApi(
   return parseJson<PartnerPortalAccessResponse>(res);
 }
 
+export async function movePartnerSeminarApi(
+  id: string,
+  body: { eventId: string; seminarId: string; destinationSeminarId: string }
+): Promise<{ partner: Partner }> {
+  const res = await fetch(`/api/partners/${id}/seminar-assignment`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "move", ...body }),
+  });
+  return parseJson(res);
+}
+
+export async function removePartnerSeminarApi(
+  id: string,
+  body: { eventId: string; seminarId: string }
+): Promise<{ partner: Partner }> {
+  const res = await fetch(`/api/partners/${id}/seminar-assignment`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "remove", ...body }),
+  });
+  return parseJson(res);
+}
+
 export async function deletePartnerApi(id: string): Promise<Partner[]> {
   const res = await fetch(`/api/partners/${id}`, { method: "DELETE" });
   return parseJson<Partner[]>(res);

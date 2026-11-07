@@ -1,3 +1,4 @@
+import { seminarTitleWithoutConfirmationMarker } from "@/lib/seminar-assignment-confirmation";
 import { Prisma } from "@/lib/generated/prisma/client";
 import type {
   Partner,
@@ -100,7 +101,8 @@ export function mapPrismaPartnerToApi(record: PrismaPartnerRecord): Partner {
         eventId: partnership.eventId,
         seminarId: assignment.seminarId,
         slots: assignment.slots,
-        seminarTitle: assignment.seminarTitle ?? undefined,
+        seminarTitle: seminarTitleWithoutConfirmationMarker(assignment.seminarTitle),
+        confirmedAt: optionalIso(assignment.confirmedAt) ?? null,
       }))
     );
 

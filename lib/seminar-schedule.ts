@@ -56,10 +56,44 @@ export function seminarCapacityLabel(
   return `${slots} panelist${slots === 1 ? "" : "s"}`;
 }
 
+/**
+ * True when panelist capacity has been saved as a whole number.
+ * `0` is configured and means no partner panelists. `null` is not configured.
+ */
+export function isSeminarCapacityConfigured(
+  slots: number | null | undefined
+): slots is number {
+  return typeof slots === "number" && Number.isInteger(slots) && slots >= 0;
+}
+
+/**
+ * True when partners may be seated on this seminar.
+ * `null` (not decided) and `0` (deliberately no partner panelists) are both unavailable.
+ */
+export function isSeminarAvailableForPartnerAllocation(
+  slots: number | null | undefined
+): slots is number {
+  return isSeminarCapacityConfigured(slots) && slots >= 1;
+}
+
+/**
+ * Partner seat maps treat only a positive capacity as open for new seats.
+ * `0` stays configured, and this helper stays false for it.
+ */
 export function isSeminarCapacityDecided(
   slots: number | null | undefined
 ): slots is number {
-  return typeof slots === "number" && Number.isInteger(slots) && slots >= 1;
+  return isSeminarAvailableForPartnerAllocation(slots);
+}
+
+export function invalidPanelistSlotsMessage(
+  slots: number | null | undefined
+): string | null {
+  if (slots == null) return null;
+  if (!isSeminarCapacityConfigured(slots)) {
+    return "Panelist slots must be a whole number of 0 or more.";
+  }
+  return null;
 }
 
 function scheduleRank(value: string | null | undefined): string {
@@ -154,10 +188,9 @@ export function seminarDraftScheduleErrors(
     }
   }
 
-  if (input.panelistSlots != null) {
-    if (!Number.isInteger(input.panelistSlots) || input.panelistSlots < 1) {
-      errors.panelistSlots = "Enter at least 1 slot";
-    }
+  const panelistSlotsError = invalidPanelistSlotsMessage(input.panelistSlots);
+  if (panelistSlotsError) {
+    errors.panelistSlots = panelistSlotsError;
   }
 
   return errors;
@@ -175,12 +208,9 @@ export function savedSeminarSchedule(input: SeminarDraftScheduleInput): Pick<
       input.hall != null && Number.isInteger(input.hall) && input.hall >= 1
         ? input.hall
         : null,
-    panelistSlots:
-      input.panelistSlots != null &&
-      Number.isInteger(input.panelistSlots) &&
-      input.panelistSlots >= 1
-        ? input.panelistSlots
-        : null,
+    panelistSlots: isSeminarCapacityConfigured(input.panelistSlots)
+      ? input.panelistSlots
+      : null,
   };
 }
 
@@ -195,16 +225,18 @@ export function seminarAllocationIncreaseError(input: {
   for (const assignment of input.next) {
     if (assignment.slots <= 0) continue;
     if (!capacityById.has(assignment.seminarId)) continue;
-    if (isSeminarCapacityDecided(capacityById.get(assignment.seminarId))) {
-      continue;
-    }
+    const capacity = capacityById.get(assignment.seminarId);
     const previous =
       input.existing.find(
         (row) =>
           row.eventId === assignment.eventId &&
           row.seminarId === assignment.seminarId
       )?.slots ?? 0;
-    if (assignment.slots > previous) {
+    if (assignment.slots <= previous) continue;
+    if (capacity === 0) {
+      return "This seminar has no partner panelist capacity.";
+    }
+    if (!isSeminarAvailableForPartnerAllocation(capacity)) {
       return "Seminar capacity is not decided yet, so new seats cannot be allocated.";
     }
   }

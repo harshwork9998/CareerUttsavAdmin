@@ -5,6 +5,7 @@ import {
   type PrismaEventRecord,
 } from "@/lib/server/event-prisma-map";
 import { prisma } from "@/lib/server/prisma";
+import { invalidPanelistSlotsMessage } from "@/lib/seminar-schedule";
 import { EventWriteError } from "@/lib/server/event-write-errors";
 import { generateId } from "@/lib/utils";
 import type { Event, EventSeminar, EventStatus } from "@/types";
@@ -78,6 +79,10 @@ function validateSeminarPayload(seminars: EventSeminar[]): void {
     seenIds.add(seminar.id);
     if (!seminar.title?.trim()) {
       throw new EventWriteError(400, `Seminar ${seminar.id} title is required`);
+    }
+    const panelistSlotsError = invalidPanelistSlotsMessage(seminar.panelistSlots);
+    if (panelistSlotsError) {
+      throw new EventWriteError(400, panelistSlotsError);
     }
   }
 }

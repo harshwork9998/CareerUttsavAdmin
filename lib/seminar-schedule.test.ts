@@ -10,6 +10,9 @@ import {
 } from "@/lib/event-seminar-drafts";
 import {
   compareScheduledSeminars,
+  invalidPanelistSlotsMessage,
+  isSeminarAvailableForPartnerAllocation,
+  isSeminarCapacityConfigured,
   isSeminarCapacityDecided,
   seminarAllocationIncreaseError,
   seminarCapacityLabel,
@@ -44,6 +47,29 @@ describe("nullable seminar schedule", () => {
     expect(undecided.hall).toBeNull();
     expect(undecided.panelistSlots).toBeNull();
     expect(isSeminarCapacityDecided(undecided.panelistSlots)).toBe(false);
+    expect(isSeminarCapacityConfigured(null)).toBe(false);
+    expect(isSeminarAvailableForPartnerAllocation(null)).toBe(false);
+  });
+
+  it("keeps 0 panelist slots distinct from null", () => {
+    expect(invalidPanelistSlotsMessage(null)).toBeNull();
+    expect(invalidPanelistSlotsMessage(0)).toBeNull();
+    expect(invalidPanelistSlotsMessage(4)).toBeNull();
+    expect(invalidPanelistSlotsMessage(-1)).toMatch(/whole number of 0 or more/);
+    expect(invalidPanelistSlotsMessage(1.5)).toMatch(/whole number of 0 or more/);
+    expect(isSeminarCapacityConfigured(0)).toBe(true);
+    expect(isSeminarAvailableForPartnerAllocation(0)).toBe(false);
+    expect(isSeminarCapacityDecided(0)).toBe(false);
+    expect(seminarCapacityLabel(0)).toBe("0 panelists");
+
+    const zero = { ...undecided, id: "sem-zero", panelistSlots: 0 };
+    const [draft] = seminarDraftsFromEvent({ seminars: [zero] });
+    expect(draft?.panelistSlots).toBe(0);
+    expect(seminarDraftScheduleErrors({ ...draft!, hallCount: 3 })).toEqual({});
+    expect(seminarSavePayload([draft!])[0]?.panelistSlots).toBe(0);
+    expect(seminarSavePayload([{ ...draft!, panelistSlots: null }])[0]?.panelistSlots).toBe(
+      null
+    );
   });
 
   it("preserves nulls through the API mapper", () => {

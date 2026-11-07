@@ -1,4 +1,5 @@
 import { buildDeliverablesForTier, normalizeDeliverableOptions } from "@/constants";
+import { selectedSeminarTopicCount } from "@/lib/seminar-allocation";
 import { getPartnershipTierLabel } from "@/lib/partner-tier";
 import type {
   Event,
@@ -309,30 +310,15 @@ export function assignedSlotsForEvent(
 }
 
 /**
- * Keep seminar seat picks within each event's deliverables budget.
- * Drops assignments for events with zero/missing budget; trims excess seats.
+ * Drops only empty seat rows.
+ * Lowering seminarSlotCount must not delete or trim topic assignments.
+ * That reduction is rejected by seminar allocation validation instead.
  */
 export function clampSeminarSlotAssignmentsToBudget(
   assignments: PartnerSeminarSlotAssignment[],
-  budgetByEvent: Record<string, number>
+  _budgetByEvent: Record<string, number>
 ): PartnerSeminarSlotAssignment[] {
-  const result: PartnerSeminarSlotAssignment[] = [];
-
-  for (const [eventId, rawBudget] of Object.entries(budgetByEvent)) {
-    const budget = Math.max(0, Math.floor(rawBudget ?? 0));
-    if (budget <= 0) continue;
-
-    let remaining = budget;
-    for (const assignment of assignments.filter((a) => a.eventId === eventId)) {
-      if (remaining <= 0) break;
-      const slots = Math.min(Math.max(0, Math.floor(assignment.slots)), remaining);
-      if (slots <= 0) continue;
-      result.push(slots === assignment.slots ? assignment : { ...assignment, slots });
-      remaining -= slots;
-    }
-  }
-
-  return result;
+  return assignments.filter((assignment) => assignment.slots > 0);
 }
 
 export function seminarSlotAssignmentsMatchBudget(
@@ -341,7 +327,8 @@ export function seminarSlotAssignmentsMatchBudget(
 ): boolean {
   return eventPartnerships.every(
     (ep) =>
-      assignedSlotsForEvent(assignments, ep.eventId) === (ep.seminarSlotCount ?? 0)
+      selectedSeminarTopicCount(assignments, ep.eventId) ===
+      (ep.seminarSlotCount ?? 0)
   );
 }
 

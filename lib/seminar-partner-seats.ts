@@ -11,6 +11,7 @@ export type PartnerSeatBlock = {
   /** Index within this partner's allotted speakers for the seminar */
   speakerSlotIndex: number;
   portalSpeaker?: PartnerSeminarSpeakerDetail;
+  confirmed: boolean;
 };
 
 export function speakerIdForPartnerSeat(
@@ -20,17 +21,11 @@ export function speakerIdForPartnerSeat(
   return `partner-seat-${partnerId}-${seatIndex}`;
 }
 
-/** Partners with confirmed seminar slots, ordered by confirmation time. */
-export function partnersWithConfirmedSeminarSlots(
-  partners: Partner[]
-): Partner[] {
-  return partners
-    .filter((partner) => Boolean(partner.seminarSlotsConfirmedAt))
-    .sort(
-      (a, b) =>
-        new Date(a.seminarSlotsConfirmedAt!).getTime() -
-        new Date(b.seminarSlotsConfirmedAt!).getTime()
-    );
+/** Partners who hold at least one saved seminar topic, confirmed or still pending. */
+export function partnersWithSeminarSeats(partners: Partner[]): Partner[] {
+  return partners.filter((partner) =>
+    (partner.seminarSlotAssignments ?? []).some((row) => row.slots > 0)
+  );
 }
 
 /** Map panelist seat indices to partner blocks for a seminar session. */
@@ -42,13 +37,28 @@ export function buildPartnerSeatBlocks(
 ): PartnerSeatBlock[] {
   const blocks: PartnerSeatBlock[] = [];
   let nextSeat = 0;
+  const seated = partnersWithSeminarSeats(partners)
+    .map((partner) => ({
+      partner,
+      assignment: partner.seminarSlotAssignments?.find(
+        (row) => row.eventId === eventId && row.seminarId === seminarId && row.slots > 0
+      ),
+    }))
+    .filter((row): row is { partner: Partner; assignment: NonNullable<typeof row.assignment> } =>
+      Boolean(row.assignment)
+    )
+    .sort((left, right) => {
+      const leftTime = left.assignment.confirmedAt
+        ? Date.parse(left.assignment.confirmedAt)
+        : Number.POSITIVE_INFINITY;
+      const rightTime = right.assignment.confirmedAt
+        ? Date.parse(right.assignment.confirmedAt)
+        : Number.POSITIVE_INFINITY;
+      if (leftTime !== rightTime) return leftTime - rightTime;
+      return left.partner.name.localeCompare(right.partner.name);
+    });
 
-  for (const partner of partnersWithConfirmedSeminarSlots(partners)) {
-    const assignment = partner.seminarSlotAssignments?.find(
-      (row) => row.eventId === eventId && row.seminarId === seminarId
-    );
-    if (!assignment || assignment.slots <= 0) continue;
-
+  for (const { partner, assignment } of seated) {
     const portalRow = partner.portalSeminarSpeakers?.find(
       (row) => row.eventId === eventId && row.seminarId === seminarId
     );
@@ -63,6 +73,7 @@ export function buildPartnerSeatBlocks(
         partner,
         speakerSlotIndex,
         portalSpeaker: portalRow?.speakers[speakerSlotIndex],
+        confirmed: Boolean(assignment.confirmedAt?.trim()),
       });
     }
   }
@@ -240,6 +251,7 @@ export type SeatDisplayMeta = {
   blocked: boolean;
   partnerName?: string;
   awaitingSpeaker: boolean;
+  confirmation?: "Confirmed" | "Pending Confirmation";
 };
 
 export function seatDisplayMetaForSeminar(
@@ -255,6 +267,11 @@ export function seatDisplayMetaForSeminar(
       blocked,
       partnerName: block?.partner.name,
       awaitingSpeaker,
+      confirmation: block
+        ? block.confirmed
+          ? "Confirmed"
+          : "Pending Confirmation"
+        : undefined,
     };
   });
 }

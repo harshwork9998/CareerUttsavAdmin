@@ -228,3 +228,189 @@ describe("partner pending state", () => {
     expect(saved).toEqual([]);
   });
 });
+
+function seminarInput(input: {
+  allocated: number;
+  assignments?: PendingPartnershipInput["assignments"];
+  sessions?: PendingPartnershipInput["sessions"];
+  speakers?: PendingPartnershipInput["speakers"];
+}): PendingPartnershipInput {
+  return {
+    eventId: "evt-001",
+    deliverables: [],
+    representativeSlotCount: 0,
+    seminarSlotCount: input.allocated,
+    assignments: input.assignments ?? [],
+    sessions: input.sessions ?? [],
+    documents: [],
+    speakers: input.speakers ?? [],
+    representatives: [],
+  };
+}
+
+function assignment(
+  seminarId: string,
+  confirmedAt: string | null
+): NonNullable<PendingPartnershipInput["assignments"]>[number] {
+  return { eventId: "evt-001", seminarId, slots: 1, confirmedAt };
+}
+
+function session(seminarId: string, topic: string): PendingPartnershipInput["sessions"][number] {
+  return {
+    eventId: "evt-001",
+    seminarId,
+    topic,
+    dateLabel: null,
+    timeLabel: null,
+    hallLabel: null,
+  };
+}
+
+describe("seminar topic pending actions and readiness", () => {
+  it("adds no topic-selection item when nothing is allocated", () => {
+    const pending = pendingItemsForPartnership(seminarInput({ allocated: 0 }));
+    expect(pending.some((item) => item.section === "topics")).toBe(false);
+    expect(readinessLinesForPartnership(seminarInput({ allocated: 0 }))).toEqual(
+      expect.arrayContaining([
+        { label: "Panel Discussion", status: "Not Applicable" },
+        { label: "Speaker details", status: "Not Applicable" },
+      ])
+    );
+  });
+
+  it("asks the partner to select topics while the allocation is open", () => {
+    const none = pendingItemsForPartnership(seminarInput({ allocated: 3 }));
+    expect(none.map((item) => item.label)).toContain(
+      "Select Panel Discussion topics (0 of 3 selected)"
+    );
+    const partial = pendingItemsForPartnership(
+      seminarInput({
+        allocated: 3,
+        assignments: [assignment("sem-a", null), assignment("sem-b", null)],
+        sessions: [session("sem-a", "Design"), session("sem-b", "Media")],
+      })
+    );
+    expect(partial.map((item) => item.label)).toContain(
+      "Select Panel Discussion topics (2 of 3 selected)"
+    );
+    expect(
+      readinessLinesForPartnership(
+        seminarInput({ allocated: 3, assignments: [assignment("sem-a", null)] })
+      ).find((line) => line.label === "Panel Discussion")?.status
+    ).toBe("Pending");
+  });
+
+  it("asks for confirmation when every allocated topic is selected but not confirmed", () => {
+    const pending = pendingItemsForPartnership(
+      seminarInput({
+        allocated: 3,
+        assignments: [
+          assignment("sem-a", null),
+          assignment("sem-b", null),
+          assignment("sem-c", null),
+        ],
+      })
+    );
+    expect(pending.map((item) => item.label)).toContain("Confirm Panel Discussion topics");
+    expect(pending.some((item) => item.label.startsWith("Select Panel Discussion"))).toBe(
+      false
+    );
+    expect(
+      readinessLinesForPartnership(
+        seminarInput({
+          allocated: 3,
+          assignments: [
+            assignment("sem-a", null),
+            assignment("sem-b", null),
+            assignment("sem-c", null),
+          ],
+        })
+      ).find((line) => line.label === "Panel Discussion")?.status
+    ).toBe("Pending Confirmation");
+  });
+
+  it("clears the topic item only after every current selection is confirmed", () => {
+    const pending = pendingItemsForPartnership(
+      seminarInput({
+        allocated: 3,
+        assignments: [
+          assignment("sem-a", "2026-11-08T00:00:00.000Z"),
+          assignment("sem-b", "2026-11-08T00:00:00.000Z"),
+          assignment("sem-c", "2026-11-08T00:00:00.000Z"),
+        ],
+        sessions: [
+          session("sem-a", "Design"),
+          session("sem-b", "Media"),
+          session("sem-c", "Law"),
+        ],
+        speakers: [
+          {
+            eventId: "evt-001",
+            seminarId: "sem-a",
+            updatedAt: "2026-11-08T00:00:00.000Z",
+            speakers: [completeSpeaker],
+          },
+          {
+            eventId: "evt-001",
+            seminarId: "sem-b",
+            updatedAt: "2026-11-08T00:00:00.000Z",
+            speakers: [completeSpeaker],
+          },
+          {
+            eventId: "evt-001",
+            seminarId: "sem-c",
+            updatedAt: "2026-11-08T00:00:00.000Z",
+            speakers: [completeSpeaker],
+          },
+        ],
+      })
+    );
+    expect(pending.some((item) => item.section === "topics")).toBe(false);
+    expect(pending.some((item) => item.section === "speakers")).toBe(false);
+    expect(
+      readinessLinesForPartnership(
+        seminarInput({
+          allocated: 3,
+          assignments: [
+            assignment("sem-a", "2026-11-08T00:00:00.000Z"),
+            assignment("sem-b", "2026-11-08T00:00:00.000Z"),
+            assignment("sem-c", "2026-11-08T00:00:00.000Z"),
+          ],
+          sessions: [session("sem-a", "Design")],
+        })
+      ).find((line) => line.label === "Panel Discussion")?.status
+    ).toBe("Confirmed");
+  });
+
+  it("does not let a historical speaker satisfy the current seminar", () => {
+    const pending = pendingItemsForPartnership(
+      seminarInput({
+        allocated: 1,
+        assignments: [assignment("sem-b", "2026-11-08T00:00:00.000Z")],
+        sessions: [session("sem-b", "Media")],
+        speakers: [
+          {
+            eventId: "evt-001",
+            seminarId: "sem-a",
+            updatedAt: "2026-11-01T00:00:00.000Z",
+            speakers: [completeSpeaker],
+          },
+        ],
+      })
+    );
+    expect(pending.map((item) => item.label)).toContain("Speaker details — Media");
+    expect(pending.some((item) => item.key === "speaker:evt-001:sem-a")).toBe(false);
+  });
+
+  it("reopens topic selection and readiness after a confirmed topic is removed", () => {
+    const removed = seminarInput({ allocated: 2, assignments: [assignment("sem-a", "2026-11-08T00:00:00.000Z")] });
+    const pending = pendingItemsForPartnership(removed);
+    expect(pending.map((item) => item.label)).toContain(
+      "Select Panel Discussion topics (1 of 2 selected)"
+    );
+    expect(
+      readinessLinesForPartnership(removed).find((line) => line.label === "Panel Discussion")
+        ?.status
+    ).toBe("Pending");
+  });
+});
