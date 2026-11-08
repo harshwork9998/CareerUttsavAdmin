@@ -168,8 +168,8 @@ export function ChapterCommercials(props: {
           }}
         >
           <div>
-            <p className="text-[11px] font-semibold tracking-[0.16em] uppercase opacity-80">
-              Net total amount
+            <p className="text-[11px] font-semibold tracking-[0.16em] opacity-80">
+              Total amount after discount
             </p>
             <p
               className={cn(
