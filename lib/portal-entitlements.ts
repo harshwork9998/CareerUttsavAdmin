@@ -1,6 +1,7 @@
 import { isValidIndianMobile } from "@/lib/indian-mobile";
 import { seminarTopicWorkflowForEvent } from "@/lib/seminar-topic-completion";
 import type { PanelSessionView } from "@/lib/partner-pending-state";
+import { isSubmittedPortalDocument } from "@/lib/partner-portal-document";
 import type {
   PartnerDeliverable,
   PartnerPortalDocument,
@@ -9,6 +10,14 @@ import type {
   PartnerSeminarSpeakerSubmission,
   PartnerSeminarSlotAssignment,
 } from "@/types";
+
+export type PartnershipEntitlementDocument = Pick<PartnerPortalDocument, "kind"> &
+  Partial<
+    Pick<
+      PartnerPortalDocument,
+      "url" | "fileName" | "storageProvider" | "storageBucket" | "storagePath"
+    >
+  >;
 
 export type PortalSubmissionKey =
   | "logo"
@@ -44,7 +53,7 @@ export type PartnershipEntitlementInput = {
   portalFasciaName?: string | null;
   portalWebsiteUrl?: string | null;
   portalSmsContent?: string | null;
-  documents?: Array<Pick<PartnerPortalDocument, "kind">> | null;
+  documents?: PartnershipEntitlementDocument[] | null;
   speakers?: PartnerSeminarSpeakerSubmission[] | null;
   representatives?: PartnerRepresentativesSubmission[] | null;
 };
@@ -74,10 +83,20 @@ function hasDoc(
   documents: PartnershipEntitlementInput["documents"],
   kind: PartnerPortalDocument["kind"]
 ): boolean {
-  return (documents ?? []).some(
-    (doc) =>
-      doc.kind === kind || (kind === "souvenir_writeup" && doc.kind === "writeup")
-  );
+  return (documents ?? []).some((doc) => {
+    if (
+      doc.kind !== kind &&
+      !(kind === "souvenir_writeup" && doc.kind === "writeup")
+    ) {
+      return false;
+    }
+    const hasPayloadFields =
+      doc.url !== undefined ||
+      doc.fileName !== undefined ||
+      doc.storagePath !== undefined;
+    if (!hasPayloadFields) return true;
+    return isSubmittedPortalDocument(doc);
+  });
 }
 
 export function isPartnerSpeakerComplete(
@@ -215,7 +234,7 @@ export type PartnerPortalEntitlementInput = {
   portalFasciaName?: string | null;
   portalWebsiteUrl?: string | null;
   portalSmsContent?: string | null;
-  documents?: Array<Pick<PartnerPortalDocument, "kind">> | null;
+  documents?: PartnershipEntitlementDocument[] | null;
   speakers?: PartnerSeminarSpeakerSubmission[] | null;
   representatives?: PartnerRepresentativesSubmission[] | null;
 };

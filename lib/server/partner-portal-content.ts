@@ -17,6 +17,11 @@ export function validatePartnerPortalContent(
         fileName: document?.fileName ?? "",
         fileSizeBytes: Number(document?.fileSizeBytes) || 0,
         url: document?.url,
+        kind: document?.kind,
+        storagePath:
+          typeof document?.storagePath === "string"
+            ? document.storagePath
+            : undefined,
       });
       if (uploadError) return uploadError;
     }

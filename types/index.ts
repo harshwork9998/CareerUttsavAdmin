@@ -544,10 +544,13 @@ export interface PartnerPortalDocument {
   label: string;
   fileName: string;
   mimeType: string;
-  /** Preview / download URL (or data URI in mocks) */
+  /** Legacy preview / inline data URL. Empty for Supabase-backed uploads. */
   url: string;
   fileSizeBytes: number;
   uploadedAt: string;
+  storageProvider?: "supabase";
+  storageBucket?: string;
+  storagePath?: string;
 }
 
 export interface Blog {

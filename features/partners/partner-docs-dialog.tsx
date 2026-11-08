@@ -41,6 +41,7 @@ import {
 import { enrichSeminarSlotAssignments } from "@/lib/partner-event-config";
 import { cn } from "@/lib/utils";
 import { eventsService, partnersService } from "@/services/api";
+import { resolvePortalDocumentHref } from "@/lib/portal-document-view";
 import type { Event, Partner, PartnerPortalDocument } from "@/types";
 import { Button } from "@/components/ui/button";
 import { PartnerReminderDialog } from "@/features/partners/partner-reminder-dialog";
@@ -73,9 +74,14 @@ function isImageDoc(doc: PartnerPortalDocument) {
   return doc.mimeType.startsWith("image/");
 }
 
-async function downloadDoc(doc: PartnerPortalDocument) {
+async function downloadDoc(partnerId: string, doc: PartnerPortalDocument) {
+  const href = await resolvePortalDocumentHref(partnerId, doc);
+  if (!href) {
+    toast.error("Could not open this file.");
+    return;
+  }
   try {
-    const res = await fetch(doc.url);
+    const res = await fetch(href);
     const blob = await res.blob();
     const objectUrl = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -87,9 +93,18 @@ async function downloadDoc(doc: PartnerPortalDocument) {
     URL.revokeObjectURL(objectUrl);
     toast.success(`Downloaded ${doc.fileName}`);
   } catch {
-    window.open(doc.url, "_blank", "noopener,noreferrer");
+    window.open(href, "_blank", "noopener,noreferrer");
     toast.message("Opened file in a new tab");
   }
+}
+
+async function openPortalDoc(partnerId: string, doc: PartnerPortalDocument) {
+  const href = await resolvePortalDocumentHref(partnerId, doc);
+  if (!href) {
+    toast.error("Could not open this file.");
+    return;
+  }
+  window.open(href, "_blank", "noopener,noreferrer");
 }
 
 function checklistIcon(item: PortalSubmissionChecklistItem) {
@@ -107,6 +122,116 @@ function eventLabel(events: Event[], eventId: string) {
   return event.city ? `${event.title} - ${event.city}` : event.title;
 }
 
+function PortalDocumentPreview({
+  partnerId,
+  doc,
+}: {
+  partnerId: string;
+  doc: PartnerPortalDocument;
+}) {
+  const [href, setHref] = useState(doc.url);
+
+  useEffect(() => {
+    let cancelled = false;
+    void resolvePortalDocumentHref(partnerId, doc).then((url) => {
+      if (!cancelled && url) setHref(url);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [partnerId, doc]);
+
+  return (
+    <>
+      <div
+        className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-3"
+        style={{ borderColor: LINE.subtle }}
+      >
+        <div className="min-w-0">
+          <p
+            className="truncate text-sm font-semibold"
+            style={{ color: INK.primary }}
+          >
+            {doc.fileName}
+          </p>
+          <p className="text-xs" style={{ color: INK.muted }}>
+            Uploaded {formatUploadedAt(doc.uploadedAt)}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => void openPortalDoc(partnerId, doc)}
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+            Open
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            className="gap-1.5 text-white hover:opacity-90"
+            style={{ backgroundColor: BRAND[700] }}
+            onClick={() => void downloadDoc(partnerId, doc)}
+          >
+            <Download className="h-3.5 w-3.5" />
+            Download
+          </Button>
+        </div>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-auto p-5">
+        {isImageDoc(doc) && href ? (
+          <div
+            className="flex min-h-full items-center justify-center rounded-2xl border p-4"
+            style={{
+              borderColor: LINE.subtle,
+              background: PAPER.surface,
+            }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={href}
+              alt={doc.label}
+              className="max-h-[min(52vh,560px)] max-w-full rounded-lg object-contain"
+            />
+          </div>
+        ) : (
+          <div
+            className="flex min-h-[40vh] flex-col items-center justify-center gap-3 rounded-2xl border px-6 text-center"
+            style={{
+              borderColor: LINE.subtle,
+              background: PAPER.surface,
+            }}
+          >
+            <FileText className="h-12 w-12" style={{ color: BRAND[700] }} />
+            <div>
+              <p className="text-sm font-semibold" style={{ color: INK.primary }}>
+                {doc.fileName}
+              </p>
+              <p className="mt-1 text-xs" style={{ color: INK.muted }}>
+                Preview isn’t available for this file type. Download or open it
+                instead.
+              </p>
+            </div>
+            <Button
+              type="button"
+              className="gap-1.5 text-white hover:opacity-90"
+              style={{ backgroundColor: BRAND[700] }}
+              onClick={() => void downloadDoc(partnerId, doc)}
+            >
+              <Download className="h-4 w-4" />
+              Download file
+            </Button>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
 function SubmissionPreview({
   partner,
   item,
@@ -117,104 +242,7 @@ function SubmissionPreview({
   events?: Event[];
 }) {
   if ((item.kind === "file" || item.kind === "logo") && item.file) {
-    const selected = item.file;
-    return (
-      <>
-        <div
-          className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-3"
-          style={{ borderColor: LINE.subtle }}
-        >
-          <div className="min-w-0">
-            <p
-              className="truncate text-sm font-semibold"
-              style={{ color: INK.primary }}
-            >
-              {selected.fileName}
-            </p>
-            <p className="text-xs" style={{ color: INK.muted }}>
-              Uploaded {formatUploadedAt(selected.uploadedAt)}
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
-              onClick={() =>
-                window.open(selected.url, "_blank", "noopener,noreferrer")
-              }
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              Open
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              className="gap-1.5 text-white hover:opacity-90"
-              style={{ backgroundColor: BRAND[700] }}
-              onClick={() => void downloadDoc(selected)}
-            >
-              <Download className="h-3.5 w-3.5" />
-              Download
-            </Button>
-          </div>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-auto p-5">
-          {isImageDoc(selected) ? (
-            <div
-              className="flex min-h-full items-center justify-center rounded-2xl border p-4"
-              style={{
-                borderColor: LINE.subtle,
-                background: PAPER.surface,
-              }}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={selected.url}
-                alt={selected.label}
-                className="max-h-[min(52vh,560px)] max-w-full rounded-lg object-contain"
-              />
-            </div>
-          ) : (
-            <div
-              className="flex min-h-[40vh] flex-col items-center justify-center gap-3 rounded-2xl border px-6 text-center"
-              style={{
-                borderColor: LINE.subtle,
-                background: PAPER.surface,
-              }}
-            >
-              <FileText
-                className="h-12 w-12"
-                style={{ color: BRAND[700] }}
-              />
-              <div>
-                <p
-                  className="text-sm font-semibold"
-                  style={{ color: INK.primary }}
-                >
-                  {selected.fileName}
-                </p>
-                <p className="mt-1 text-xs" style={{ color: INK.muted }}>
-                  Preview isn’t available for this file type. Download or open
-                  it instead.
-                </p>
-              </div>
-              <Button
-                type="button"
-                className="gap-1.5 text-white hover:opacity-90"
-                style={{ backgroundColor: BRAND[700] }}
-                onClick={() => void downloadDoc(selected)}
-              >
-                <Download className="h-4 w-4" />
-                Download file
-              </Button>
-            </div>
-          )}
-        </div>
-      </>
-    );
+    return <PortalDocumentPreview partnerId={partner.id} doc={item.file} />;
   }
 
   if (item.kind === "text") {

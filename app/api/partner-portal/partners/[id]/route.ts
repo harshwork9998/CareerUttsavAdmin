@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
 
 import {
+  findSubmittedPortalDocument,
+  isStorageBackedPortalDocument,
+} from "@/lib/partner-portal-document";
+import {
   applyMeaningfulPartnerActivity,
   notifyReadinessTransition,
   notifySpeakerReceived,
 } from "@/lib/server/partner-communication-service";
+import { removePortalStorageObject } from "@/lib/server/partner-portal-storage";
 import { toPartnerPortalPartnerDto } from "@/lib/server/partner-portal-dto";
 import { portalSpeakerRowsError } from "@/lib/seminar-allocation";
 import { validatePartnerPortalContent } from "@/lib/server/partner-portal-content";
@@ -66,6 +71,22 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
 
   let partner = result.partner;
+  if (before && Array.isArray(parsed.patch.portalDocuments)) {
+    const beforeAd = findSubmittedPortalDocument(before.portalDocuments, "ad_creative");
+    const afterAd = findSubmittedPortalDocument(partner.portalDocuments, "ad_creative");
+    if (
+      beforeAd &&
+      isStorageBackedPortalDocument(beforeAd) &&
+      (!afterAd ||
+        afterAd.storagePath !== beforeAd.storagePath ||
+        afterAd.storageBucket !== beforeAd.storageBucket)
+    ) {
+      await removePortalStorageObject(
+        beforeAd.storageBucket!,
+        beforeAd.storagePath!
+      );
+    }
+  }
   if (before) {
     try {
       partner = await applyMeaningfulPartnerActivity(before, partner);
