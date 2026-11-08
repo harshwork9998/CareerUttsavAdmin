@@ -162,6 +162,33 @@ describe("arePortalSpeakerDetailsComplete", () => {
     ).toBe(false);
   });
 
+  it("is complete when the photograph is Storage-backed without a data URL", () => {
+    expect(
+      arePortalSpeakerDetailsComplete(
+        partner({
+          eventPartnerships: [seminarPartnership()],
+          seminarSlotAssignments: [assignment("evt-001", "sem-a")],
+          portalSeminarSpeakers: [
+            {
+              eventId: "evt-001",
+              seminarId: "sem-a",
+              updatedAt: "2026-11-01T00:00:00.000Z",
+              speakers: [
+                {
+                  ...completeSpeaker,
+                  photoUrl: "",
+                  photoStorageProvider: "supabase",
+                  photoStorageBucket: "partner-portal-assets",
+                  photoStoragePath: "partners/p1/speaker_photo/s1/x.png",
+                },
+              ],
+            },
+          ],
+        })
+      )
+    ).toBe(true);
+  });
+
   it("is complete when one required slot has a fully valid speaker", () => {
     expect(
       arePortalSpeakerDetailsComplete(

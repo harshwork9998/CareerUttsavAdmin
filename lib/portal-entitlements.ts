@@ -2,6 +2,7 @@ import { isValidIndianMobile } from "@/lib/indian-mobile";
 import { seminarTopicWorkflowForEvent } from "@/lib/seminar-topic-completion";
 import type { PanelSessionView } from "@/lib/partner-pending-state";
 import { isSubmittedPortalDocument } from "@/lib/partner-portal-document";
+import { speakerHasPersistedPhoto } from "@/lib/partner-portal-speaker";
 import type {
   PartnerDeliverable,
   PartnerPortalDocument,
@@ -108,7 +109,7 @@ export function isPartnerSpeakerComplete(
     speaker.name?.trim() &&
       speaker.designation?.trim() &&
       speaker.introduction?.trim() &&
-      speaker.photoUrl?.trim() &&
+      speakerHasPersistedPhoto(speaker) &&
       isValidIndianMobile(contact)
   );
 }

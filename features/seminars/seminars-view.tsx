@@ -742,6 +742,8 @@ export function SeminarsView() {
                           totalSlots={activePanelistSlots}
                           selectedId={selectedSpeakerId}
                           seatMeta={seatMeta}
+                          eventId={active.event.id}
+                          seminarId={active.seminar.id}
                           onSeatClick={handleSeatClick}
                         />
                         <SeminarPartnerActions

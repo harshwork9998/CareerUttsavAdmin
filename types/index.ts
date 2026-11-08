@@ -464,6 +464,11 @@ export interface SeminarSpeaker {
   linkedinProfile?: string;
   /** Headshot URL (data URL or hosted) from partner portal */
   photoUrl?: string;
+  photoStorageProvider?: "supabase";
+  photoStorageBucket?: string;
+  photoStoragePath?: string;
+  /** Partner portal speaker UUID, used to resolve a private Storage photo */
+  portalSpeakerId?: string;
   organization: string;
   partnerId?: string;
   /** 0-based panel seat index within the seminar */
@@ -500,6 +505,8 @@ export type PartnerPortalDocumentKind =
   | "other";
 
 export interface PartnerSeminarSpeakerDetail {
+  /** Stable portal speaker id (UUID). Optional on legacy rows. */
+  id?: string;
   name: string;
   designation?: string;
   /** Phone or email */
@@ -508,8 +515,14 @@ export interface PartnerSeminarSpeakerDetail {
   introduction?: string;
   /** Optional LinkedIn profile URL */
   linkedinProfile?: string;
-  /** Headshot from partner portal */
+  /** Legacy headshot data URL or hosted URL. Empty for Storage-backed photos. */
   photoUrl?: string;
+  photoStorageProvider?: "supabase";
+  photoStorageBucket?: string;
+  photoStoragePath?: string;
+  photoFileName?: string;
+  photoMimeType?: string;
+  photoFileSizeBytes?: number;
   /** @deprecated use contact */
   phone?: string;
   /** @deprecated use contact */

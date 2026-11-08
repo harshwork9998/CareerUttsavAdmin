@@ -5,12 +5,15 @@ import {
   notifyReadinessTransition,
   notifySpeakerReceived,
 } from "@/lib/server/partner-communication-service";
+import { isStorageBackedPortalDocument } from "@/lib/partner-portal-document";
 import { toPartnerPortalPartnerDto } from "@/lib/server/partner-portal-dto";
 import { validatePartnerPortalContent } from "@/lib/server/partner-portal-content";
 import {
   writePartnerPortalSubmission,
   type PortalSubmissionMutation,
 } from "@/lib/server/partner-portal-submission-write";
+import { speakerPhotosNoLongerReferenced } from "@/lib/server/partner-portal-speaker-photo";
+import { removePortalStorageObject } from "@/lib/server/partner-portal-storage";
 import { requirePartnerPortalServiceAuth } from "@/lib/server/partner-portal-service-auth";
 import { getPartnerByIdForApi } from "@/lib/server/partner-service";
 import type { Partner } from "@/types";
@@ -73,6 +76,18 @@ function patchForValidation(mutation: PortalSubmissionMutation): Partial<Partner
   if (mutation.op === "upsert_document") return { portalDocuments: [mutation.document] };
   if (mutation.op === "remove_document") return {};
   if (mutation.op === "upsert_speakers") return { portalSeminarSpeakers: [mutation.row] };
+  if (mutation.op === "patch_speaker_photo") {
+    return {
+      portalSeminarSpeakers: [
+        {
+          eventId: mutation.eventId,
+          seminarId: mutation.seminarId,
+          speakers: [mutation.speaker],
+          updatedAt: new Date().toISOString(),
+        },
+      ],
+    };
+  }
   return { portalRepresentatives: [mutation.row] };
 }
 
@@ -92,6 +107,25 @@ export async function POST(request: Request, context: RouteContext) {
 
   const saved = await writePartnerPortalSubmission(id, mutation);
   if (!saved.ok) return NextResponse.json({ error: saved.error }, { status: saved.status });
+
+  if (
+    mutation.op === "remove_document" &&
+    saved.replacedDocument &&
+    isStorageBackedPortalDocument(saved.replacedDocument)
+  ) {
+    await removePortalStorageObject(
+      saved.replacedDocument.storageBucket!,
+      saved.replacedDocument.storagePath!
+    );
+  }
+  if (mutation.op === "upsert_speakers") {
+    for (const orphan of speakerPhotosNoLongerReferenced(
+      before.portalSeminarSpeakers,
+      saved.partner.portalSeminarSpeakers
+    )) {
+      await removePortalStorageObject(orphan.storageBucket, orphan.storagePath);
+    }
+  }
 
   let partner = saved.partner;
   try {

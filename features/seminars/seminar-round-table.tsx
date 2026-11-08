@@ -3,6 +3,8 @@
 import { User } from "lucide-react";
 
 import { BRASS, INK, LINE, TEAL } from "@/features/dashboard/dashboard-ui";
+import { PortalSpeakerPhoto } from "@/features/partners/portal-speaker-photo";
+import { isStorageBackedSpeakerPhoto } from "@/lib/partner-portal-speaker";
 import type { SeatDisplayMeta } from "@/lib/seminar-partner-seats";
 import type { SeminarSpeaker } from "@/types";
 
@@ -69,6 +71,8 @@ export function SeminarRoundTable({
   totalSlots,
   selectedId,
   seatMeta,
+  eventId,
+  seminarId,
   onSeatClick,
 }: {
   moderator: SeminarSpeaker | null;
@@ -76,6 +80,8 @@ export function SeminarRoundTable({
   totalSlots: number;
   selectedId: string | null;
   seatMeta?: SeatDisplayMeta[];
+  eventId: string;
+  seminarId: string;
   onSeatClick: (
     seat:
       | { kind: "moderator"; speaker: SeminarSpeaker | null }
@@ -227,10 +233,13 @@ export function SeminarRoundTable({
                           : `1.5px solid ${palette.border}`,
                 }}
               >
-                {speaker?.photoUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={speaker.photoUrl}
+                {speaker &&
+                (speaker.photoUrl || isStorageBackedSpeakerPhoto(speaker)) ? (
+                  <PortalSpeakerPhoto
+                    partnerId={speaker.partnerId}
+                    eventId={eventId}
+                    seminarId={seminarId}
+                    speaker={speaker}
                     alt={speaker.name || "Speaker"}
                     className="h-full w-full object-cover"
                   />

@@ -42,6 +42,8 @@ import { enrichSeminarSlotAssignments } from "@/lib/partner-event-config";
 import { cn } from "@/lib/utils";
 import { eventsService, partnersService } from "@/services/api";
 import { resolvePortalDocumentHref } from "@/lib/portal-document-view";
+import { PortalSpeakerPhoto } from "@/features/partners/portal-speaker-photo";
+import { speakerHasPersistedPhoto } from "@/lib/partner-portal-speaker";
 import type { Event, Partner, PartnerPortalDocument } from "@/types";
 import { Button } from "@/components/ui/button";
 import { PartnerReminderDialog } from "@/features/partners/partner-reminder-dialog";
@@ -382,13 +384,14 @@ function SubmissionPreview({
                           style={{ borderColor: LINE.subtle }}
                         >
                           <div className="flex items-start gap-3">
-                            {speaker.photoUrl ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={speaker.photoUrl}
+                            {speakerHasPersistedPhoto(speaker) ? (
+                              <PortalSpeakerPhoto
+                                partnerId={partner.id}
+                                eventId={slot.eventId}
+                                seminarId={slot.seminarId}
+                                speaker={speaker}
                                 alt={speaker.name}
                                 className="h-10 w-10 shrink-0 rounded-full object-cover"
-                                style={{ border: `1px solid ${LINE.subtle}` }}
                               />
                             ) : null}
                             <div className="min-w-0 flex-1">

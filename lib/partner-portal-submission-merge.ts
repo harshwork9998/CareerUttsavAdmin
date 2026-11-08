@@ -1,6 +1,7 @@
 import type {
   PartnerPortalDocument,
   PartnerRepresentativesSubmission,
+  PartnerSeminarSpeakerDetail,
   PartnerSeminarSpeakerSubmission,
 } from "@/types";
 
@@ -38,6 +39,47 @@ export function upsertSeminarSpeakers(
   );
   if (index >= 0) list[index] = next;
   else list.push(next);
+  return list;
+}
+
+export function patchSeminarSpeakerPhoto(
+  rows: readonly PartnerSeminarSpeakerSubmission[] | null | undefined,
+  input: {
+    eventId: string;
+    seminarId: string;
+    speaker: PartnerSeminarSpeakerDetail;
+  }
+): PartnerSeminarSpeakerSubmission[] {
+  const speakerId = input.speaker.id?.trim();
+  const list = [...(rows ?? [])];
+  const index = list.findIndex(
+    (row) => row.eventId === input.eventId && row.seminarId === input.seminarId
+  );
+  const current =
+    index >= 0
+      ? list[index]!
+      : {
+          eventId: input.eventId,
+          seminarId: input.seminarId,
+          speakers: [] as PartnerSeminarSpeakerDetail[],
+          updatedAt: new Date().toISOString(),
+        };
+  const speakers = [...current.speakers];
+  const speakerIndex = speakerId
+    ? speakers.findIndex((speaker) => speaker.id === speakerId)
+    : -1;
+  if (speakerIndex >= 0) {
+    speakers[speakerIndex] = { ...speakers[speakerIndex], ...input.speaker, id: speakerId };
+  } else {
+    speakers.push({ ...input.speaker, id: speakerId || input.speaker.id });
+  }
+  const nextRow: PartnerSeminarSpeakerSubmission = {
+    ...current,
+    speakers,
+    updatedAt: new Date().toISOString(),
+  };
+  if (index >= 0) list[index] = nextRow;
+  else list.push(nextRow);
   return list;
 }
 

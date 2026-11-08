@@ -93,13 +93,12 @@ export function validateStoredUpload(input: {
   kind?: PartnerPortalDocumentKind;
   storagePath?: string;
 }): string | null {
-  const isAdStorage =
-    input.kind === "ad_creative" && Boolean(input.storagePath?.trim());
-  const policy: PortalUploadKindPolicy = isAdStorage
-    ? "ad_creative"
-    : input.kind === "ad_creative"
-      ? "ad_creative"
-      : "default";
+  const storageBacked = Boolean(input.storagePath?.trim());
+  const policy: PortalUploadKindPolicy =
+    input.kind === "ad_creative" ? "ad_creative" : "default";
+  if (storageBacked && (!Number.isFinite(input.fileSizeBytes) || input.fileSizeBytes <= 0)) {
+    return PORTAL_ZERO_BYTE_MESSAGE;
+  }
 
   const fileError = validateUploadFile({
     fileName: input.fileName,

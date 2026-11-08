@@ -1,6 +1,7 @@
 import type { Prisma } from "@/lib/generated/prisma/client";
 
 import {
+  patchSeminarSpeakerPhoto,
   removePortalDocumentByKind,
   upsertEventRepresentatives,
   upsertPortalDocumentByKind,
@@ -14,6 +15,7 @@ import type {
   Partner,
   PartnerPortalDocument,
   PartnerRepresentativesSubmission,
+  PartnerSeminarSpeakerDetail,
   PartnerSeminarSpeakerSubmission,
 } from "@/types";
 
@@ -65,6 +67,12 @@ export type PortalSubmissionMutation =
   | { op: "upsert_document"; document: PartnerPortalDocument }
   | { op: "remove_document"; kind: PartnerPortalDocument["kind"] }
   | { op: "upsert_speakers"; row: PartnerSeminarSpeakerSubmission }
+  | {
+      op: "patch_speaker_photo";
+      eventId: string;
+      seminarId: string;
+      speaker: PartnerSeminarSpeakerDetail;
+    }
   | { op: "upsert_representatives"; row: PartnerRepresentativesSubmission };
 
 export function applyPortalSubmissionMutation(
@@ -97,6 +105,17 @@ export function applyPortalSubmissionMutation(
         portalSeminarSpeakers: upsertSeminarSpeakers(
           columns.portalSeminarSpeakers,
           mutation.row
+        ),
+      },
+    };
+  }
+  if (mutation.op === "patch_speaker_photo") {
+    return {
+      columns: {
+        ...columns,
+        portalSeminarSpeakers: patchSeminarSpeakerPhoto(
+          columns.portalSeminarSpeakers,
+          mutation
         ),
       },
     };
