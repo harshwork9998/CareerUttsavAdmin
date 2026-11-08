@@ -83,6 +83,7 @@ export async function createPartnerSpeakerPhotoUploadIntent(input: {
   const validationError = validateUploadFile({
     fileName: input.fileName,
     fileSizeBytes: input.fileSizeBytes,
+    kind: "speaker_photo",
     mimeType: input.mimeType,
   });
   if (validationError) {
@@ -111,6 +112,7 @@ export async function commitPartnerSpeakerPhotoUpload(input: {
   fileSizeBytes: number;
   storageBucket: string;
   storagePath: string;
+  ifMatchToken?: string;
 }): Promise<
   | {
       ok: true;
@@ -123,7 +125,7 @@ export async function commitPartnerSpeakerPhotoUpload(input: {
       fileName: string;
       partner: Partner;
     }
-  | { ok: false; error: string; status: number }
+  | { ok: false; error: string; status: number; partner?: Partner }
 > {
   const eventId = input.eventId.trim();
   const seminarId = input.seminarId.trim();
@@ -147,6 +149,7 @@ export async function commitPartnerSpeakerPhotoUpload(input: {
   const validationError = validateUploadFile({
     fileName: input.fileName,
     fileSizeBytes: input.fileSizeBytes,
+    kind: "speaker_photo",
     mimeType: input.mimeType,
   });
   if (validationError) {
@@ -178,6 +181,7 @@ export async function commitPartnerSpeakerPhotoUpload(input: {
     photoFileName: input.fileName,
     photoMimeType: input.mimeType.trim() || verified.info.mimeType,
     photoFileSizeBytes: verified.info.size,
+    photoUploadedAt: new Date().toISOString(),
   };
 
   if (!existing) {
@@ -199,15 +203,25 @@ export async function commitPartnerSpeakerPhotoUpload(input: {
     eventId,
     seminarId,
     speaker: photoFields,
+    ifMatchToken: input.ifMatchToken,
   });
   if (!saved.ok) {
-    await removePortalStorageObject(input.storageBucket, input.storagePath);
-    return { ok: false, error: saved.error, status: saved.status };
+    await removePortalStorageObject(input.storageBucket, input.storagePath).catch(
+      () => undefined
+    );
+    return {
+      ok: false,
+      error: saved.error,
+      status: saved.status,
+      partner: saved.partner,
+    };
   }
 
   const previous = speakerPhotoStorageRef(existing);
   if (previous && previous.storagePath !== input.storagePath) {
-    await removePortalStorageObject(previous.storageBucket, previous.storagePath);
+    await removePortalStorageObject(previous.storageBucket, previous.storagePath).catch(
+      () => undefined
+    );
   }
 
   return {

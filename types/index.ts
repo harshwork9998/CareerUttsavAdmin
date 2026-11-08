@@ -523,6 +523,7 @@ export interface PartnerSeminarSpeakerDetail {
   photoFileName?: string;
   photoMimeType?: string;
   photoFileSizeBytes?: number;
+  photoUploadedAt?: string;
   /** @deprecated use contact */
   phone?: string;
   /** @deprecated use contact */

@@ -109,6 +109,7 @@ describe("partner portal ad creative storage", () => {
     ["ad.jpeg", "image/jpeg"],
     ["ad.pdf", "application/pdf"],
     ["ad.cdr", "application/octet-stream"],
+    ["ad.cdr", ""],
     ["ad.ai", "application/postscript"],
     ["ad.eps", "application/postscript"],
   ] as const) {

@@ -1,12 +1,18 @@
 import type { Prisma } from "@/lib/generated/prisma/client";
 
 import {
+  findSubmittedPortalDocument,
+  portalDocumentMatchToken,
+} from "@/lib/partner-portal-document";
+import { speakerPhotoMatchToken } from "@/lib/partner-portal-speaker";
+import {
   patchSeminarSpeakerPhoto,
   removePortalDocumentByKind,
   upsertEventRepresentatives,
   upsertPortalDocumentByKind,
   upsertSeminarSpeakers,
 } from "@/lib/partner-portal-submission-merge";
+import { PORTAL_UPLOAD_CONFLICT_MESSAGE } from "@/lib/partner-upload-policy";
 import { isPrismaPartnerPersistence } from "@/lib/server/partner-persistence-mode";
 import { getPrismaPartnerById } from "@/lib/server/partner-prisma-store";
 import { prisma } from "@/lib/server/prisma";
@@ -64,7 +70,11 @@ function columnsFromPartner(partner: Partner): PortalColumns {
 
 export type PortalSubmissionMutation =
   | { op: "set_field"; field: "portalFasciaName" | "portalWebsiteUrl" | "portalSmsContent"; value: string }
-  | { op: "upsert_document"; document: PartnerPortalDocument }
+  | {
+      op: "upsert_document";
+      document: PartnerPortalDocument;
+      ifMatchToken?: string;
+    }
   | { op: "remove_document"; kind: PartnerPortalDocument["kind"] }
   | { op: "upsert_speakers"; row: PartnerSeminarSpeakerSubmission }
   | {
@@ -72,19 +82,33 @@ export type PortalSubmissionMutation =
       eventId: string;
       seminarId: string;
       speaker: PartnerSeminarSpeakerDetail;
+      ifMatchToken?: string;
     }
   | { op: "upsert_representatives"; row: PartnerRepresentativesSubmission };
 
 export function applyPortalSubmissionMutation(
   columns: PortalColumns,
   mutation: PortalSubmissionMutation
-): { columns: PortalColumns; replacedDocument?: PartnerPortalDocument } {
+): {
+  columns: PortalColumns;
+  replacedDocument?: PartnerPortalDocument;
+  conflict?: boolean;
+} {
   if (mutation.op === "set_field") {
     return {
       columns: { ...columns, [mutation.field]: mutation.value },
     };
   }
   if (mutation.op === "upsert_document") {
+    if (mutation.ifMatchToken !== undefined) {
+      const live = findSubmittedPortalDocument(
+        columns.portalDocuments,
+        mutation.document.kind
+      );
+      if (portalDocumentMatchToken(live) !== mutation.ifMatchToken) {
+        return { columns, conflict: true };
+      }
+    }
     const merged = upsertPortalDocumentByKind(columns.portalDocuments, mutation.document);
     return {
       columns: { ...columns, portalDocuments: merged.documents },
@@ -110,6 +134,16 @@ export function applyPortalSubmissionMutation(
     };
   }
   if (mutation.op === "patch_speaker_photo") {
+    if (mutation.ifMatchToken !== undefined) {
+      const row = columns.portalSeminarSpeakers.find(
+        (entry) =>
+          entry.eventId === mutation.eventId && entry.seminarId === mutation.seminarId
+      );
+      const live = row?.speakers.find((speaker) => speaker.id === mutation.speaker.id);
+      if (speakerPhotoMatchToken(live) !== mutation.ifMatchToken) {
+        return { columns, conflict: true };
+      }
+    }
     return {
       columns: {
         ...columns,
@@ -134,8 +168,12 @@ export function applyPortalSubmissionMutation(
 async function writePrismaColumns(
   partnerId: string,
   mutation: PortalSubmissionMutation
-): Promise<{ partner: Partner; replacedDocument?: PartnerPortalDocument } | null> {
-  const replaced = await prisma.$transaction(async (tx) => {
+): Promise<{
+  partner: Partner;
+  replacedDocument?: PartnerPortalDocument;
+  conflict?: boolean;
+} | null> {
+  const outcome = await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM partners WHERE id = ${partnerId} FOR UPDATE`;
     const row = await tx.partner.findUnique({
       where: { id: partnerId },
@@ -164,6 +202,9 @@ async function writePrismaColumns(
       ),
     };
     const next = applyPortalSubmissionMutation(current, mutation);
+    if (next.conflict) {
+      return { conflict: true as const };
+    }
     await tx.partner.update({
       where: { id: partnerId },
       data: {
@@ -178,24 +219,39 @@ async function writePrismaColumns(
         updatedAt: new Date(),
       },
     });
-    return next.replacedDocument;
+    return { replacedDocument: next.replacedDocument };
   });
-  if (replaced === null && !(await getPrismaPartnerById(partnerId))) return null;
+  if (outcome === null && !(await getPrismaPartnerById(partnerId))) return null;
   const partner = await getPrismaPartnerById(partnerId);
   if (!partner) return null;
-  return { partner, replacedDocument: replaced ?? undefined };
+  if (outcome && "conflict" in outcome && outcome.conflict) {
+    return { partner, conflict: true };
+  }
+  return {
+    partner,
+    replacedDocument:
+      outcome && "replacedDocument" in outcome ? outcome.replacedDocument : undefined,
+  };
 }
 
 async function writeJsonColumns(
   partnerId: string,
   mutation: PortalSubmissionMutation
-): Promise<{ partner: Partner; replacedDocument?: PartnerPortalDocument } | null> {
+): Promise<{
+  partner: Partner;
+  replacedDocument?: PartnerPortalDocument;
+  conflict?: boolean;
+} | null> {
   const partners = loadPartners();
   const index = partners.findIndex((partner) => partner.id === partnerId);
   if (index < 0) return null;
-  const next = applyPortalSubmissionMutation(columnsFromPartner(partners[index]!), mutation);
+  const current = partners[index]!;
+  const next = applyPortalSubmissionMutation(columnsFromPartner(current), mutation);
+  if (next.conflict) {
+    return { partner: current, conflict: true };
+  }
   const updated: Partner = {
-    ...partners[index]!,
+    ...current,
     ...next.columns,
     updatedAt: new Date().toISOString(),
   };
@@ -210,7 +266,7 @@ export async function writePartnerPortalSubmission(
   mutation: PortalSubmissionMutation
 ): Promise<
   | { ok: true; partner: Partner; replacedDocument?: PartnerPortalDocument }
-  | { ok: false; status: number; error: string }
+  | { ok: false; status: number; error: string; partner?: Partner }
 > {
   try {
     const saved = await withPartnerLock(partnerId, () =>
@@ -219,6 +275,14 @@ export async function writePartnerPortalSubmission(
         : writeJsonColumns(partnerId, mutation)
     );
     if (!saved) return { ok: false, status: 404, error: "Not found" };
+    if (saved.conflict) {
+      return {
+        ok: false,
+        status: 409,
+        error: PORTAL_UPLOAD_CONFLICT_MESSAGE,
+        partner: saved.partner,
+      };
+    }
     return { ok: true, partner: saved.partner, replacedDocument: saved.replacedDocument };
   } catch (error) {
     console.error("[portal-submission]", error instanceof Error ? error.message : "write failed");

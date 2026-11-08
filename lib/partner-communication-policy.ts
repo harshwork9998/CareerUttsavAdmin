@@ -105,7 +105,13 @@ function clean(value: string | null | undefined): string {
 function submissionShape(partner: Partner): SubmissionShape {
   const documents = [...(partner.portalDocuments ?? [])]
     .map((doc) =>
-      [doc.kind, doc.fileName, doc.url, String(doc.fileSizeBytes ?? "")].join("|")
+      [
+        doc.kind,
+        doc.fileName,
+        doc.url,
+        doc.storagePath ?? "",
+        String(doc.fileSizeBytes ?? ""),
+      ].join("|")
     )
     .sort();
   const speakers = [...(partner.portalSeminarSpeakers ?? [])]
@@ -119,6 +125,7 @@ function submissionShape(partner: Partner): SubmissionShape {
         introduction: clean(speaker.introduction),
         linkedinProfile: clean(speaker.linkedinProfile),
         photoUrl: clean(speaker.photoUrl),
+        photoStoragePath: clean(speaker.photoStoragePath),
       })),
     }))
     .sort((a, b) =>

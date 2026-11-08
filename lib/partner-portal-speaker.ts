@@ -10,6 +10,7 @@ export type SpeakerPhotoStorageFields = Pick<
   | "photoFileName"
   | "photoMimeType"
   | "photoFileSizeBytes"
+  | "photoUploadedAt"
 >;
 
 export function isStorageBackedSpeakerPhoto(
@@ -36,6 +37,13 @@ export function speakerHasPersistedPhoto(
     url.startsWith("http://") ||
     url.startsWith("https://")
   );
+}
+
+export function speakerPhotoMatchToken(
+  speaker: SpeakerPhotoStorageFields | null | undefined
+): string {
+  if (!speaker) return "";
+  return speaker.photoStoragePath?.trim() || speaker.photoUrl?.trim() || "";
 }
 
 export function speakerPhotoStorageRef(

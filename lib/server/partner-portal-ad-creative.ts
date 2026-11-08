@@ -88,9 +88,10 @@ export async function commitPartnerAdCreativeUpload(input: {
   fileSizeBytes: number;
   storageBucket: string;
   storagePath: string;
+  ifMatchToken?: string;
 }): Promise<
   | { ok: true; partner: Partner }
-  | { ok: false; error: string; status: number }
+  | { ok: false; error: string; status: number; partner?: Partner }
 > {
   if (!isPartnerEntitledToAdCreative(input.partner)) {
     return { ok: false, error: "Advertisement creative is not required for your package.", status: 403 };
@@ -145,10 +146,18 @@ export async function commitPartnerAdCreativeUpload(input: {
   const saved = await writePartnerPortalSubmission(input.partner.id, {
     op: "upsert_document",
     document: nextDoc,
+    ifMatchToken: input.ifMatchToken,
   });
   if (!saved.ok) {
-    await removePortalStorageObject(input.storageBucket, input.storagePath);
-    return { ok: false, error: saved.error, status: saved.status };
+    await removePortalStorageObject(input.storageBucket, input.storagePath).catch(
+      () => undefined
+    );
+    return {
+      ok: false,
+      error: saved.error,
+      status: saved.status,
+      partner: saved.partner,
+    };
   }
 
   const replaced = saved.replacedDocument;
@@ -157,7 +166,9 @@ export async function commitPartnerAdCreativeUpload(input: {
     isStorageBackedPortalDocument(replaced) &&
     replaced.storagePath !== nextDoc.storagePath
   ) {
-    await removePortalStorageObject(replaced.storageBucket!, replaced.storagePath!);
+    await removePortalStorageObject(replaced.storageBucket!, replaced.storagePath!).catch(
+      () => undefined
+    );
   }
 
   return { ok: true, partner: saved.partner };

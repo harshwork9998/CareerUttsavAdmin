@@ -211,11 +211,19 @@ export async function removePortalStorageObject(
   bucket: string,
   path: string
 ): Promise<void> {
-  const client = createPortalStorageAdminClient();
-  if (!client) return;
-  const { error } = await client.storage.from(bucket).remove([path]);
-  if (error) {
-    console.error("[portal-storage] remove", { bucket, path, message: error.message });
+  try {
+    const client = createPortalStorageAdminClient();
+    if (!client) return;
+    const { error } = await client.storage.from(bucket).remove([path]);
+    if (error) {
+      console.error("[portal-storage] remove", { bucket, path, message: error.message });
+    }
+  } catch (error) {
+    console.error("[portal-storage] remove", {
+      bucket,
+      path,
+      message: error instanceof Error ? error.message : "remove failed",
+    });
   }
 }
 

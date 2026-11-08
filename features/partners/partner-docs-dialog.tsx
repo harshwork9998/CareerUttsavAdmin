@@ -42,6 +42,7 @@ import { enrichSeminarSlotAssignments } from "@/lib/partner-event-config";
 import { cn } from "@/lib/utils";
 import { eventsService, partnersService } from "@/services/api";
 import { resolvePortalDocumentHref } from "@/lib/portal-document-view";
+import { isBrowserPreviewableImage } from "@/lib/partner-upload-policy";
 import { PortalSpeakerPhoto } from "@/features/partners/portal-speaker-photo";
 import { speakerHasPersistedPhoto } from "@/lib/partner-portal-speaker";
 import type { Event, Partner, PartnerPortalDocument } from "@/types";
@@ -73,7 +74,7 @@ function formatUploadedAt(value: string) {
 }
 
 function isImageDoc(doc: PartnerPortalDocument) {
-  return doc.mimeType.startsWith("image/");
+  return isBrowserPreviewableImage(doc.fileName, doc.mimeType);
 }
 
 async function downloadDoc(partnerId: string, doc: PartnerPortalDocument) {

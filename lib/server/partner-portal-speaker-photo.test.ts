@@ -44,6 +44,19 @@ describe("partner portal speaker photo storage", () => {
     process.env.SUPABASE_PORTAL_BUCKET = "partner-portal-assets";
   });
 
+  it("rejects speaker photographs that are not image formats", async () => {
+    const result = await createPartnerSpeakerPhotoUploadIntent({
+      partner: basePartner(),
+      eventId: "evt-001",
+      seminarId: "sem-a",
+      fileName: "photo.pdf",
+      mimeType: "application/pdf",
+      fileSizeBytes: 1200,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.status).toBe(400);
+  });
+
   it("rejects unassigned seminars", async () => {
     const result = await createPartnerSpeakerPhotoUploadIntent({
       partner: basePartner({ seminarSlotAssignments: [] }),
@@ -246,5 +259,73 @@ describe("partner portal speaker photo storage", () => {
         storagePath: "partners/partner-001/speaker_photo/" + speakerId + "/old.png",
       },
     ]);
+  });
+
+  it("deletes only the incoming photograph when a same-speaker replacement conflicts", async () => {
+    const livePath = "partners/partner-001/speaker_photo/" + speakerId + "/live.jpg";
+    const stalePath = buildSpeakerPhotoObjectPath("partner-001", speakerId, ".jpg");
+    vi.spyOn(storage, "verifyPortalStorageObject").mockResolvedValue({
+      ok: true,
+      info: { size: 3000, mimeType: "image/jpeg" },
+    });
+    vi.spyOn(submissionWrite, "writePartnerPortalSubmission").mockResolvedValue({
+      ok: false,
+      status: 409,
+      error: "This file was updated from another session. The latest submitted file has been kept.",
+      partner: basePartner({
+        portalSeminarSpeakers: [
+          {
+            eventId: "evt-001",
+            seminarId: "sem-a",
+            updatedAt: "t2",
+            speakers: [
+              {
+                id: speakerId,
+                name: "Asha",
+                photoStorageProvider: "supabase",
+                photoStorageBucket: "partner-portal-assets",
+                photoStoragePath: livePath,
+                photoUrl: "",
+              },
+            ],
+          },
+        ],
+      }),
+    });
+    const removeSpy = vi.spyOn(storage, "removePortalStorageObject").mockResolvedValue();
+    const result = await commitPartnerSpeakerPhotoUpload({
+      partner: basePartner({
+        portalSeminarSpeakers: [
+          {
+            eventId: "evt-001",
+            seminarId: "sem-a",
+            updatedAt: "t1",
+            speakers: [
+              {
+                id: speakerId,
+                name: "Asha",
+                photoStorageProvider: "supabase",
+                photoStorageBucket: "partner-portal-assets",
+                photoStoragePath: livePath,
+                photoUrl: "",
+              },
+            ],
+          },
+        ],
+      }),
+      eventId: "evt-001",
+      seminarId: "sem-a",
+      speakerId,
+      fileName: "stale.jpg",
+      mimeType: "image/jpeg",
+      fileSizeBytes: 3000,
+      storageBucket: "partner-portal-assets",
+      storagePath: stalePath,
+      ifMatchToken: "partners/partner-001/speaker_photo/" + speakerId + "/old.jpg",
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.status).toBe(409);
+    expect(removeSpy).toHaveBeenCalledWith("partner-portal-assets", stalePath);
+    expect(removeSpy).not.toHaveBeenCalledWith("partner-portal-assets", livePath);
   });
 });

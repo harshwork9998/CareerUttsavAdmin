@@ -98,6 +98,117 @@ describe("partner portal document storage", () => {
     expect(zero.ok).toBe(false);
   });
 
+  it("accepts write-up design formats even when the browser MIME is empty", async () => {
+    vi.spyOn(storage, "createSignedUploadIntent").mockResolvedValue({
+      ok: true,
+      intent: {
+        bucket: "partner-portal-assets",
+        path: "partners/partner-001/souvenir_writeup/x.cdr",
+        token: "tok",
+        tusEndpoint: "https://example-ref.storage.supabase.co/storage/v1/upload/resumable/sign",
+      },
+    });
+    const result = await createPartnerPortalDocumentUploadIntent({
+      partner: basePartner(),
+      kind: "souvenir_writeup",
+      fileName: "writeup.cdr",
+      mimeType: "",
+      fileSizeBytes: 2048,
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it("accepts SVG with a charset suffix and PNG with a generic MIME", async () => {
+    vi.spyOn(storage, "createSignedUploadIntent").mockResolvedValue({
+      ok: true,
+      intent: {
+        bucket: "partner-portal-assets",
+        path: "partners/partner-001/logo/x.svg",
+        token: "tok",
+        tusEndpoint: "https://example-ref.storage.supabase.co/storage/v1/upload/resumable/sign",
+      },
+    });
+    const svg = await createPartnerPortalDocumentUploadIntent({
+      partner: basePartner(),
+      kind: "logo",
+      fileName: "logo.svg",
+      mimeType: "image/svg+xml;charset=utf-8",
+      fileSizeBytes: 2048,
+    });
+    const png = await createPartnerPortalDocumentUploadIntent({
+      partner: basePartner(),
+      kind: "logo",
+      fileName: "logo.png",
+      mimeType: "application/octet-stream",
+      fileSizeBytes: 2048,
+    });
+    expect(svg.ok).toBe(true);
+    expect(png.ok).toBe(true);
+  });
+
+  it("deletes only the new object when a same-kind replacement conflicts", async () => {
+    const livePath = "partners/partner-001/logo/live.png";
+    const stalePath = buildPortalDocumentObjectPath("partner-001", "logo", ".png");
+    vi.spyOn(storage, "verifyPortalStorageObject").mockResolvedValue({
+      ok: true,
+      info: { size: 2048, mimeType: "image/png" },
+    });
+    vi.spyOn(submissionWrite, "writePartnerPortalSubmission").mockResolvedValue({
+      ok: false,
+      status: 409,
+      error: "This file was updated from another session. The latest submitted file has been kept.",
+      partner: basePartner({
+        portalDocuments: [
+          {
+            id: "logo-1",
+            kind: "logo",
+            label: "University logo",
+            fileName: "live.png",
+            mimeType: "image/png",
+            url: "",
+            fileSizeBytes: 10,
+            uploadedAt: new Date().toISOString(),
+            storageProvider: "supabase",
+            storageBucket: "partner-portal-assets",
+            storagePath: livePath,
+          },
+        ],
+      }),
+    });
+    const removeSpy = vi.spyOn(storage, "removePortalStorageObject").mockResolvedValue();
+    const result = await commitPartnerPortalDocumentUpload({
+      partner: basePartner({
+        portalDocuments: [
+          {
+            id: "logo-1",
+            kind: "logo",
+            label: "University logo",
+            fileName: "old.png",
+            mimeType: "image/png",
+            url: "",
+            fileSizeBytes: 10,
+            uploadedAt: new Date().toISOString(),
+            storageProvider: "supabase",
+            storageBucket: "partner-portal-assets",
+            storagePath: livePath,
+          },
+        ],
+      }),
+      kind: "logo",
+      label: "University logo",
+      fileName: "stale.png",
+      mimeType: "image/png",
+      fileSizeBytes: 2048,
+      storageBucket: "partner-portal-assets",
+      storagePath: stalePath,
+      ifMatchToken: "partners/partner-001/logo/old.png",
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.status).toBe(409);
+    expect(removeSpy).toHaveBeenCalledWith("partner-portal-assets", stalePath);
+    expect(removeSpy).not.toHaveBeenCalledWith("partner-portal-assets", livePath);
+  });
+
   it("commit verifies the object and does not persist when missing", async () => {
     vi.spyOn(storage, "verifyPortalStorageObject").mockResolvedValue({
       ok: false,
@@ -217,5 +328,42 @@ describe("partner portal document storage", () => {
     });
     expect(result.ok).toBe(false);
     expect(removeSpy).toHaveBeenCalledWith("partner-portal-assets", path);
+  });
+
+  it("still returns success if previous-object cleanup throws", async () => {
+    vi.spyOn(storage, "verifyPortalStorageObject").mockResolvedValue({
+      ok: true,
+      info: { size: 2048, mimeType: "image/png" },
+    });
+    const path = buildPortalDocumentObjectPath("partner-001", "logo", ".png");
+    vi.spyOn(submissionWrite, "writePartnerPortalSubmission").mockResolvedValue({
+      ok: true,
+      partner: basePartner(),
+      replacedDocument: {
+        id: "logo-1",
+        kind: "logo",
+        label: "University logo",
+        fileName: "old.png",
+        mimeType: "image/png",
+        url: "",
+        fileSizeBytes: 10,
+        uploadedAt: new Date().toISOString(),
+        storageProvider: "supabase",
+        storageBucket: "partner-portal-assets",
+        storagePath: "partners/partner-001/logo/old.png",
+      },
+    });
+    vi.spyOn(storage, "removePortalStorageObject").mockRejectedValue(new Error("storage down"));
+    const result = await commitPartnerPortalDocumentUpload({
+      partner: basePartner(),
+      kind: "logo",
+      label: "University logo",
+      fileName: "logo.png",
+      mimeType: "image/png",
+      fileSizeBytes: 2048,
+      storageBucket: "partner-portal-assets",
+      storagePath: path,
+    });
+    expect(result.ok).toBe(true);
   });
 });

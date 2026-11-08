@@ -42,3 +42,11 @@ export function findSubmittedPortalDocument(
     return isSubmittedPortalDocument(doc);
   });
 }
+
+/** Opaque compare-and-swap token for an existing document, or "" if none. */
+export function portalDocumentMatchToken(
+  doc: Pick<PartnerPortalDocument, "storagePath" | "url"> | null | undefined
+): string {
+  if (!doc) return "";
+  return doc.storagePath?.trim() || doc.url?.trim() || "";
+}
