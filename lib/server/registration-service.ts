@@ -534,18 +534,7 @@ export async function createRegistrationForApi(
 
   saveRegistrations([created, ...registrations]);
 
-  const nextEvents = events.map((item) =>
-    item.id === event.id
-      ? {
-          ...item,
-          registrationCount: (item.registrationCount ?? 0) + 1,
-          updatedAt: now,
-        }
-      : item
-  );
-  saveEvents(nextEvents);
-
-  const resolved = resolveRegistration(created, nextEvents);
+  const resolved = resolveRegistration(created, events);
   scheduleStudentWelcomeEmail(resolved);
   return { ok: true, registration: resolved };
 }
@@ -605,7 +594,7 @@ export async function deleteRegistrationForApi(
 
   const events = loadEvents();
   const eventId = removed.eventId;
-  if (events.some((event) => event.id === eventId)) {
+  if (removed.kind === "student" && events.some((event) => event.id === eventId)) {
     const now = new Date().toISOString();
     saveEvents(
       events.map((event) =>

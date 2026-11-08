@@ -405,13 +405,15 @@ export async function createPrismaRegistration(
       await tx.registrationSeminar.createMany({ data: seminarRows });
     }
 
-    await tx.event.update({
-      where: { id: event.id },
-      data: {
-        registrationCount: { increment: 1 },
-        updatedAt: now,
-      },
-    });
+    if (input.kind === "student") {
+      await tx.event.update({
+        where: { id: event.id },
+        data: {
+          registrationCount: { increment: 1 },
+          updatedAt: now,
+        },
+      });
+    }
 
     if (input.kind === "student") {
       await finalizeRegistrationAttemptsWithClient(tx, {
@@ -634,7 +636,7 @@ export async function deletePrismaRegistration(
 ): Promise<{ success: true; id: string; eventId: string } | null> {
   const existing = await prisma.registration.findUnique({
     where: { id },
-    select: { id: true, eventId: true },
+    select: { id: true, eventId: true, kind: true },
   });
   if (!existing) return null;
 
@@ -646,7 +648,7 @@ export async function deletePrismaRegistration(
       where: { id: existing.eventId },
       select: { registrationCount: true },
     });
-    if (event) {
+    if (event && existing.kind === "student") {
       await tx.event.update({
         where: { id: existing.eventId },
         data: {

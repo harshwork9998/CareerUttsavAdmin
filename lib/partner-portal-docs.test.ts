@@ -29,6 +29,14 @@ function partner(
     portalSeminarSpeakers?: Partner["portalSeminarSpeakers"];
   } = {}
 ): Partner {
+  const eventPartnerships = overrides.eventPartnerships ?? [
+    {
+      eventId: "evt-001",
+      deliverables: [],
+      seminarSlotCount: 0,
+      representativeSlotCount: 0,
+    },
+  ];
   return {
     id: "p1",
     name: "Example University",
@@ -60,9 +68,19 @@ function partner(
     seminarSlotAssignments: [],
     portalSeminarSpeakers: [],
     portalDocuments: [],
+    eventPartnerships,
     ...overrides,
   };
 }
+
+const seminarPartnership = (
+  seminarSlotCount = 1
+): NonNullable<Partner["eventPartnerships"]>[number] => ({
+  eventId: "evt-001",
+  deliverables: [],
+  seminarSlotCount,
+  representativeSlotCount: 0,
+});
 
 function speakerItem(
   overrides: Partial<typeof completeSpeaker> = {},
@@ -80,7 +98,10 @@ describe("arePortalSpeakerDetailsComplete", () => {
   it("is incomplete when there are zero allotted seminar slots", () => {
     expect(
       arePortalSpeakerDetailsComplete(
-        partner({ seminarSlotAssignments: [], portalSeminarSpeakers: [] })
+        partner({
+          seminarSlotAssignments: [],
+          portalSeminarSpeakers: [],
+        })
       )
     ).toBe(false);
   });
@@ -89,6 +110,14 @@ describe("arePortalSpeakerDetailsComplete", () => {
     expect(
       arePortalSpeakerDetailsComplete(
         partner({
+          eventPartnerships: [
+            {
+              eventId: "evt-001",
+              deliverables: [],
+              seminarSlotCount: 1,
+              representativeSlotCount: 0,
+            },
+          ],
           seminarSlotAssignments: [assignment("evt-001", "sem-a")],
           portalSeminarSpeakers: [],
         })
@@ -100,6 +129,7 @@ describe("arePortalSpeakerDetailsComplete", () => {
     expect(
       arePortalSpeakerDetailsComplete(
         partner({
+          eventPartnerships: [seminarPartnership()],
           seminarSlotAssignments: [assignment("evt-001", "sem-a")],
           portalSeminarSpeakers: [
             speakerItem({
@@ -124,6 +154,7 @@ describe("arePortalSpeakerDetailsComplete", () => {
     expect(
       arePortalSpeakerDetailsComplete(
         partner({
+          eventPartnerships: [seminarPartnership()],
           seminarSlotAssignments: [assignment("evt-001", "sem-a")],
           portalSeminarSpeakers: [speakerItem(patch)],
         })
@@ -135,6 +166,7 @@ describe("arePortalSpeakerDetailsComplete", () => {
     expect(
       arePortalSpeakerDetailsComplete(
         partner({
+          eventPartnerships: [seminarPartnership()],
           seminarSlotAssignments: [assignment("evt-001", "sem-a")],
           portalSeminarSpeakers: [speakerItem()],
         })
@@ -146,6 +178,7 @@ describe("arePortalSpeakerDetailsComplete", () => {
     expect(
       arePortalSpeakerDetailsComplete(
         partner({
+          eventPartnerships: [seminarPartnership(2)],
           seminarSlotAssignments: [
             assignment("evt-001", "sem-a"),
             assignment("evt-001", "sem-b"),
@@ -160,6 +193,7 @@ describe("arePortalSpeakerDetailsComplete", () => {
     expect(
       arePortalSpeakerDetailsComplete(
         partner({
+          eventPartnerships: [seminarPartnership(2)],
           seminarSlotAssignments: [
             assignment("evt-001", "sem-a"),
             assignment("evt-001", "sem-b"),
@@ -178,6 +212,14 @@ describe("getPartnerPortalUploadStatus speaker_details segment", () => {
   it("maps speaker_details completion to arePortalSpeakerDetailsComplete", () => {
     const incomplete = getPartnerPortalUploadStatus(
       partner({
+        eventPartnerships: [
+          {
+            eventId: "evt-001",
+            deliverables: [],
+            seminarSlotCount: 1,
+            representativeSlotCount: 0,
+          },
+        ],
         seminarSlotAssignments: [assignment("evt-001", "sem-a")],
         portalSeminarSpeakers: [],
       })
@@ -192,6 +234,14 @@ describe("getPartnerPortalUploadStatus speaker_details segment", () => {
 
     const complete = getPartnerPortalUploadStatus(
       partner({
+        eventPartnerships: [
+          {
+            eventId: "evt-001",
+            deliverables: [],
+            seminarSlotCount: 1,
+            representativeSlotCount: 0,
+          },
+        ],
         seminarSlotAssignments: [assignment("evt-001", "sem-a")],
         portalSeminarSpeakers: [speakerItem()],
       })
@@ -201,30 +251,59 @@ describe("getPartnerPortalUploadStatus speaker_details segment", () => {
     ).toBe(true);
   });
 
-  it("does not change unrelated checklist ordering or keys", () => {
+  it("omits non-applicable rows and keeps the always-required trio", () => {
     const status = getPartnerPortalUploadStatus(partner());
+    expect(status.checklist.map((row) => row.key)).toEqual([
+      "logo",
+      "fascia_name",
+      "website_link",
+    ]);
+    expect(
+      status.checklist.find((row) => row.key === "fascia_name")?.complete
+    ).toBe(false);
+  });
+
+  it("includes conditional rows when the package entitles them", () => {
+    const status = getPartnerPortalUploadStatus(
+      partner({
+        eventPartnerships: [
+          {
+            eventId: "evt-001",
+            deliverables: [
+              {
+                id: "writeup",
+                key: "fullPageWriteup",
+                label: "Write-up",
+                included: true,
+              },
+              {
+                id: "ad",
+                key: "eventSouvenirAd",
+                label: "Souvenir ad",
+                included: true,
+              },
+            ],
+            seminarSlotCount: 0,
+            representativeSlotCount: 2,
+          },
+        ],
+      })
+    );
     expect(status.checklist.map((row) => row.key)).toEqual([
       "logo",
       "fascia_name",
       "website_link",
       "souvenir_writeup",
       "ad_creative",
-      "sms_content",
-      "speaker_details",
       "representatives",
     ]);
-    expect(status.checklist.findIndex((row) => row.key === "speaker_details")).toBe(
-      6
-    );
-    expect(
-      status.checklist.find((row) => row.key === "fascia_name")?.complete
-    ).toBe(false);
   });
 
   it("does not mark speaker details complete from communication history alone", () => {
     expect(
       arePortalSpeakerDetailsComplete(
         partner({
+          eventPartnerships: [seminarPartnership()],
           seminarSlotAssignments: [assignment("evt-001", "sem-a")],
           portalSeminarSpeakers: [],
         })

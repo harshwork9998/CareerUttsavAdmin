@@ -5,12 +5,13 @@ import type {
   PartnerSeminarSlotAssignment,
 } from "@/types";
 
-import { isValidIndianMobile } from "@/lib/indian-mobile";
-import { isPartnerSpeakerComplete } from "@/lib/partner-pending-state";
-
-function isValidRepPhone(phone: string): boolean {
-  return isValidIndianMobile(phone);
-}
+import { resolveEventPartnerships } from "@/lib/partner-event-config";
+import {
+  isPartnerSpeakerComplete,
+  partnerPortalSubmissionEntitlements,
+  type PortalSubmissionKey as EntitlementSubmissionKey,
+} from "@/lib/portal-entitlements";
+import type { PanelSessionView } from "@/lib/partner-pending-state";
 
 /** View Docs lists people who were actually submitted, never blank slots. */
 export function representativesShownInViewDocs<
@@ -23,20 +24,21 @@ export function representativesShownInViewDocs<
   );
 }
 
-function isRepresentativesRowComplete(
-  row: PartnerRepresentativesSubmission
-): boolean {
-  if (row.count < 1) return true;
-  const visible = row.representatives.slice(0, row.count);
-  return (
-    visible.length === row.count &&
-    visible.every(
-      (r) =>
-        r.name.trim().length > 0 &&
-        Boolean(r.designation?.trim()) &&
-        isValidRepPhone(r.phone)
-    )
-  );
+function sessionsFromAssignments(
+  partner: Pick<Partner, "seminarSlotAssignments">
+): PanelSessionView[] {
+  return (partner.seminarSlotAssignments ?? [])
+    .filter((assignment) => assignment.slots > 0)
+    .map((assignment) => ({
+      eventId: assignment.eventId,
+      seminarId: assignment.seminarId,
+      topic:
+        assignment.seminarTitle?.trim() ||
+        assignment.seminarId,
+      dateLabel: null,
+      timeLabel: null,
+      hallLabel: null,
+    }));
 }
 
 /**
@@ -195,26 +197,125 @@ function findDoc(
   return docs.find((d) => d.kind === kind || (kind === "souvenir_writeup" && d.kind === "writeup"));
 }
 
-function allottedSeminars(
-  assignments: PartnerSeminarSlotAssignment[] | undefined
-) {
-  return (assignments ?? []).filter((a) => a.slots > 0);
+export function arePortalSpeakerDetailsComplete(
+  partner: Pick<
+    Partner,
+    | "portalSeminarSpeakers"
+    | "seminarSlotAssignments"
+    | "eventPartnerships"
+    | "eventIds"
+    | "deliverables"
+    | "sponsorshipTier"
+  >
+): boolean {
+  const entitlements = partnerPortalSubmissionEntitlements({
+    partnerships: resolveEventPartnerships(partner as Partner).map((row) => ({
+      eventId: row.eventId,
+      deliverables: row.deliverables ?? [],
+      representativeSlotCount: row.representativeSlotCount,
+      seminarSlotCount: row.seminarSlotCount,
+    })),
+    seminarSlotAssignments: partner.seminarSlotAssignments,
+    sessions: sessionsFromAssignments(partner),
+    speakers: partner.portalSeminarSpeakers,
+    representatives: [],
+  });
+  if (!entitlements.speaker_details.applicable) return false;
+  return entitlements.speaker_details.complete;
 }
 
-export function arePortalSpeakerDetailsComplete(
-  partner: Pick<Partner, "portalSeminarSpeakers" | "seminarSlotAssignments">
-): boolean {
-  const seminars = allottedSeminars(partner.seminarSlotAssignments);
-  if (seminars.length === 0) return false;
+function checklistItemForKey(
+  key: EntitlementSubmissionKey,
+  partner: Pick<
+    Partner,
+    | "portalDocuments"
+    | "portalFasciaName"
+    | "portalWebsiteUrl"
+    | "portalSmsContent"
+  >,
+  entitlements: ReturnType<typeof partnerPortalSubmissionEntitlements>
+): PortalSubmissionChecklistItem | null {
+  const entitlement = entitlements[key];
+  if (!entitlement.applicable) return null;
 
-  return seminars.every((slot) =>
-    (partner.portalSeminarSpeakers ?? []).some(
-      (row) =>
-        row.eventId === slot.eventId &&
-        row.seminarId === slot.seminarId &&
-        row.speakers.some((speaker) => isPartnerSpeakerComplete(speaker))
-    )
-  );
+  const docs = partner.portalDocuments ?? [];
+
+  if (key === "logo") {
+    const logoDoc = findDoc(docs, "logo");
+    return {
+      key: "logo",
+      label: "University Logo",
+      complete: entitlement.complete,
+      uploaded: entitlement.complete,
+      kind: "logo",
+      file: logoDoc,
+    };
+  }
+  if (key === "fascia_name") {
+    return {
+      key: "fascia_name",
+      label: "Fascia Name (Name on the Stall Board)",
+      complete: entitlement.complete,
+      uploaded: entitlement.complete,
+      kind: "text",
+    };
+  }
+  if (key === "website_link") {
+    return {
+      key: "website_link",
+      label: "University Website link",
+      complete: entitlement.complete,
+      uploaded: entitlement.complete,
+      kind: "url",
+    };
+  }
+  if (key === "souvenir_writeup") {
+    const writeupDoc = findDoc(docs, "souvenir_writeup");
+    return {
+      key: "souvenir_writeup",
+      label: "Full page write up in event souvenir",
+      complete: entitlement.complete,
+      uploaded: entitlement.complete,
+      kind: "file",
+      file: writeupDoc,
+    };
+  }
+  if (key === "ad_creative") {
+    const adDoc = findDoc(docs, "ad_creative");
+    return {
+      key: "ad_creative",
+      label: "Advertisement creative",
+      complete: entitlement.complete,
+      uploaded: entitlement.complete,
+      kind: "file",
+      file: adDoc,
+    };
+  }
+  if (key === "sms_content") {
+    return {
+      key: "sms_content",
+      label: "SMS content (for mailer campaigns to all participants)",
+      complete: entitlement.complete,
+      uploaded: entitlement.complete,
+      kind: "textarea",
+    };
+  }
+  if (key === "speaker_details") {
+    return {
+      key: "speaker_details",
+      label: "Speaker details for each panel discussion",
+      complete: entitlement.complete,
+      uploaded: entitlement.complete,
+      kind: "speakers",
+    };
+  }
+  return {
+    key: "representatives",
+    label: "Event Representatives",
+    complete: entitlement.complete,
+    uploaded: entitlement.complete,
+    kind: "representatives",
+  };
 }
 
 export function getPartnerPortalUploadStatus(
@@ -229,14 +330,45 @@ export function getPartnerPortalUploadStatus(
     | "portalRepresentatives"
     | "seminarSlotAssignments"
     | "eventIds"
+    | "eventPartnerships"
+    | "deliverables"
+    | "sponsorshipTier"
   >
 ): PartnerPortalUploadStatus {
   const docs = partner.portalDocuments ?? [];
-  const logoDoc = findDoc(docs, "logo");
-  const writeupDoc = findDoc(docs, "souvenir_writeup");
-  const adDoc = findDoc(docs, "ad_creative");
+  const partnerships = resolveEventPartnerships(partner as Partner);
+  const sessions = sessionsFromAssignments(partner);
+  const entitlements = partnerPortalSubmissionEntitlements({
+    partnerships: partnerships.map((row) => ({
+      eventId: row.eventId,
+      deliverables: row.deliverables ?? [],
+      representativeSlotCount: row.representativeSlotCount,
+      seminarSlotCount: row.seminarSlotCount,
+    })),
+    seminarSlotAssignments: partner.seminarSlotAssignments,
+    sessions,
+    portalFasciaName: partner.portalFasciaName,
+    portalWebsiteUrl: partner.portalWebsiteUrl,
+    portalSmsContent: partner.portalSmsContent,
+    documents: docs,
+    speakers: partner.portalSeminarSpeakers,
+    representatives: partner.portalRepresentatives,
+  });
 
-  const speakersComplete = arePortalSpeakerDetailsComplete(partner);
+  const checklist = (
+    [
+      "logo",
+      "fascia_name",
+      "website_link",
+      "souvenir_writeup",
+      "ad_creative",
+      "sms_content",
+      "speaker_details",
+      "representatives",
+    ] as EntitlementSubmissionKey[]
+  )
+    .map((key) => checklistItemForKey(key, partner, entitlements))
+    .filter((item): item is PortalSubmissionChecklistItem => item !== null);
 
   const eventIds =
     partner.eventIds?.length > 0
@@ -250,77 +382,6 @@ export function getPartnerPortalUploadStatus(
     partner.portalRepresentatives,
     eventIds
   );
-  const requiredEventIds =
-    eventIds.length > 0 ? eventIds : repRows.map((r) => r.eventId);
-  const representativesComplete =
-    requiredEventIds.length > 0
-      ? requiredEventIds.every((eventId) => {
-          const row = repRows.find((r) => r.eventId === eventId);
-          return row ? isRepresentativesRowComplete(row) : false;
-        })
-      : repRows.some(isRepresentativesRowComplete);
-
-  const checklist: PortalSubmissionChecklistItem[] = [
-    {
-      key: "logo",
-      label: "University Logo",
-      complete: Boolean(logoDoc),
-      uploaded: Boolean(logoDoc),
-      kind: "logo",
-      file: logoDoc,
-    },
-    {
-      key: "fascia_name",
-      label: "Fascia Name (Name on the Stall Board)",
-      complete: Boolean(partner.portalFasciaName?.trim()),
-      uploaded: Boolean(partner.portalFasciaName?.trim()),
-      kind: "text",
-    },
-    {
-      key: "website_link",
-      label: "University Website link",
-      complete: Boolean(partner.portalWebsiteUrl?.trim()),
-      uploaded: Boolean(partner.portalWebsiteUrl?.trim()),
-      kind: "url",
-    },
-    {
-      key: "souvenir_writeup",
-      label: "Full page write up in event souvenir",
-      complete: Boolean(writeupDoc),
-      uploaded: Boolean(writeupDoc),
-      kind: "file",
-      file: writeupDoc,
-    },
-    {
-      key: "ad_creative",
-      label: "Advertisement creative",
-      complete: Boolean(adDoc),
-      uploaded: Boolean(adDoc),
-      kind: "file",
-      file: adDoc,
-    },
-    {
-      key: "sms_content",
-      label: "SMS content (for mailer campaigns to all participants)",
-      complete: Boolean(partner.portalSmsContent?.trim()),
-      uploaded: Boolean(partner.portalSmsContent?.trim()),
-      kind: "textarea",
-    },
-    {
-      key: "speaker_details",
-      label: "Speaker details for each panel discussion",
-      complete: speakersComplete,
-      uploaded: speakersComplete,
-      kind: "speakers",
-    },
-    {
-      key: "representatives",
-      label: "Event Representatives",
-      complete: representativesComplete,
-      uploaded: representativesComplete,
-      kind: "representatives",
-    },
-  ];
 
   const missing = checklist.filter((c) => !c.complete);
 

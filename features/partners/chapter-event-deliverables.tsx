@@ -666,8 +666,8 @@ export function ChapterEventDeliverables({
                     </p>
                     <p className="mt-0.5 text-xs" style={{ color: INK.muted }}>
                       {isCustomPartnership(ep)
-                        ? "Include panel seats in this custom package if applicable — the next step must fill this exact count."
-                        : "Total seats for this event — the next step must fill this exact count."}
+                        ? "Include panel seats when this package includes a seminar or panel. Use 0 when not applicable."
+                        : "Panel discussion seat allocation for this event. Use 0 when the partner has no seminar or panel slot."}
                     </p>
                   </div>
                 </div>

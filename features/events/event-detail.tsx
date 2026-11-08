@@ -57,14 +57,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Event, EventSeminar, OperatingCity, Registration } from "@/types";
 
-/**
- * Live check-in count: primary source is status. Legacy imports may have
- * checkInTime while status stayed Confirmed — still counted for display only.
- */
-function isCheckedIn(registration: Registration): boolean {
-  if (registration.status === "Checked In") return true;
-  return Boolean(registration.checkInTime);
-}
+import {
+  studentCheckInCount,
+  studentRegistrationsForEvent,
+} from "@/lib/registration-dashboard-metrics";
 
 function formatSeminarTime(time: string | null | undefined): string {
   return seminarTimeLabel(time);
@@ -144,8 +140,9 @@ export function EventDetail({ eventId }: EventDetailProps) {
   const partners = partnersQuery.data ?? [];
   const registrations = registrationsQuery.data ?? [];
 
-  const liveRegistrationCount = registrations.length;
-  const liveCheckInCount = registrations.filter(isCheckedIn).length;
+  const studentRegistrations = studentRegistrationsForEvent(registrations);
+  const liveRegistrationCount = studentRegistrations.length;
+  const liveCheckInCount = studentCheckInCount(registrations);
   const livePartnerCount = partners.length;
 
   const seminarDays = useMemo(() => {

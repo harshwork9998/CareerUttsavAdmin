@@ -23,7 +23,7 @@ const PENDING_LABEL_BY_KEY: Record<string, string> = {
   website_link: "University website link",
   fascia_name: "Fascia name",
   souvenir_writeup: "Full page write-up in the event souvenir",
-  ad_creative: "Careers After +2 advertisement",
+  ad_creative: "Advertisement creative",
   sms_content: "SMS content",
 };
 

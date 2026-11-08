@@ -329,10 +329,14 @@ describe("partner communication delivery", () => {
     ]);
     expect(options[0]?.pendingItems?.map((item) => item.label)).toEqual([
       "University logo",
+      "Fascia name",
+      "University website link",
       "Speaker details — Design careers",
     ]);
 
     const complete = partner({
+      portalFasciaName: "Example Institute",
+      portalWebsiteUrl: "https://example.edu",
       portalDocuments: [
         {
           id: "logo-1",
@@ -540,6 +544,8 @@ describe("partner communication delivery", () => {
     const send = mailer(accepted("ready-1"));
     const before = partner();
     const after = partner({
+      portalFasciaName: "Example Institute",
+      portalWebsiteUrl: "https://example.edu",
       portalDocuments: [
         {
           id: "logo-1",
@@ -606,6 +612,8 @@ function seminarPartner(input: {
     portalSeminarSpeakers: input.speakers,
     ...(input.withLogo
       ? {
+          portalFasciaName: "Example Institute",
+          portalWebsiteUrl: "https://example.edu",
           portalDocuments: [
             {
               id: "logo-1",

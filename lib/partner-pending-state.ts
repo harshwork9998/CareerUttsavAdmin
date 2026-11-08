@@ -1,13 +1,15 @@
-import { isValidIndianMobile } from "@/lib/indian-mobile";
 import { seminarTopicWorkflowForEvent } from "@/lib/seminar-topic-completion";
+import {
+  isPartnerSpeakerComplete,
+  isValidRepresentative,
+  partnershipSubmissionEntitlements,
+  representativesCompleteForEvent,
+  seminarPanelApplicable,
+  type PartnershipEntitlementInput,
+} from "@/lib/portal-entitlements";
 import type {
   Partner,
-  PartnerDeliverable,
   PartnerEventPartnership,
-  PartnerPortalDocument,
-  PartnerRepresentativesSubmission,
-  PartnerSeminarSpeakerDetail,
-  PartnerSeminarSpeakerSubmission,
   PartnerSeminarSlotAssignment,
 } from "@/types";
 
@@ -38,71 +40,11 @@ export type PanelSessionView = {
   hallLabel: string | null;
 };
 
-export type PendingPartnershipInput = {
-  eventId: string;
+export type PendingPartnershipInput = PartnershipEntitlementInput & {
   eventTitle?: string;
-  deliverables: PartnerDeliverable[];
-  representativeSlotCount: number;
-  seminarSlotCount?: number | null;
-  assignments?: readonly Pick<
-    PartnerSeminarSlotAssignment,
-    "eventId" | "seminarId" | "slots" | "confirmedAt"
-  >[] | null;
-  sessions: PanelSessionView[];
-  portalFasciaName?: string | null;
-  portalWebsiteUrl?: string | null;
-  portalSmsContent?: string | null;
-  documents?: Array<Pick<PartnerPortalDocument, "kind">> | null;
-  speakers?: PartnerSeminarSpeakerSubmission[] | null;
-  representatives?: PartnerRepresentativesSubmission[] | null;
 };
 
-const PLUS2_AD_KEY = "bookAdCareersAfterPlus2";
-
-function included(
-  deliverables: PartnerDeliverable[],
-  key: string
-): PartnerDeliverable | undefined {
-  return deliverables.find(
-    (item) => item.included && !item.isCustom && item.key === key
-  );
-}
-
-function hasDoc(
-  documents: PendingPartnershipInput["documents"],
-  kind: PartnerPortalDocument["kind"]
-): boolean {
-  return (documents ?? []).some(
-    (doc) =>
-      doc.kind === kind || (kind === "souvenir_writeup" && doc.kind === "writeup")
-  );
-}
-
-export function isPartnerSpeakerComplete(
-  speaker: Partial<PartnerSeminarSpeakerDetail> | null | undefined
-): boolean {
-  if (!speaker) return false;
-  const contact = speaker.contact ?? speaker.phone ?? "";
-  return Boolean(
-    speaker.name?.trim() &&
-      speaker.designation?.trim() &&
-      speaker.introduction?.trim() &&
-      speaker.photoUrl?.trim() &&
-      isValidIndianMobile(contact)
-  );
-}
-
-export function isValidRepresentative(person: {
-  name?: string;
-  designation?: string;
-  phone?: string;
-}): boolean {
-  return Boolean(
-    person.name?.trim() &&
-      person.designation?.trim() &&
-      isValidIndianMobile(person.phone ?? "")
-  );
-}
+export { isPartnerSpeakerComplete, isValidRepresentative };
 
 function sessionComplete(
   input: PendingPartnershipInput,
@@ -116,37 +58,22 @@ function sessionComplete(
   );
 }
 
-function plus2AdApplicable(deliverables: PartnerDeliverable[]): boolean {
-  const ad = included(deliverables, PLUS2_AD_KEY);
-  if (!ad) return false;
-  const option = ad.option?.trim().toLowerCase() ?? "";
-  if (!option) return true;
-  return option === "full page" || option === "half page";
-}
-
-function representativePending(input: PendingPartnershipInput): boolean {
-  if (input.representativeSlotCount <= 0) return false;
-  const row = (input.representatives ?? []).find(
-    (item) => item.eventId === input.eventId
-  );
-  const valid = (row?.representatives ?? []).filter((person) =>
-    isValidRepresentative(person)
-  );
-  return valid.length === 0;
-}
-
 export function pendingItemsForPartnership(
   input: PendingPartnershipInput
 ): PendingItem[] {
   const items: PendingItem[] = [];
-  const deliverables = input.deliverables ?? [];
+  const entitlements = partnershipSubmissionEntitlements(input);
   const eventSuffix = input.eventTitle ? ` (${input.eventTitle})` : "";
 
-  if (
-    (included(deliverables, "stallSize") ||
-      included(deliverables, "commonBranding")) &&
-    !input.portalFasciaName?.trim()
-  ) {
+  if (entitlements.logo.applicable && !entitlements.logo.complete) {
+    items.push({
+      key: "logo",
+      label: "University logo",
+      section: "branding",
+    });
+  }
+
+  if (entitlements.fascia_name.applicable && !entitlements.fascia_name.complete) {
     items.push({
       key: "fascia_name",
       label: "Fascia name",
@@ -154,7 +81,7 @@ export function pendingItemsForPartnership(
     });
   }
 
-  if (included(deliverables, "weblink") && !input.portalWebsiteUrl?.trim()) {
+  if (entitlements.website_link.applicable && !entitlements.website_link.complete) {
     items.push({
       key: "website_link",
       label: "University website link",
@@ -163,21 +90,8 @@ export function pendingItemsForPartnership(
   }
 
   if (
-    (included(deliverables, "logoB2C") ||
-      included(deliverables, "commonBranding") ||
-      included(deliverables, "stallLogoPositioning")) &&
-    !hasDoc(input.documents, "logo")
-  ) {
-    items.push({
-      key: "logo",
-      label: "University logo",
-      section: "branding",
-    });
-  }
-
-  if (
-    included(deliverables, "fullPageWriteup") &&
-    !hasDoc(input.documents, "souvenir_writeup")
+    entitlements.souvenir_writeup.applicable &&
+    !entitlements.souvenir_writeup.complete
   ) {
     items.push({
       key: "souvenir_writeup",
@@ -186,18 +100,15 @@ export function pendingItemsForPartnership(
     });
   }
 
-  if (plus2AdApplicable(deliverables) && !hasDoc(input.documents, "ad_creative")) {
+  if (entitlements.ad_creative.applicable && !entitlements.ad_creative.complete) {
     items.push({
       key: "ad_creative",
-      label: "Careers After +2 advertisement",
+      label: "Advertisement creative",
       section: "branding",
     });
   }
 
-  if (
-    included(deliverables, "smsMailerCampaign") &&
-    !input.portalSmsContent?.trim()
-  ) {
+  if (entitlements.sms_content.applicable && !entitlements.sms_content.complete) {
     items.push({
       key: "sms_content",
       label: "SMS content",
@@ -224,16 +135,21 @@ export function pendingItemsForPartnership(
     });
   }
 
-  for (const session of input.sessions) {
-    if (sessionComplete(input, session)) continue;
-    items.push({
-      key: `speaker:${session.eventId}:${session.seminarId}`,
-      label: `Speaker details — ${session.topic}`,
-      section: "speakers",
-    });
+  if (entitlements.speaker_details.applicable) {
+    for (const session of input.sessions) {
+      if (sessionComplete(input, session)) continue;
+      items.push({
+        key: `speaker:${session.eventId}:${session.seminarId}`,
+        label: `Speaker details — ${session.topic}`,
+        section: "speakers",
+      });
+    }
   }
 
-  if (representativePending(input)) {
+  if (
+    entitlements.representatives.applicable &&
+    !representativesCompleteForEvent(input)
+  ) {
     items.push({
       key: `representatives:${input.eventId}`,
       label: `Event representatives${eventSuffix}`,
@@ -246,52 +162,62 @@ export function pendingItemsForPartnership(
 
 function groupStatus(
   applicable: boolean,
-  completeStatus: ReadinessStatus
+  complete: boolean,
+  confirmedStatus?: ReadinessStatus
 ): ReadinessStatus {
-  return applicable ? completeStatus : "Not Applicable";
+  if (!applicable) return "Not Applicable";
+  if (confirmedStatus) return confirmedStatus;
+  return complete ? "Complete" : "Pending";
 }
 
 export function readinessLinesForPartnership(
   input: PendingPartnershipInput
 ): ReadinessLine[] {
-  const deliverables = input.deliverables ?? [];
-  const institutionApplicable = Boolean(
-    included(deliverables, "stallSize") ||
-      included(deliverables, "commonBranding") ||
-      included(deliverables, "weblink")
-  );
-  const brandingApplicable = Boolean(
-    included(deliverables, "logoB2C") ||
-      included(deliverables, "commonBranding") ||
-      included(deliverables, "stallLogoPositioning") ||
-      included(deliverables, "fullPageWriteup") ||
-      plus2AdApplicable(deliverables)
-  );
-  const otherApplicable = Boolean(included(deliverables, "smsMailerCampaign"));
+  const entitlements = partnershipSubmissionEntitlements(input);
+
+  const institutionComplete =
+    entitlements.fascia_name.complete && entitlements.website_link.complete;
+
+  const brandingApplicable =
+    entitlements.logo.applicable ||
+    entitlements.souvenir_writeup.applicable ||
+    entitlements.ad_creative.applicable;
+  const brandingComplete =
+    (!entitlements.logo.applicable || entitlements.logo.complete) &&
+    (!entitlements.souvenir_writeup.applicable ||
+      entitlements.souvenir_writeup.complete) &&
+    (!entitlements.ad_creative.applicable || entitlements.ad_creative.complete);
+
   const topics = seminarTopicWorkflowForEvent({
     eventId: input.eventId,
     seminarSlotCount: input.seminarSlotCount,
     assignments: input.assignments,
   });
+  const panelApplicable = seminarPanelApplicable({
+    eventId: input.eventId,
+    seminarSlotCount: input.seminarSlotCount,
+    assignments: input.assignments,
+  });
   const panelStatus: ReadinessStatus =
-    topics.status === "not_applicable"
+    !panelApplicable
       ? "Not Applicable"
       : topics.status === "selecting"
         ? "Pending"
         : topics.status === "confirming"
           ? "Pending Confirmation"
           : "Confirmed";
-  const speakersApplicable = input.sessions.length > 0;
-  const representativesApplicable = input.representativeSlotCount > 0;
+
+  const speakersApplicable = entitlements.speaker_details.applicable;
+  const speakersComplete = entitlements.speaker_details.complete;
 
   return [
     {
       label: "Institution information",
-      status: groupStatus(institutionApplicable, "Complete"),
+      status: groupStatus(true, institutionComplete),
     },
     {
       label: "Branding & collaterals",
-      status: groupStatus(brandingApplicable, "Complete"),
+      status: groupStatus(brandingApplicable, brandingComplete),
     },
     {
       label: "Panel Discussion",
@@ -299,15 +225,21 @@ export function readinessLinesForPartnership(
     },
     {
       label: "Speaker details",
-      status: groupStatus(speakersApplicable, "Complete"),
+      status: groupStatus(speakersApplicable, speakersComplete),
     },
     {
       label: "Event representatives",
-      status: groupStatus(representativesApplicable, "Complete"),
+      status: groupStatus(
+        entitlements.representatives.applicable,
+        entitlements.representatives.complete
+      ),
     },
     {
       label: "Other applicable deliverables",
-      status: groupStatus(otherApplicable, "Complete"),
+      status: groupStatus(
+        entitlements.sms_content.applicable,
+        entitlements.sms_content.complete
+      ),
     },
   ];
 }
@@ -359,6 +291,8 @@ export function partnershipInputsForPartner(
     eventId: partnership.eventId,
     deliverables: partnership.deliverables ?? [],
     representativeSlotCount: partnership.representativeSlotCount ?? 0,
+    seminarSlotCount: partnership.seminarSlotCount,
+    assignments: partner.seminarSlotAssignments,
     sessions: sessions.filter(
       (session) => session.eventId === partnership.eventId
     ),

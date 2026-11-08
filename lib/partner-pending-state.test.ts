@@ -41,7 +41,7 @@ const completeSpeaker = {
 };
 
 describe("partner pending state", () => {
-  it("excludes items that are not included in the partnership", () => {
+  it("always requires the base trio regardless of package deliverables", () => {
     const pending = pendingItemsForPartnership(
       input({
         deliverables: [
@@ -56,7 +56,9 @@ describe("partner pending state", () => {
         portalSmsContent: "",
       })
     );
-    expect(pending.map((item) => item.key)).toEqual([]);
+    expect(pending.map((item) => item.key).sort()).toEqual(
+      ["fascia_name", "logo", "website_link"].sort()
+    );
   });
 
   it("does not treat an optional LinkedIn profile as a pending speaker field", () => {
@@ -102,6 +104,9 @@ describe("partner pending state", () => {
   it("marks speaker details pending when a Panel Discussion is allocated and incomplete", () => {
     const pending = pendingItemsForPartnership(
       input({
+        portalFasciaName: "Example U",
+        portalWebsiteUrl: "https://example.edu",
+        documents: [{ kind: "logo" }],
         sessions: [
           {
             eventId: "evt-001",
@@ -125,6 +130,22 @@ describe("partner pending state", () => {
     expect(pending.map((item) => item.label)).toEqual([
       "Speaker details — Design careers",
     ]);
+  });
+
+  it("requires advertisement creative when any advertisement deliverable is included", () => {
+    const souvenir = pendingItemsForPartnership(
+      input({
+        deliverables: [deliverable("eventSouvenirAd", true)],
+      })
+    );
+    expect(souvenir.map((item) => item.key)).toContain("ad_creative");
+
+    const premium = pendingItemsForPartnership(
+      input({
+        deliverables: [deliverable("bookAdPremiumSpot", true, "back cover")],
+      })
+    );
+    expect(premium.map((item) => item.key)).toContain("ad_creative");
   });
 
   it("requires Careers After +2 artwork only when a full or half page is included", () => {
@@ -151,10 +172,10 @@ describe("partner pending state", () => {
     expect(notApplicable.map((item) => item.key)).not.toContain("ad_creative");
   });
 
-  it("treats one valid representative as complete and zero representatives as pending", () => {
+  it("requires the full representative allocation before clearing the pending item", () => {
     const none = pendingItemsForPartnership(
       input({
-        representativeSlotCount: 5,
+        representativeSlotCount: 2,
         representatives: [
           {
             eventId: "evt-001",
@@ -167,9 +188,9 @@ describe("partner pending state", () => {
     );
     expect(none.map((item) => item.key)).toContain("representatives:evt-001");
 
-    const one = pendingItemsForPartnership(
+    const partial = pendingItemsForPartnership(
       input({
-        representativeSlotCount: 5,
+        representativeSlotCount: 2,
         representatives: [
           {
             eventId: "evt-001",
@@ -182,7 +203,27 @@ describe("partner pending state", () => {
         ],
       })
     );
-    expect(one.map((item) => item.key)).not.toContain("representatives:evt-001");
+    expect(partial.map((item) => item.key)).toContain("representatives:evt-001");
+
+    const complete = pendingItemsForPartnership(
+      input({
+        representativeSlotCount: 2,
+        representatives: [
+          {
+            eventId: "evt-001",
+            count: 2,
+            representatives: [
+              { name: "Ravi", designation: "Lead", phone: "9876543211" },
+              { name: "Asha", designation: "Dean", phone: "9876543210" },
+            ],
+            updatedAt: "2026-11-03T00:00:00.000Z",
+          },
+        ],
+      })
+    );
+    expect(complete.map((item) => item.key)).not.toContain(
+      "representatives:evt-001"
+    );
   });
 
   it("marks SMS content pending only when that deliverable applies and is empty", () => {
@@ -206,21 +247,29 @@ describe("partner pending state", () => {
       input({
         deliverables: [deliverable("custom", true, undefined, true)],
         portalSmsContent: "",
+        portalFasciaName: "Example U",
+        portalWebsiteUrl: "https://example.edu",
+        documents: [{ kind: "logo" }],
       })
     );
     expect(skipped).toEqual([]);
   });
 
-  it("drops a submission from the pending list once it is complete", () => {
-    const base = {
-      deliverables: [deliverable("logoB2C", true), deliverable("weblink", true)],
-      portalWebsiteUrl: "",
-    };
-    const missing = pendingItemsForPartnership(input(base));
-    expect(missing.map((item) => item.key)).toEqual(["website_link", "logo"]);
+  it("drops the always-required items from the pending list once they are complete", () => {
+    const missing = pendingItemsForPartnership(
+      input({
+        deliverables: [],
+        portalFasciaName: "",
+        portalWebsiteUrl: "",
+      })
+    );
+    expect(missing.map((item) => item.key).sort()).toEqual(
+      ["fascia_name", "logo", "website_link"].sort()
+    );
     const saved = pendingItemsForPartnership(
       input({
-        ...base,
+        deliverables: [],
+        portalFasciaName: "Example U",
         portalWebsiteUrl: "https://example.edu",
         documents: [{ kind: "logo" }],
       })
@@ -228,6 +277,12 @@ describe("partner pending state", () => {
     expect(saved).toEqual([]);
   });
 });
+
+const completeProfile = {
+  portalFasciaName: "Example U",
+  portalWebsiteUrl: "https://example.edu",
+  documents: [{ kind: "logo" as const }],
+};
 
 function seminarInput(input: {
   allocated: number;
@@ -242,9 +297,9 @@ function seminarInput(input: {
     seminarSlotCount: input.allocated,
     assignments: input.assignments ?? [],
     sessions: input.sessions ?? [],
-    documents: [],
     speakers: input.speakers ?? [],
     representatives: [],
+    ...completeProfile,
   };
 }
 
