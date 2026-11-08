@@ -111,13 +111,20 @@ export async function commitPartnerAdCreativeUpload(input: {
     return { ok: false, error: validationError, status: 400 };
   }
 
-  const objectInfo = await verifyPortalStorageObject(
+  const verified = await verifyPortalStorageObject(
     input.storageBucket,
     input.storagePath
   );
-  if (!objectInfo) {
-    return { ok: false, error: "Uploaded file could not be verified. Please try again.", status: 400 };
+  if (!verified.ok) {
+    const status =
+      verified.reason === "missing" ? 400 : verified.reason === "unconfigured" ? 503 : 502;
+    return {
+      ok: false,
+      error: "Uploaded file could not be verified. Please try again.",
+      status,
+    };
   }
+  const objectInfo = verified.info;
 
   const prior = findSubmittedPortalDocument(input.partner.portalDocuments, "ad_creative");
 

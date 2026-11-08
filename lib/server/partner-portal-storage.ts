@@ -15,6 +15,15 @@ export type PortalStorageObjectInfo = {
   metadata?: Record<string, string>;
 };
 
+export type PortalStorageVerificationReason =
+  | "missing"
+  | "unconfigured"
+  | "verification_error";
+
+export type PortalStorageVerificationResult =
+  | { ok: true; info: PortalStorageObjectInfo }
+  | { ok: false; reason: PortalStorageVerificationReason };
+
 export type SignedUploadIntent = {
   bucket: string;
   path: string;
@@ -118,49 +127,68 @@ export async function createSignedUploadIntent(path: string): Promise<
   };
 }
 
+type StorageBucketClient = {
+  info?: (objectPath: string) => Promise<{
+    data: StorageInfoPayload | null;
+    error: { message?: string } | null;
+  }>;
+  list: (
+    prefix?: string,
+    options?: { search?: string; limit?: number }
+  ) => Promise<{
+    data: Array<{
+      name: string;
+      metadata?: { size?: number; mimetype?: string; contentType?: string };
+    }> | null;
+    error: { message?: string } | null;
+  }>;
+};
+
+type StorageInfoPayload = {
+  size?: number;
+  mimetype?: string;
+  contentType?: string;
+  content_type?: string;
+  metadata?: Record<string, string>;
+};
+
 export async function verifyPortalStorageObject(
   bucket: string,
   path: string
-): Promise<PortalStorageObjectInfo | null> {
+): Promise<PortalStorageVerificationResult> {
   const client = createPortalStorageAdminClient();
-  if (!client) return null;
-  const infoApi = (
-    client.storage.from(bucket) as {
-      info?: (objectPath: string) => Promise<{
-        data: { size?: number; mimetype?: string; metadata?: Record<string, string> } | null;
-        error: { message?: string } | null;
-      }>;
-    }
-  ).info;
-  if (typeof infoApi === "function") {
-    const { data, error } = await infoApi(path);
-    if (error || !data) {
-      console.error("[portal-storage] info", error?.message);
-      return null;
-    }
-    const size = Number(data.size) || 0;
-    if (size <= 0) return null;
-    return {
-      size,
-      mimeType: data.mimetype?.trim() || "application/octet-stream",
-      metadata: data.metadata,
-    };
-  }
+  if (!client) return { ok: false, reason: "unconfigured" };
 
-  const listed = await client.storage.from(bucket).list(path.split("/").slice(0, -1).join("/") || undefined, {
-    search: path.split("/").pop(),
-    limit: 1,
-  });
-  if (listed.error || !listed.data?.length) {
-    return null;
+  try {
+    // Keep the StorageFileApi instance. info() reads this._getFinalPath and
+    // must not be detached (storage-js 2.109.0).
+    const storage = client.storage.from(bucket) as StorageBucketClient;
+    if (typeof storage.info === "function") {
+      const { data, error } = await storage.info(path);
+      if (error || !data) {
+        logStorageVerify("info", bucket, path, error?.message ?? "missing object");
+        return { ok: false, reason: "missing" };
+      }
+      const info = objectInfoFromInfoPayload(data);
+      if (!info) {
+        logStorageVerify("info", bucket, path, "object metadata missing");
+        return { ok: false, reason: "missing" };
+      }
+      return { ok: true, info };
+    }
+
+    const listed = await listExactStorageObject(storage, bucket, path);
+    if (!listed.ok) return listed;
+    return { ok: true, info: listed.info };
+  } catch (error) {
+    logStorageVerify(
+      "verify",
+      bucket,
+      path,
+      error instanceof Error ? error.message : "verification failed"
+    );
+    return { ok: false, reason: "verification_error" };
   }
-  const item = listed.data[0];
-  const size = Number((item as { metadata?: { size?: number } }).metadata?.size) || 0;
-  if (size <= 0) return null;
-  const mimeType =
-    (item as { metadata?: { mimetype?: string } }).metadata?.mimetype?.trim() ||
-    "application/octet-stream";
-  return { size, mimeType };
 }
 
 export async function createPortalDocumentReadUrl(
@@ -189,6 +217,85 @@ export async function removePortalStorageObject(
   if (error) {
     console.error("[portal-storage] remove", { bucket, path, message: error.message });
   }
+}
+
+function objectInfoFromInfoPayload(data: StorageInfoPayload): PortalStorageObjectInfo | null {
+  const size = Number(data.size) || 0;
+  if (size <= 0) return null;
+  return {
+    size,
+    mimeType: readStorageMimeType(data),
+    metadata: data.metadata,
+  };
+}
+
+function objectInfoFromListItem(item: {
+  metadata?: { size?: number; mimetype?: string; contentType?: string };
+}): PortalStorageObjectInfo | null {
+  const size = Number(item.metadata?.size) || 0;
+  if (size <= 0) return null;
+  return {
+    size,
+    mimeType: readStorageMimeType(item.metadata ?? {}),
+  };
+}
+
+function readStorageMimeType(data: {
+  mimetype?: string;
+  contentType?: string;
+  content_type?: string;
+}): string {
+  return (
+    data.contentType?.trim() ||
+    data.mimetype?.trim() ||
+    data.content_type?.trim() ||
+    "application/octet-stream"
+  );
+}
+
+function splitStorageObjectPath(path: string): { folder?: string; fileName: string } | null {
+  const segments = path.replace(/\\/g, "/").split("/").filter(Boolean);
+  const fileName = segments.pop();
+  if (!fileName) return null;
+  const folder = segments.join("/") || undefined;
+  return { folder, fileName };
+}
+
+async function listExactStorageObject(
+  storage: StorageBucketClient,
+  bucket: string,
+  path: string
+): Promise<PortalStorageVerificationResult> {
+  const parsed = splitStorageObjectPath(path);
+  if (!parsed) return { ok: false, reason: "missing" };
+  const listed = await storage.list(parsed.folder, {
+    search: parsed.fileName,
+    limit: 20,
+  });
+  if (listed.error) {
+    logStorageVerify("list", bucket, path, listed.error.message ?? "list failed");
+    return { ok: false, reason: "verification_error" };
+  }
+  const item = listed.data?.find((entry) => entry.name === parsed.fileName);
+  if (!item) return { ok: false, reason: "missing" };
+  const info = objectInfoFromListItem(item);
+  if (!info) return { ok: false, reason: "missing" };
+  return { ok: true, info };
+}
+
+function logStorageVerify(
+  operation: string,
+  bucket: string,
+  path: string,
+  message: string
+): void {
+  const url = readSupabaseUrl();
+  console.error("[portal-storage] " + operation, {
+    bucket: bucket || undefined,
+    path,
+    projectRef: url ? deriveSupabaseProjectRef(url) : null,
+    message: safeStorageLog(message),
+  });
 }
 
 function safeStorageLog(message: string): string {

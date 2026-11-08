@@ -188,8 +188,11 @@ describe("partner portal ad creative storage", () => {
 
   it("commit verifies object existence and persists storage metadata", async () => {
     vi.spyOn(storage, "verifyPortalStorageObject").mockResolvedValue({
-      size: 4096,
-      mimeType: "image/png",
+      ok: true,
+      info: {
+        size: 4096,
+        mimeType: "image/png",
+      },
     });
     vi.spyOn(submissionWrite, "writePartnerPortalSubmission").mockResolvedValue({
       ok: true,
@@ -228,6 +231,51 @@ describe("partner portal ad creative storage", () => {
     });
     expect(result.ok).toBe(true);
     expect(removeSpy).not.toHaveBeenCalled();
+  });
+
+  it("does not persist when the uploaded object is missing", async () => {
+    vi.spyOn(storage, "verifyPortalStorageObject").mockResolvedValue({
+      ok: false,
+      reason: "missing",
+    });
+    const writeSpy = vi.spyOn(submissionWrite, "writePartnerPortalSubmission");
+    const path = buildAdCreativeObjectPath("partner-001", ".png");
+    const result = await commitPartnerAdCreativeUpload({
+      partner: basePartner(),
+      label: "Advertisement creative",
+      fileName: "ad.png",
+      mimeType: "image/png",
+      fileSizeBytes: 4096,
+      storageBucket: "partner-portal-assets",
+      storagePath: path,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.status).toBe(400);
+      expect(result.error).toMatch(/could not be verified/i);
+    }
+    expect(writeSpy).not.toHaveBeenCalled();
+  });
+
+  it("does not persist when storage verification fails", async () => {
+    vi.spyOn(storage, "verifyPortalStorageObject").mockResolvedValue({
+      ok: false,
+      reason: "verification_error",
+    });
+    const writeSpy = vi.spyOn(submissionWrite, "writePartnerPortalSubmission");
+    const path = buildAdCreativeObjectPath("partner-001", ".png");
+    const result = await commitPartnerAdCreativeUpload({
+      partner: basePartner(),
+      label: "Advertisement creative",
+      fileName: "ad.png",
+      mimeType: "image/png",
+      fileSizeBytes: 4096,
+      storageBucket: "partner-portal-assets",
+      storagePath: path,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.status).toBe(502);
+    expect(writeSpy).not.toHaveBeenCalled();
   });
 
   it("never exposes unsupported helper copy in validation", () => {
