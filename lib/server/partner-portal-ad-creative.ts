@@ -4,10 +4,12 @@ import { isAdCreativeApplicable } from "@/lib/portal-entitlements";
 import {
   findSubmittedPortalDocument,
   isStorageBackedPortalDocument,
+  isSubmittedPortalDocument,
   PORTAL_STORAGE_PROVIDER_SUPABASE,
 } from "@/lib/partner-portal-document";
 import {
   fileExtension,
+  PORTAL_AD_CREATIVE_ALREADY_EXISTS_MESSAGE,
   validateUploadFile,
 } from "@/lib/partner-upload-policy";
 import {
@@ -48,6 +50,28 @@ export function assertAdCreativePathOwnedByPartner(
 
 export function assertAdCreativePathUsesBucket(bucket: string): boolean {
   return bucket.trim() === readPortalStorageBucket();
+}
+
+export type AdCreativeCommitCas =
+  | { mode: "create"; ifMatchToken: "" }
+  | { mode: "replace"; ifMatchToken: string }
+  | { mode: "reject"; reason: "already_exists" };
+
+/**
+ * Create-if-absent uses explicit empty CAS (""). Replace requires the live document token.
+ */
+export function resolveAdCreativeCommitCas(input: {
+  portalDocuments: PartnerPortalDocument[] | null | undefined;
+  ifMatchToken?: string;
+}): AdCreativeCommitCas {
+  const prior = findSubmittedPortalDocument(input.portalDocuments, "ad_creative");
+  if (prior && isSubmittedPortalDocument(prior)) {
+    if (input.ifMatchToken === undefined || input.ifMatchToken === "") {
+      return { mode: "reject", reason: "already_exists" };
+    }
+    return { mode: "replace", ifMatchToken: input.ifMatchToken };
+  }
+  return { mode: "create", ifMatchToken: "" };
 }
 
 export async function createPartnerAdCreativeUploadIntent(input: {
@@ -127,10 +151,27 @@ export async function commitPartnerAdCreativeUpload(input: {
   }
   const objectInfo = verified.info;
 
+  const cas = resolveAdCreativeCommitCas({
+    portalDocuments: input.partner.portalDocuments,
+    ifMatchToken: input.ifMatchToken,
+  });
+  if (cas.mode === "reject") {
+    await removePortalStorageObject(input.storageBucket, input.storagePath).catch(
+      () => undefined
+    );
+    return {
+      ok: false,
+      error: PORTAL_AD_CREATIVE_ALREADY_EXISTS_MESSAGE,
+      status: 409,
+      partner: input.partner,
+    };
+  }
+
   const prior = findSubmittedPortalDocument(input.partner.portalDocuments, "ad_creative");
+  const isReplace = cas.mode === "replace";
 
   const nextDoc: PartnerPortalDocument = {
-    id: prior?.id ?? randomUUID(),
+    id: isReplace && prior ? prior.id : randomUUID(),
     kind: "ad_creative",
     label: input.label.trim() || "Advertisement creative",
     fileName: input.fileName,
@@ -146,7 +187,7 @@ export async function commitPartnerAdCreativeUpload(input: {
   const saved = await writePartnerPortalSubmission(input.partner.id, {
     op: "upsert_document",
     document: nextDoc,
-    ifMatchToken: input.ifMatchToken,
+    ifMatchToken: cas.ifMatchToken,
   });
   if (!saved.ok) {
     await removePortalStorageObject(input.storageBucket, input.storagePath).catch(
@@ -162,6 +203,7 @@ export async function commitPartnerAdCreativeUpload(input: {
 
   const replaced = saved.replacedDocument;
   if (
+    isReplace &&
     replaced &&
     isStorageBackedPortalDocument(replaced) &&
     replaced.storagePath !== nextDoc.storagePath

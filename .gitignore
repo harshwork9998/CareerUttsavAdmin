@@ -54,3 +54,5 @@ temp-partner.json
 # Local development folders
 /CareerUttsavPartner/
 /tmp/
+
+scripts/logs/

@@ -40,6 +40,9 @@ export const PORTAL_ZERO_BYTE_MESSAGE = "The selected file is empty.";
 export const PORTAL_UPLOAD_CONFLICT_MESSAGE =
   "This file was updated from another session. The latest submitted file has been kept.";
 
+export const PORTAL_AD_CREATIVE_ALREADY_EXISTS_MESSAGE =
+  "An advertisement creative is already on file. Use Replace in the partner portal to update it.";
+
 const DOCUMENT_EXTENSION_SET = new Set<string>(DOCUMENT_UPLOAD_EXTENSIONS);
 const SPEAKER_PHOTO_EXTENSION_SET = new Set<string>(SPEAKER_PHOTO_EXTENSIONS);
 
