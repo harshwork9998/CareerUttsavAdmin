@@ -328,4 +328,73 @@ describe("partner portal speaker photo storage", () => {
     expect(removeSpy).toHaveBeenCalledWith("partner-portal-assets", stalePath);
     expect(removeSpy).not.toHaveBeenCalledWith("partner-portal-assets", livePath);
   });
+
+  it("treats a 409 as success when the requested path is already live", async () => {
+    const livePath = buildSpeakerPhotoObjectPath("partner-001", speakerId, ".jpg");
+    vi.spyOn(storage, "verifyPortalStorageObject").mockResolvedValue({
+      ok: true,
+      info: { size: 3000, mimeType: "image/jpeg" },
+    });
+    vi.spyOn(submissionWrite, "writePartnerPortalSubmission").mockResolvedValue({
+      ok: false,
+      status: 409,
+      error: "This file was updated from another session. The latest submitted file has been kept.",
+      partner: basePartner({
+        portalSeminarSpeakers: [
+          {
+            eventId: "evt-001",
+            seminarId: "sem-a",
+            updatedAt: "t2",
+            speakers: [
+              {
+                id: speakerId,
+                name: "Asha",
+                photoStorageProvider: "supabase",
+                photoStorageBucket: "partner-portal-assets",
+                photoStoragePath: livePath,
+                photoFileName: "photo.jpg",
+                photoMimeType: "image/jpeg",
+                photoFileSizeBytes: 3000,
+                photoUrl: "",
+              },
+            ],
+          },
+        ],
+      }),
+    });
+    const removeSpy = vi.spyOn(storage, "removePortalStorageObject").mockResolvedValue();
+    const result = await commitPartnerSpeakerPhotoUpload({
+      partner: basePartner({
+        portalSeminarSpeakers: [
+          {
+            eventId: "evt-001",
+            seminarId: "sem-a",
+            updatedAt: "t1",
+            speakers: [
+              {
+                id: speakerId,
+                name: "Asha",
+                photoStorageProvider: "supabase",
+                photoStorageBucket: "partner-portal-assets",
+                photoStoragePath: "partners/partner-001/speaker_photo/" + speakerId + "/old.jpg",
+                photoUrl: "",
+              },
+            ],
+          },
+        ],
+      }),
+      eventId: "evt-001",
+      seminarId: "sem-a",
+      speakerId,
+      fileName: "photo.jpg",
+      mimeType: "image/jpeg",
+      fileSizeBytes: 3000,
+      storageBucket: "partner-portal-assets",
+      storagePath: livePath,
+      ifMatchToken: "partners/partner-001/speaker_photo/" + speakerId + "/old.jpg",
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.storagePath).toBe(livePath);
+    expect(removeSpy).not.toHaveBeenCalled();
+  });
 });

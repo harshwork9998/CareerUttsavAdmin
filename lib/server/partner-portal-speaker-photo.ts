@@ -206,6 +206,27 @@ export async function commitPartnerSpeakerPhotoUpload(input: {
     ifMatchToken: input.ifMatchToken,
   });
   if (!saved.ok) {
+    if (saved.status === 409 && saved.partner) {
+      const live = findPortalSpeaker(
+        saved.partner,
+        eventId,
+        seminarId,
+        speakerId
+      );
+      if (live?.photoStoragePath?.trim() === input.storagePath.trim()) {
+        return {
+          ok: true,
+          persisted: true,
+          speakerId,
+          storageBucket: input.storageBucket,
+          storagePath: input.storagePath,
+          mimeType: live.photoMimeType ?? photoFields.photoMimeType ?? verified.info.mimeType,
+          fileSizeBytes: live.photoFileSizeBytes ?? verified.info.size,
+          fileName: live.photoFileName ?? input.fileName,
+          partner: saved.partner,
+        };
+      }
+    }
     await removePortalStorageObject(input.storageBucket, input.storagePath).catch(
       () => undefined
     );
