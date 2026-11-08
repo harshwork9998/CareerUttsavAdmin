@@ -95,6 +95,59 @@ describe("nullable seminar schedule", () => {
     expect(seminarHallLabel(2)).toBe("Audi 2");
   });
 
+  it("keeps a timed seminar unchanged through save", () => {
+    const timed: EventSeminar = {
+      id: "sem-001-a",
+      title: "Timed seminar",
+      date: "2026-12-19",
+      startTime: "10:00",
+      endTime: "11:00",
+      hall: 1,
+      panelistSlots: 4,
+    };
+    const [draft] = seminarDraftsFromEvent({ seminars: [timed] });
+    expect(seminarDraftScheduleErrors({ ...draft!, hallCount: 3 })).toEqual({});
+    expect(seminarSavePayload([draft!])[0]).toMatchObject({
+      startTime: "10:00",
+      endTime: "11:00",
+    });
+  });
+
+  it("persists null when start, end, or both are cleared in the editor", () => {
+    const timed: EventSeminar = {
+      id: "sem-2026-01",
+      title: CAREER_UTTSAV_SEMINARS[0],
+      date: "2026-12-19",
+      startTime: "11:00",
+      endTime: "12:00",
+      hall: 2,
+      panelistSlots: 4,
+    };
+    const [draft] = seminarDraftsFromEvent({ seminars: [timed] });
+
+    expect(
+      seminarSavePayload([{ ...draft!, startTime: "" }])[0]?.startTime
+    ).toBeNull();
+    expect(seminarSavePayload([{ ...draft!, endTime: "" }])[0]?.endTime).toBeNull();
+    expect(
+      seminarSavePayload([{ ...draft!, startTime: "", endTime: "" }])[0]
+    ).toMatchObject({ startTime: null, endTime: null });
+
+    const cleared = seminarSavePayload([
+      { ...draft!, startTime: "", endTime: "" },
+    ])[0]!;
+    expect(seminarTimeLabel(cleared.startTime)).toBe(SEMINAR_SCHEDULE_UNSET_LABEL);
+    expect(seminarTimeLabel(cleared.endTime)).toBe(SEMINAR_SCHEDULE_UNSET_LABEL);
+    expect(
+      seminarDraftScheduleErrors({
+        ...draft!,
+        startTime: "",
+        endTime: "",
+        hallCount: 3,
+      })
+    ).toEqual({});
+  });
+
   it("saves a schedule-less seminar and can add the schedule later", () => {
     const [draft] = seminarDraftsFromEvent({ seminars: [undecided] });
     expect(seminarDraftScheduleErrors({ ...draft, hallCount: 3 })).toEqual({});

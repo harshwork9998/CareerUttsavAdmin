@@ -78,11 +78,19 @@ function toHHMM(hour24: number, minute: number) {
 }
 
 function parseHHMM(value: string): { hour24: number; minute: number } {
-  const [h, m] = (value || "09:00").split(":").map(Number);
+  const trimmed = value?.trim() ?? "";
+  if (!trimmed) {
+    return { hour24: 9, minute: 0 };
+  }
+  const [h, m] = trimmed.split(":").map(Number);
   return {
     hour24: Number.isFinite(h) ? Math.min(23, Math.max(0, h)) : 9,
     minute: Number.isFinite(m) ? Math.min(59, Math.max(0, m)) : 0,
   };
+}
+
+function hasScheduleTime(value: string | null | undefined): boolean {
+  return Boolean(value?.trim());
 }
 
 function to12h(hour24: number): { hour12: number; period: "AM" | "PM" } {
@@ -516,7 +524,7 @@ export function TimeField({
   className,
 }: TimeFieldProps) {
   const [open, setOpen] = useState(false);
-  const initial = parseHHMM(value || "09:00");
+  const initial = parseHHMM(value);
   const initial12 = to12h(initial.hour24);
 
   const [hour12, setHour12] = useState(initial12.hour12);
@@ -529,7 +537,7 @@ export function TimeField({
 
   useEffect(() => {
     if (!open) return;
-    const parsed = parseHHMM(value || "09:00");
+    const parsed = parseHHMM(hasScheduleTime(value) ? value : "");
     const t = to12h(parsed.hour24);
     setHour12(t.hour12);
     setMinute(parsed.minute);
@@ -741,7 +749,20 @@ export function TimeField({
               </>
             )}
           </Button>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap justify-end gap-2">
+            {hasScheduleTime(value) ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  onChange("");
+                  setOpen(false);
+                }}
+              >
+                Clear
+              </Button>
+            ) : null}
             <Button
               type="button"
               variant="ghost"

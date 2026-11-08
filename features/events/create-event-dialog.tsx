@@ -719,6 +719,10 @@ function EventEditor({
                             value={row.startTime}
                             placeholder={SEMINAR_SCHEDULE_UNSET_LABEL}
                             onChange={(v) => {
+                              if (!v.trim()) {
+                                updateSeminar(index, { startTime: "" });
+                                return;
+                              }
                               const [h, m] = v.split(":").map(Number);
                               const endH = Math.min(22, h + 1);
                               const nextEnd = `${String(endH).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
@@ -741,7 +745,9 @@ function EventEditor({
                             placeholder={SEMINAR_SCHEDULE_UNSET_LABEL}
                             min={row.startTime || undefined}
                             onChange={(v) =>
-                              updateSeminar(index, { endTime: v })
+                              updateSeminar(index, {
+                                endTime: v.trim() ? v : "",
+                              })
                             }
                           />
                           <FieldError message={errors[`sem-${index}-end`]} />
