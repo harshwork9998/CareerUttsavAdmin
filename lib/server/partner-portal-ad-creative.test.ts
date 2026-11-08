@@ -14,7 +14,7 @@ import {
   isPartnerEntitledToAdCreative,
 } from "@/lib/server/partner-portal-ad-creative";
 import * as storage from "@/lib/server/partner-portal-storage";
-import * as partnerService from "@/lib/server/partner-service";
+import * as submissionWrite from "@/lib/server/partner-portal-submission-write";
 import type { Partner, PartnerDeliverable } from "@/types";
 
 const entitledDeliverables: PartnerDeliverable[] = [
@@ -119,7 +119,7 @@ describe("partner portal ad creative storage", () => {
           bucket: "partner-portal-assets",
           path: "partners/partner-001/ad_creative/x.png",
           token: "tok",
-          tusEndpoint: "https://example-ref.storage.supabase.co/storage/v1/upload/resumable",
+          tusEndpoint: "https://example-ref.storage.supabase.co/storage/v1/upload/resumable/sign",
         },
       });
       const partner = basePartner();
@@ -191,7 +191,7 @@ describe("partner portal ad creative storage", () => {
       size: 4096,
       mimeType: "image/png",
     });
-    vi.spyOn(partnerService, "updatePartnerForApi").mockResolvedValue({
+    vi.spyOn(submissionWrite, "writePartnerPortalSubmission").mockResolvedValue({
       ok: true,
       partner: basePartner({
         portalDocuments: [

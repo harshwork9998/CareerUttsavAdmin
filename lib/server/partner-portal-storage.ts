@@ -47,8 +47,12 @@ export function deriveSupabaseProjectRef(supabaseUrl: string): string | null {
   }
 }
 
+/**
+ * Signed TUS endpoint. `x-signature` tokens from createSignedUploadUrl are only
+ * accepted at `/upload/resumable/sign`, not the session endpoint `/upload/resumable`.
+ */
 export function tusResumableEndpoint(projectRef: string): string {
-  return `https://${projectRef}.storage.supabase.co/storage/v1/upload/resumable`;
+  return `https://${projectRef}.storage.supabase.co/storage/v1/upload/resumable/sign`;
 }
 
 export function createPortalStorageAdminClient(): SupabaseClient | null {
@@ -87,10 +91,19 @@ export async function createSignedUploadIntent(path: string): Promise<
   const { client, bucket, projectRef } = configured;
   const { data, error } = await client.storage.from(bucket).createSignedUploadUrl(path);
   if (error || !data?.token) {
-    console.error("[portal-storage] createSignedUploadUrl", error?.message);
+    const statusCode =
+      error && "status" in error && typeof error.status === "number"
+        ? error.status
+        : undefined;
+    console.error("[portal-storage] createSignedUploadUrl", {
+      status: statusCode ?? "none",
+      message: safeStorageLog(error?.message ?? "missing upload token"),
+    });
     return {
       ok: false,
-      error: normalizePortalStorageErrorMessage(error?.message),
+      error: normalizePortalStorageErrorMessage(
+        error?.message ?? (data?.token ? undefined : "missing upload token")
+      ),
       status: 502,
     };
   }
@@ -176,6 +189,13 @@ export async function removePortalStorageObject(
   if (error) {
     console.error("[portal-storage] remove", { bucket, path, message: error.message });
   }
+}
+
+function safeStorageLog(message: string): string {
+  return message
+    .replace(/sb_(?:secret|publishable)_[A-Za-z0-9._-]+/g, "[redacted]")
+    .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, "[redacted]")
+    .slice(0, 180);
 }
 
 export function normalizePortalStorageErrorMessage(message?: string | null): string {

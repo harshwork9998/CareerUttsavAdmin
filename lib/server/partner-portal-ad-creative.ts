@@ -16,7 +16,7 @@ import {
   removePortalStorageObject,
   verifyPortalStorageObject,
 } from "@/lib/server/partner-portal-storage";
-import { updatePartnerForApi } from "@/lib/server/partner-service";
+import { writePartnerPortalSubmission } from "@/lib/server/partner-portal-submission-write";
 import type { Partner, PartnerPortalDocument } from "@/types";
 
 export const AD_CREATIVE_PATH_SEGMENT = "ad_creative";
@@ -119,12 +119,7 @@ export async function commitPartnerAdCreativeUpload(input: {
     return { ok: false, error: "Uploaded file could not be verified. Please try again.", status: 400 };
   }
 
-  const docs = [...(input.partner.portalDocuments ?? [])];
-  const prior = findSubmittedPortalDocument(docs, "ad_creative");
-  const priorStorage =
-    prior && isStorageBackedPortalDocument(prior)
-      ? { bucket: prior.storageBucket!, path: prior.storagePath! }
-      : null;
+  const prior = findSubmittedPortalDocument(input.partner.portalDocuments, "ad_creative");
 
   const nextDoc: PartnerPortalDocument = {
     id: prior?.id ?? randomUUID(),
@@ -140,17 +135,22 @@ export async function commitPartnerAdCreativeUpload(input: {
     storagePath: input.storagePath,
   };
 
-  const withoutKind = docs.filter((doc) => doc.kind !== "ad_creative");
-  const saved = await updatePartnerForApi(input.partner.id, {
-    portalDocuments: [...withoutKind, nextDoc],
+  const saved = await writePartnerPortalSubmission(input.partner.id, {
+    op: "upsert_document",
+    document: nextDoc,
   });
   if (!saved.ok) {
     await removePortalStorageObject(input.storageBucket, input.storagePath);
     return { ok: false, error: saved.error, status: saved.status };
   }
 
-  if (priorStorage) {
-    await removePortalStorageObject(priorStorage.bucket, priorStorage.path);
+  const replaced = saved.replacedDocument;
+  if (
+    replaced &&
+    isStorageBackedPortalDocument(replaced) &&
+    replaced.storagePath !== nextDoc.storagePath
+  ) {
+    await removePortalStorageObject(replaced.storageBucket!, replaced.storagePath!);
   }
 
   return { ok: true, partner: saved.partner };
