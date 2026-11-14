@@ -52,7 +52,7 @@ const passIdColumn: ColumnDef<Registration, unknown> = {
 
 const sourceColumn: ColumnDef<Registration, unknown> = {
   id: "source",
-  header: "Source",
+  header: "Lead Medium",
   accessorFn: (row) =>
     isStudentRegistration(row) ? registrationSourceLabel(row.source) : "",
   cell: ({ row }) => (
@@ -403,7 +403,7 @@ export function exportHeadersForKind(kind: RegistrationKind): string[] {
       return [
         "Registration Date",
         "Pass ID",
-        "Source",
+        "Lead Medium",
         "Student Name",
         "School/College",
         "Event",

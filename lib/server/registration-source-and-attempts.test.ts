@@ -275,9 +275,9 @@ describe("registration source and attempts", () => {
       typeof column.header === "string" ? column.header : ""
     );
     expect(headers[1]).toBe("Pass ID");
-    expect(headers[2]).toBe("Source");
-    expect(exportHeadersForKind("student")[2]).toBe("Source");
-    expect(exportHeadersForKind("school")).not.toContain("Source");
+    expect(headers[2]).toBe("Lead Medium");
+    expect(exportHeadersForKind("student")[2]).toBe("Lead Medium");
+    expect(exportHeadersForKind("school")).not.toContain("Lead Medium");
 
     const registration = {
       ...studentBody(),

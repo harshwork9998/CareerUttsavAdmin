@@ -13,6 +13,11 @@ export const NAV_ITEMS = [
   { title: "Registrations", href: "/registrations", icon: "Users" },
   { title: "Partners", href: "/partners", icon: "Handshake" },
   { title: "Seminars", href: "/seminars", icon: "Mic2" },
+  {
+    title: "Marketing Attribution",
+    href: "/marketing-attribution",
+    icon: "Megaphone",
+  },
   { title: "Users", href: "/users", icon: "UserCog" },
 ] as const;
 

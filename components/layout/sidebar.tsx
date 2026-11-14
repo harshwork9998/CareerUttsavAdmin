@@ -10,6 +10,7 @@ import {
   Handshake,
   LayoutDashboard,
   LogOut,
+  Megaphone,
   Mic2,
   UserCog,
   Users,
@@ -47,6 +48,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   GraduationCap,
   Handshake,
   Mic2,
+  Megaphone,
   UserCog,
 };
 

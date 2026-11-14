@@ -701,7 +701,7 @@ export function RegistrationsList() {
           }}
           placeholder={
             partialTab
-              ? "Search by name, mobile, email, class, city, source, or step…"
+              ? "Search by name, mobile, email, class, city, lead medium, or step…"
               : searchPlaceholderForKind(activeKind)
           }
           containerClassName="max-w-xl"
