@@ -38,6 +38,9 @@ export function mapPrismaConversationToState(
     selectedSeminarIds: parseSelectedSeminarIds(record.selectedSeminarIds),
     completedRegistrationId: record.completedRegistrationId,
     registrationAttemptId: record.registrationAttemptId ?? null,
+    attributionTrackingCode: record.attributionTrackingCode ?? null,
+    leadSource: record.leadSource ?? null,
+    leadSubSource: record.leadSubSource ?? null,
   };
 }
 
@@ -60,6 +63,9 @@ export function mapStateToPrismaConversationData(
     selectedSeminarIds: state.selectedSeminarIds,
     completedRegistrationId: state.completedRegistrationId ?? null,
     registrationAttemptId: state.registrationAttemptId ?? null,
+    attributionTrackingCode: state.attributionTrackingCode ?? null,
+    leadSource: state.leadSource ?? null,
+    leadSubSource: state.leadSubSource ?? null,
     expiresAt,
   };
 }

@@ -627,6 +627,39 @@ export function StudentRegistrationSection({
     [data.bySeminar]
   );
 
+  const leadMediumData = useMemo(
+    () =>
+      (liveStudentAnalytics.byLeadMedium ?? data.byLeadMedium ?? []).map(
+        (item) => ({
+          name: String(item.name),
+          value: Number(item.value),
+        })
+      ),
+    [liveStudentAnalytics.byLeadMedium, data.byLeadMedium]
+  );
+
+  const leadSourceData = useMemo(
+    () =>
+      (liveStudentAnalytics.byLeadSource ?? data.byLeadSource ?? []).map(
+        (item) => ({
+          name: String(item.name),
+          value: Number(item.value),
+        })
+      ),
+    [liveStudentAnalytics.byLeadSource, data.byLeadSource]
+  );
+
+  const leadSubSourceData = useMemo(
+    () =>
+      (liveStudentAnalytics.byLeadSubSource ?? data.byLeadSubSource ?? []).map(
+        (item) => ({
+          name: String(item.name),
+          value: Number(item.value),
+        })
+      ),
+    [liveStudentAnalytics.byLeadSubSource, data.byLeadSubSource]
+  );
+
   return (
     <section className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -647,6 +680,28 @@ export function StudentRegistrationSection({
         />
         <ShareDonutCard title="Gender" items={genderData} delay={0.18} />
       </div>
+
+      {(leadMediumData.length > 0 ||
+        leadSourceData.length > 0 ||
+        leadSubSourceData.length > 0) && (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <ShareDonutCard
+            title="Lead Medium"
+            items={leadMediumData}
+            delay={0}
+          />
+          <ShareDonutCard
+            title="Lead Source"
+            items={leadSourceData}
+            delay={0.06}
+          />
+          <ShareDonutCard
+            title="Lead Sub-source"
+            items={leadSubSourceData}
+            delay={0.12}
+          />
+        </div>
+      )}
 
       <CareerInterestAndTrend
         careerInterests={careerInterests}

@@ -109,6 +109,7 @@ export type RegistrationAttemptRecord = {
   college: string | null;
   city: string | null;
   seminarInterests: string[];
+  attributionTrackingCode: string | null;
   lastStep: RegistrationAttemptStep;
   startedAt: string;
   lastActivityAt: string;

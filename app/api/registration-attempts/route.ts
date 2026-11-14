@@ -6,6 +6,7 @@ import { DEFAULT_PARTIAL_ATTEMPT_STATUSES } from "@/lib/registration-attempt";
 import { checkStudentRegistrationDuplicate } from "@/lib/server/registration-service";
 import { requireAdminUser } from "@/lib/server/admin-auth";
 import { listEventsForApi } from "@/lib/server/event-service";
+import { resolveActiveLeadAttribution } from "@/lib/lead-attribution/resolve";
 import {
   createWebsiteRegistrationAttempt,
   listRegistrationAttempts,
@@ -35,6 +36,8 @@ export async function POST(request: Request) {
     email?: string;
     phoneVerificationToken?: string;
     source?: string;
+    trackingCode?: string;
+    attributionTrackingCode?: string;
   } = {};
   try {
     body = (await request.json()) as typeof body;
@@ -95,11 +98,17 @@ export async function POST(request: Request) {
     );
   }
 
+  const rawTracking =
+    body.trackingCode?.trim() || body.attributionTrackingCode?.trim() || "";
+  const attributionTrackingCode =
+    resolveActiveLeadAttribution(rawTracking)?.trackingCode ?? null;
+
   const attempt = await createWebsiteRegistrationAttempt({
     eventId,
     phone,
     name,
     email,
+    attributionTrackingCode,
   });
   return NextResponse.json(
     { attemptId: attempt.id },

@@ -68,6 +68,8 @@ export type CreateStudentRegistrationInput = {
   gender: (typeof REGISTRATION_GENDER_OPTIONS)[number];
   city: string;
   seminarInterests?: string[];
+  /** Public website may send an internal tracking code only; never leadSource/subSource text. */
+  trackingCode?: string;
 };
 
 export type CreateSchoolRegistrationInput = {
@@ -247,6 +249,10 @@ function validateStudentCreate(
       city,
       seminarInterests:
         seminarInterests.length > 0 ? seminarInterests : undefined,
+      trackingCode:
+        typeof body.trackingCode === "string" && body.trackingCode.trim()
+          ? body.trackingCode.trim()
+          : undefined,
     },
   };
 }
@@ -499,7 +505,8 @@ export function buildRegistrationFromInput(
   existing: Registration[],
   id: string,
   now: string,
-  source: import("@/lib/registration-source").RegistrationSource = "UNKNOWN"
+  source: import("@/lib/registration-source").RegistrationSource = "UNKNOWN",
+  leadAttribution?: { leadSource: string; leadSubSource: string }
 ): Registration {
   const base = baseRegistrationFields(input.kind, event, existing, id, now);
 
@@ -521,6 +528,8 @@ export function buildRegistrationFromInput(
         city: input.city,
         state: event.state?.trim() || "Karnataka",
         seminarInterests: input.seminarInterests,
+        leadSource: leadAttribution?.leadSource ?? null,
+        leadSubSource: leadAttribution?.leadSubSource ?? null,
       };
       return student;
     }

@@ -116,6 +116,9 @@ describe("whatsapp completed conversation reconcile", () => {
     expect(result.completedRegistrationId).toBeNull();
     expect(result.studentName).toBeNull();
     expect(result.email).toBeNull();
+    expect(result.attributionTrackingCode).toBeNull();
+    expect(result.leadSource).toBeNull();
+    expect(result.leadSubSource).toBeNull();
     expect(resolveDuplicateMock).toHaveBeenCalledWith({
       eventId: CURRENT_EVENT_ID,
       phone: "9876543210",

@@ -1,3 +1,4 @@
+import { matchLeadAttributionWhatsAppIntro } from "@/lib/lead-attribution/resolve";
 import {
   REGISTRATION_BOARD_OPTIONS,
   REGISTRATION_CLASS_OPTIONS,
@@ -96,6 +97,9 @@ export type WhatsAppConversationState = {
   selectedSeminarIds: string[];
   completedRegistrationId: string | null;
   registrationAttemptId?: string | null;
+  attributionTrackingCode?: string | null;
+  leadSource?: string | null;
+  leadSubSource?: string | null;
 };
 
 export type SeminarOption = {
@@ -201,6 +205,47 @@ export function normalizeWaId(waId: string): string {
   return waId.replace(/\D/g, "");
 }
 
+function preserveEstablishedLeadAttribution(
+  from: WhatsAppConversationState,
+  to: WhatsAppConversationState
+): WhatsAppConversationState {
+  if (!from.attributionTrackingCode?.trim()) {
+    return to;
+  }
+  return {
+    ...to,
+    attributionTrackingCode: from.attributionTrackingCode,
+    leadSource: from.leadSource ?? null,
+    leadSubSource: from.leadSubSource ?? null,
+  };
+}
+
+function clearLeadAttributionFields<T extends WhatsAppConversationState>(
+  conversation: T
+): T {
+  return {
+    ...conversation,
+    attributionTrackingCode: null,
+    leadSource: null,
+    leadSubSource: null,
+  };
+}
+
+function conversationWithIntroAttribution(
+  conversation: WhatsAppConversationState,
+  introAttribution: NonNullable<
+    ReturnType<typeof matchLeadAttributionWhatsAppIntro>
+  >
+): WhatsAppConversationState {
+  return {
+    ...createInitialConversationState(conversation.waId),
+    registrationAttemptId: conversation.registrationAttemptId ?? null,
+    attributionTrackingCode: introAttribution.trackingCode,
+    leadSource: introAttribution.leadSource,
+    leadSubSource: introAttribution.leadSubSource,
+  };
+}
+
 export function createInitialConversationState(waId: string): WhatsAppConversationState {
   return {
     waId: normalizeWaId(waId),
@@ -217,19 +262,22 @@ export function createInitialConversationState(waId: string): WhatsAppConversati
     selectedSeminarIds: [],
     completedRegistrationId: null,
     registrationAttemptId: null,
+    attributionTrackingCode: null,
+    leadSource: null,
+    leadSubSource: null,
   };
 }
 
 export function resetConversationAnswers(
   conversation: WhatsAppConversationState
 ): WhatsAppConversationState {
-  return {
+  return preserveEstablishedLeadAttribution(conversation, {
     ...createInitialConversationState(conversation.waId),
     status: "ACTIVE",
     currentStep: "AWAITING_NAME",
     completedRegistrationId: null,
     registrationAttemptId: conversation.registrationAttemptId ?? null,
-  };
+  });
 }
 
 function isValidEmail(value: string): boolean {
@@ -991,11 +1039,11 @@ function handleGlobalControls(
     }
 
     return {
-      conversation: {
+      conversation: clearLeadAttributionFields({
         ...conversation,
         status: "CANCELLED",
         currentStep: "CANCELLED",
-      },
+      }),
       actions: cancelledActions(),
       refreshExpiry: true,
     };
@@ -1055,11 +1103,25 @@ function handleGlobalControls(
       };
       return beginNameStep(reset, seminarOptions);
     }
+    if (text) {
+      const introAttribution = matchLeadAttributionWhatsAppIntro(text);
+      if (introAttribution) {
+        const attributed = conversationWithIntroAttribution(
+          conversation,
+          introAttribution
+        );
+        return {
+          conversation: attributed,
+          actions: welcomeActions(),
+          refreshExpiry: true,
+        };
+      }
+    }
     if (text && isGreetingText(text)) {
-      const reset = {
+      const reset = preserveEstablishedLeadAttribution(conversation, {
         ...createInitialConversationState(conversation.waId),
         registrationAttemptId: conversation.registrationAttemptId ?? null,
-      };
+      });
       return {
         conversation: reset,
         actions: welcomeActions(),
@@ -1203,11 +1265,40 @@ export function processRegistrationConversationTurn(input: {
     if (interactiveId === REGISTRATION_INTERACTIVE_IDS.START) {
       return beginNameStep(conversation, input.seminarOptions);
     }
+  if (text) {
+    const introAttribution = matchLeadAttributionWhatsAppIntro(text);
+    if (introAttribution) {
+      if (conversation.attributionTrackingCode?.trim()) {
+        const actions = welcomeActions();
+        if (sessionExpired) {
+          actions.unshift(expiredSessionNoticeAction());
+        }
+        return {
+          conversation,
+          actions,
+          refreshExpiry: true,
+        };
+      }
+      const attributed = conversationWithIntroAttribution(
+        conversation,
+        introAttribution
+      );
+      const actions = welcomeActions();
+      if (sessionExpired) {
+        actions.unshift(expiredSessionNoticeAction());
+      }
+      return {
+        conversation: attributed,
+        actions,
+        refreshExpiry: true,
+      };
+    }
+  }
     if (text && isGreetingText(text)) {
-      const reset = {
+      const reset = preserveEstablishedLeadAttribution(conversation, {
         ...createInitialConversationState(conversation.waId),
         registrationAttemptId: conversation.registrationAttemptId ?? null,
-      };
+      });
       const actions = welcomeActions();
       if (sessionExpired) {
         actions.unshift(expiredSessionNoticeAction());

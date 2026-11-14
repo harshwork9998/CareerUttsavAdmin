@@ -199,6 +199,12 @@ model Registration {
   emailNormalized  String?
   phoneLast10      String?
 
+  /// Marketing snapshot — not derived from live config after completion.
+  leadSource                String?
+  leadSubSource             String?
+  /// Internal placement code used at registration time (diagnostics).
+  attributionTrackingCode   String?
+
   // School fields
   schoolContactName   String?
   schoolName          String?
@@ -231,6 +237,8 @@ model Registration {
   @@index([eventId])
   @@index([kind])
   @@index([eventId, kind])
+  @@index([leadSource])
+  @@index([leadSubSource])
   @@map("registrations")
 }
 
@@ -275,6 +283,7 @@ model RegistrationAttempt {
   college                  String?
   city                     String?
   seminarInterests         String[]                    @default([])
+  attributionTrackingCode  String?
   lastStep                 RegistrationAttemptStep
   startedAt                DateTime
   lastActivityAt           DateTime
@@ -627,6 +636,9 @@ model WhatsAppRegistrationConversation {
   selectedSeminarIds Json                       @default("[]")
   completedRegistrationId String?               @unique
   registrationAttemptId  String?               @unique
+  attributionTrackingCode String?
+  leadSource             String?
+  leadSubSource          String?
   lastInboundAt          DateTime?
   highestReminderStageSent Int                @default(0)
   lastReminderAttemptAt  DateTime?
@@ -673,90 +685,3 @@ model WhatsAppInboundMessage {
   @@map("whatsapp_inbound_messages")
 }
 
-// ─── Marketing attribution configuration (Lead Source hierarchy) ─────────────
-
-model LeadSource {
-  id          String   @id
-  name        String
-  /// Lowercase trimmed name for global case-insensitive uniqueness.
-  nameKey     String   @unique
-  description String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  subSources LeadSubSource[]
-
-  @@index([isActive])
-  @@map("lead_sources")
-}
-
-model LeadSubSource {
-  id           String   @id
-  leadSourceId String
-  name         String
-  /// Lowercase trimmed name; unique per parent lead source.
-  nameKey      String
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  leadSource LeadSource           @relation(fields: [leadSourceId], references: [id], onDelete: Restrict)
-  campaigns  MarketingCampaign[]
-
-  @@unique([leadSourceId, nameKey])
-  @@index([leadSourceId])
-  @@index([leadSourceId, isActive])
-  @@map("lead_sub_sources")
-}
-
-model MarketingCampaign {
-  id                    String    @id
-  leadSubSourceId       String
-  name                  String
-  /// Canonical display code (uppercase alphanumerics).
-  trackingCode          String
-  /// Lowercase key for case-insensitive uniqueness; never reassigned.
-  trackingCodeKey       String    @unique
-  placementDescription  String?
-  startDate             DateTime?
-  endDate               DateTime?
-  isActive              Boolean   @default(true)
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
-
-  leadSubSource LeadSubSource @relation(fields: [leadSubSourceId], references: [id], onDelete: Restrict)
-
-  @@index([leadSubSourceId])
-  @@index([leadSubSourceId, isActive])
-  @@index([trackingCode])
-  @@map("marketing_campaigns")
-}
-
-enum MarketingAttributionAuditAction {
-  CREATE
-  UPDATE
-  DEACTIVATE
-  ACTIVATE
-}
-
-enum MarketingAttributionEntityType {
-  LEAD_SOURCE
-  LEAD_SUB_SOURCE
-  MARKETING_CAMPAIGN
-}
-
-model MarketingAttributionAuditLog {
-  id          String                          @id @default(cuid())
-  adminUserId String
-  action      MarketingAttributionAuditAction
-  entityType  MarketingAttributionEntityType
-  entityId    String
-  summary     String
-  metadata    Json?
-  createdAt   DateTime                        @default(now())
-
-  @@index([entityType, entityId])
-  @@index([adminUserId, createdAt])
-  @@map("marketing_attribution_audit_logs")
-}

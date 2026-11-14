@@ -1,6 +1,7 @@
 import { canonicalizeSeminarTitle } from "@/features/dashboard/seminars";
 import { isStudentRegistration } from "@/lib/registration-kinds";
 import { canonicalizeClassLabel } from "@/lib/registration-validation";
+import { registrationSourceLabel } from "@/lib/registration-source";
 import { resolveEventCity } from "@/lib/resolve-event-city";
 import { citiesMatch, getEventCities } from "@/lib/event-cities";
 import type {
@@ -237,6 +238,17 @@ export function buildStudentRegistrationAnalytics(
     byGender: countBy(filtered, (registration) => registration.gender),
     byCity,
     byRegistrantCity: countBy(filtered, (registration) => registration.city),
+    byLeadMedium: countBy(filtered, (registration) =>
+      registrationSourceLabel(registration.source)
+    ),
+    byLeadSource: countBy(
+      filtered,
+      (registration) => registration.leadSource ?? undefined
+    ),
+    byLeadSubSource: countBy(
+      filtered,
+      (registration) => registration.leadSubSource ?? undefined
+    ),
     bySeminar: buildBySeminar(filtered),
     weeklyTrend: buildWeeklyTrend(filtered),
     topSchools: buildTopSchools(

@@ -507,6 +507,17 @@ export async function completeWhatsAppRegistrationForConversation(
     )?.id ??
     null;
 
+  const attributionSnapshot =
+    record.leadSource &&
+    record.leadSubSource &&
+    record.attributionTrackingCode
+      ? {
+          leadSource: record.leadSource,
+          leadSubSource: record.leadSubSource,
+          attributionTrackingCode: record.attributionTrackingCode,
+        }
+      : null;
+
   const createResult = await createStudentRegistration(
     buildStudentRegistrationInput(
       record,
@@ -516,6 +527,7 @@ export async function completeWhatsAppRegistrationForConversation(
     {
       trustedInternalRegistration: true,
       attemptId: linkedAttemptId,
+      attributionSnapshot,
     }
   );
 

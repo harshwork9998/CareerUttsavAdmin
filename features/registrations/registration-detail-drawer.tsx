@@ -21,6 +21,7 @@ import {
 } from "@/lib/registration-kinds";
 import { REGISTRATION_KIND_LABELS } from "@/lib/registration-kinds";
 import { getRegistrationDisplayName } from "@/features/registrations/registration-table-config";
+import { registrationSourceLabel } from "@/lib/registration-source";
 import type { Registration } from "@/types";
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils";
 import { StatusChip } from "@/components/shared";
@@ -161,6 +162,28 @@ export function RegistrationDetailDrawer({
                   <h3 className="text-sm font-semibold text-foreground">Seminars</h3>
                   <div className="rounded-xl border bg-muted/30 p-4 text-sm">
                     {formatSeminarInterests(registration)}
+                  </div>
+                </section>
+                <section className="space-y-4">
+                  <h3 className="text-sm font-semibold text-foreground">
+                    Lead attribution
+                  </h3>
+                  <div className="space-y-4 rounded-xl border bg-muted/30 p-4">
+                    <DetailRow
+                      icon={Ticket}
+                      label="Lead Medium"
+                      value={registrationSourceLabel(registration.source)}
+                    />
+                    <DetailRow
+                      icon={Ticket}
+                      label="Lead Source"
+                      value={registration.leadSource?.trim() || "—"}
+                    />
+                    <DetailRow
+                      icon={Ticket}
+                      label="Lead Sub-source"
+                      value={registration.leadSubSource?.trim() || "—"}
+                    />
                   </div>
                 </section>
               </>

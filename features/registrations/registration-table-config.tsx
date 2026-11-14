@@ -50,6 +50,34 @@ const passIdColumn: ColumnDef<Registration, unknown> = {
   ),
 };
 
+const leadSourceColumn: ColumnDef<Registration, unknown> = {
+  id: "leadSource",
+  header: "Lead Source",
+  accessorFn: (row) =>
+    isStudentRegistration(row) ? row.leadSource?.trim() || "" : "",
+  cell: ({ row }) => (
+    <span className="text-sm text-foreground">
+      {isStudentRegistration(row.original) && row.original.leadSource?.trim()
+        ? row.original.leadSource
+        : "—"}
+    </span>
+  ),
+};
+
+const leadSubSourceColumn: ColumnDef<Registration, unknown> = {
+  id: "leadSubSource",
+  header: "Lead Sub-source",
+  accessorFn: (row) =>
+    isStudentRegistration(row) ? row.leadSubSource?.trim() || "" : "",
+  cell: ({ row }) => (
+    <span className="text-sm text-foreground">
+      {isStudentRegistration(row.original) && row.original.leadSubSource?.trim()
+        ? row.original.leadSubSource
+        : "—"}
+    </span>
+  ),
+};
+
 const sourceColumn: ColumnDef<Registration, unknown> = {
   id: "source",
   header: "Lead Medium",
@@ -94,6 +122,8 @@ export function buildRegistrationColumns(
       registeredAtColumn,
       passIdColumn,
       sourceColumn,
+      leadSourceColumn,
+      leadSubSourceColumn,
       {
         accessorKey: "studentName",
         header: "Student Name",
@@ -404,6 +434,8 @@ export function exportHeadersForKind(kind: RegistrationKind): string[] {
         "Registration Date",
         "Pass ID",
         "Lead Medium",
+        "Lead Source",
+        "Lead Sub-source",
         "Student Name",
         "School/College",
         "Event",
@@ -475,6 +507,8 @@ export function exportRowForKind(
       registeredAt,
       passId,
       registrationSourceLabel(registration.source),
+      registration.leadSource?.trim() || "—",
+      registration.leadSubSource?.trim() || "—",
       registration.studentName,
       registration.college,
       eventTitle,
@@ -551,6 +585,8 @@ export function registrationMatchesSearch(
 
   if (isStudentRegistration(registration)) {
     haystack.push(
+      registration.leadSource ?? "",
+      registration.leadSubSource ?? "",
       registration.email,
       registration.phone,
       registration.parentPhone ?? "",

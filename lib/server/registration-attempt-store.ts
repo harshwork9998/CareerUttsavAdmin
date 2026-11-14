@@ -100,6 +100,7 @@ function mapPrismaAttempt(record: {
   college: string | null;
   city: string | null;
   seminarInterests: string[];
+  attributionTrackingCode: string | null;
   lastStep: RegistrationAttemptStep;
   startedAt: Date;
   lastActivityAt: Date;
@@ -126,6 +127,7 @@ function mapPrismaAttempt(record: {
     college: record.college,
     city: record.city,
     seminarInterests: record.seminarInterests,
+    attributionTrackingCode: record.attributionTrackingCode ?? null,
     lastStep: record.lastStep,
     startedAt: record.startedAt.toISOString(),
     lastActivityAt: record.lastActivityAt.toISOString(),
@@ -259,6 +261,7 @@ export async function ensureWhatsAppRegistrationAttempt(input: {
       college: null,
       city: null,
       seminarInterests: [],
+      attributionTrackingCode: null,
       lastStep: "WELCOME",
       startedAt: now.toISOString(),
       lastActivityAt: now.toISOString(),
@@ -444,6 +447,7 @@ export async function createWebsiteRegistrationAttempt(input: {
   phone: string;
   name: string;
   email: string;
+  attributionTrackingCode?: string | null;
   now?: Date;
 }): Promise<RegistrationAttemptRecord> {
   const now = input.now ?? new Date();
@@ -471,6 +475,8 @@ export async function createWebsiteRegistrationAttempt(input: {
         lastActivityAt: now.toISOString(),
         updatedAt: now.toISOString(),
         lastStep: existing.lastStep === "YOU" ? "YOU" : existing.lastStep,
+        attributionTrackingCode:
+          input.attributionTrackingCode?.trim() || existing.attributionTrackingCode,
       };
       return { attempts: attempts.map((row) => (row.id === existing.id ? next : row)), result: next };
     }
@@ -491,6 +497,7 @@ export async function createWebsiteRegistrationAttempt(input: {
       college: null,
       city: null,
       seminarInterests: [],
+      attributionTrackingCode: input.attributionTrackingCode?.trim() || null,
       lastStep: "YOU",
       startedAt: now.toISOString(),
       lastActivityAt: now.toISOString(),
@@ -533,6 +540,9 @@ export async function createWebsiteRegistrationAttempt(input: {
           email,
           emailNormalized,
           lastActivityAt: now,
+          ...(input.attributionTrackingCode?.trim()
+            ? { attributionTrackingCode: input.attributionTrackingCode.trim() }
+            : {}),
           ...(existing.lastStep === "YOU" ? { lastStep: "YOU" as const } : {}),
         },
       });
@@ -553,6 +563,7 @@ export async function createWebsiteRegistrationAttempt(input: {
         startedAt: now,
         lastActivityAt: now,
         seminarInterests: [],
+        attributionTrackingCode: input.attributionTrackingCode?.trim() || null,
       },
     });
     return mapPrismaAttempt(record);

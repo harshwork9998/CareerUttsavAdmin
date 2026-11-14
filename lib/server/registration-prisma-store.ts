@@ -25,6 +25,7 @@ import {
   studentNormalizedFields,
   type PrismaRegistrationRecord,
 } from "@/lib/server/registration-prisma-map";
+import type { RegistrationAttributionSnapshot } from "@/lib/lead-attribution/snapshot";
 import type { RegistrationSource } from "@/lib/registration-source";
 import { finalizeRegistrationAttemptsWithClient } from "@/lib/server/registration-attempt-store";
 import type { RegistrationAttemptStep } from "@/lib/registration-attempt";
@@ -97,7 +98,8 @@ function buildCreateData(
   id: string,
   registrationNumber: string,
   now: Date,
-  source: RegistrationSource
+  source: RegistrationSource,
+  attribution?: RegistrationAttributionSnapshot | null
 ): Prisma.RegistrationUncheckedCreateInput {
   const base = {
     id,
@@ -134,6 +136,9 @@ function buildCreateData(
         state: event.state?.trim() || "Karnataka",
         emailNormalized: normalized.emailNormalized,
         phoneLast10: normalized.phoneLast10,
+        leadSource: attribution?.leadSource ?? null,
+        leadSubSource: attribution?.leadSubSource ?? null,
+        attributionTrackingCode: attribution?.attributionTrackingCode ?? null,
       };
     }
     case "school":
@@ -374,6 +379,7 @@ export async function createPrismaRegistration(
     source?: RegistrationSource;
     attemptId?: string | null;
     attemptLastStep?: RegistrationAttemptStep;
+    attribution?: RegistrationAttributionSnapshot | null;
   }
 ): Promise<Registration> {
   const now = new Date();
@@ -397,7 +403,15 @@ export async function createPrismaRegistration(
 
     const source = input.kind === "student" ? (options?.source ?? "UNKNOWN") : "UNKNOWN";
     const record = await tx.registration.create({
-      data: buildCreateData(input, event, id, registrationNumber, now, source),
+      data: buildCreateData(
+        input,
+        event,
+        id,
+        registrationNumber,
+        now,
+        source,
+        input.kind === "student" ? options?.attribution ?? null : null
+      ),
       include: registrationInclude,
     });
 

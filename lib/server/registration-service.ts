@@ -20,6 +20,9 @@ import { listEventsForApi } from "@/lib/server/event-service";
 import { loadEvents, saveEvents } from "@/lib/server/events-persistence";
 import type { RegistrationAttemptStep } from "@/lib/registration-attempt";
 import { normalizeAttemptPhone } from "@/lib/registration-attempt";
+import { registrationAttributionFromResolved } from "@/lib/lead-attribution/snapshot";
+import { resolveActiveLeadAttribution } from "@/lib/lead-attribution/resolve";
+import type { RegistrationAttributionSnapshot } from "@/lib/lead-attribution/snapshot";
 import type { RegistrationSource } from "@/lib/registration-source";
 import {
   finalizeRegistrationAttempts,
@@ -233,7 +236,25 @@ export type StudentRegistrationCreateOptions = {
   phoneVerificationToken?: string;
   /** Server-owned attempt id. Public callers cannot choose the source. */
   attemptId?: string | null;
+  /** Trusted snapshot from WhatsApp conversation — never from HTTP body text fields. */
+  attributionSnapshot?: RegistrationAttributionSnapshot | null;
 };
+
+async function resolveStudentAttributionForCreate(
+  input: CreateStudentRegistrationInput,
+  options: StudentRegistrationCreateOptions,
+  attempt: Awaited<ReturnType<typeof getRegistrationAttempt>> | null
+): Promise<RegistrationAttributionSnapshot | null> {
+  if (options.isAdminRequest) return null;
+  if (options.attributionSnapshot) return options.attributionSnapshot;
+
+  const code =
+    input.trackingCode?.trim() ||
+    attempt?.attributionTrackingCode?.trim() ||
+    null;
+  const resolved = resolveActiveLeadAttribution(code);
+  return resolved ? registrationAttributionFromResolved(resolved) : null;
+}
 
 function resolveCompletedStudentSource(
   options: StudentRegistrationCreateOptions
@@ -340,18 +361,19 @@ export async function createStudentRegistration(
     ? null
     : options.attemptId?.trim() || null;
   const attemptLastStep = attemptLastStepForSource(source);
+  let linkedAttempt: Awaited<ReturnType<typeof getRegistrationAttempt>> = null;
   if (attemptId) {
-    const attempt = await getRegistrationAttempt(attemptId);
+    linkedAttempt = await getRegistrationAttempt(attemptId);
     const expectedSource = source === "WHATSAPP" ? "WHATSAPP" : "WEBSITE";
     const phoneLast10 = normalizeAttemptPhone(validated.data.phone).phoneLast10;
     if (
-      !attempt ||
-      attempt.status !== "IN_PROGRESS" ||
-      attempt.source !== expectedSource ||
-      attempt.eventId !== event.id ||
-      (attempt.phoneLast10 &&
+      !linkedAttempt ||
+      linkedAttempt.status !== "IN_PROGRESS" ||
+      linkedAttempt.source !== expectedSource ||
+      linkedAttempt.eventId !== event.id ||
+      (linkedAttempt.phoneLast10 &&
         phoneLast10 &&
-        attempt.phoneLast10 !== phoneLast10)
+        linkedAttempt.phoneLast10 !== phoneLast10)
     ) {
       return {
         ok: false,
@@ -365,12 +387,19 @@ export async function createStudentRegistration(
     }
   }
 
+  const attribution = await resolveStudentAttributionForCreate(
+    validated.data,
+    options,
+    linkedAttempt
+  );
+
   if (isPrismaRegistrationPersistence()) {
     try {
       const created = await createPrismaRegistration(validated.data, event, {
         source,
         attemptId,
         attemptLastStep,
+        attribution,
       });
       scheduleStudentWelcomeEmail(created);
       return { ok: true, registration: created };
@@ -413,7 +442,13 @@ export async function createStudentRegistration(
     registrations,
     `reg-${generateId()}`,
     now,
-    source
+    source,
+    attribution
+      ? {
+          leadSource: attribution.leadSource,
+          leadSubSource: attribution.leadSubSource,
+        }
+      : undefined
   );
 
   saveRegistrations([created, ...registrations]);

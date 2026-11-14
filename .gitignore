@@ -14,6 +14,9 @@
 # production
 /build
 
+# Generated lead-attribution QR PNGs (regenerate via scripts/generate-lead-attribution-qrs.ts)
+/lead-attribution-qr/
+
 # misc
 .DS_Store
 *.pem

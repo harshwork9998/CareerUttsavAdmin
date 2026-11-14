@@ -95,6 +95,8 @@ export function mapPrismaRegistrationToApi(
         year: optionalString(record.year) as StudentRegistration["year"],
         seminarInterests: seminarInterestsFromRecord(record),
         source: isRegistrationSource(record.source) ? record.source : "UNKNOWN",
+        leadSource: record.leadSource ?? null,
+        leadSubSource: record.leadSubSource ?? null,
       };
       return student;
     }

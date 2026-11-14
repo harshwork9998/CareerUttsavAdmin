@@ -248,6 +248,100 @@ describe("whatsapp registration conversation engine", () => {
     expectNoFullNamePrompt(result.actions);
   });
 
+  it.each([
+    [
+      "AUTO-IN26",
+      "Auto (Inside)",
+      "Hi! I saw Career Uttsav advertised inside an auto and would like to register.",
+    ],
+    [
+      "AUTO-OUT26",
+      "Auto (Outside)",
+      "Hi! I came across Career Uttsav on the outside of an auto and would like to register.",
+    ],
+    [
+      "CABS26",
+      "Cabs",
+      "Hi! I came across Career Uttsav through a cab advertisement and would like to register.",
+    ],
+  ] as const)(
+    "stores lead attribution for configured intro (%s)",
+    (code, subSource, intro) => {
+      const result = turn(null, { text: intro });
+      expect(result.conversation.currentStep).toBe("AWAITING_START");
+      expect(result.conversation.leadSource).toBe("Overhead Marketing");
+      expect(result.conversation.leadSubSource).toBe(subSource);
+      expect(result.conversation.attributionTrackingCode).toBe(code);
+      expectWelcomeActions(result.actions);
+    }
+  );
+
+  it("keeps attribution after the prefilled intro and a follow-up Hi", () => {
+    const intro =
+      "Hi! I saw Career Uttsav advertised inside an auto and would like to register.";
+    const attributed = turn(null, { text: intro });
+    const afterHi = turn(attributed.conversation, { text: "Hi" });
+    expect(afterHi.conversation.attributionTrackingCode).toBe("AUTO-IN26");
+    expect(afterHi.conversation.leadSource).toBe("Overhead Marketing");
+    expect(afterHi.conversation.leadSubSource).toBe("Auto (Inside)");
+  });
+
+  it("does not replace an established attribution with a different intro", () => {
+    const firstIntro =
+      "Hi! I saw Career Uttsav advertised inside an auto and would like to register.";
+    const secondIntro =
+      "Hi! I came across Career Uttsav through a cab advertisement and would like to register.";
+    const first = turn(null, { text: firstIntro });
+    const started = turn(first.conversation, {
+      interactiveId: REGISTRATION_INTERACTIVE_IDS.START,
+    });
+    const second = turn(started.conversation, { text: secondIntro });
+    expect(second.conversation.attributionTrackingCode).toBe("AUTO-IN26");
+    expect(second.conversation.leadSubSource).toBe("Auto (Inside)");
+  });
+
+  describe("lead attribution lifecycle", () => {
+    const autoInIntro =
+      "Hi! I saw Career Uttsav advertised inside an auto and would like to register.";
+    const autoOutIntro =
+      "Hi! I came across Career Uttsav on the outside of an auto and would like to register.";
+    const cabsIntro =
+      "Hi! I came across Career Uttsav through a cab advertisement and would like to register.";
+
+    it("A: preserves Auto (Inside) through Hi and into registration", () => {
+      const attributed = turn(null, { text: autoInIntro });
+      const afterHi = turn(attributed.conversation, { text: "Hi" });
+      const started = turn(afterHi.conversation, {
+        interactiveId: REGISTRATION_INTERACTIVE_IDS.START,
+      });
+      expect(started.conversation.leadSubSource).toBe("Auto (Inside)");
+      expect(started.conversation.attributionTrackingCode).toBe("AUTO-IN26");
+    });
+
+    it("C: after cancel, a new CABS intro applies Cabs attribution", () => {
+      const attributed = turn(null, { text: autoInIntro });
+      const inProgress = turn(attributed.conversation, {
+        interactiveId: REGISTRATION_INTERACTIVE_IDS.START,
+      });
+      const cancelled = turn(inProgress.conversation, { text: "cancel" });
+      expect(cancelled.conversation.status).toBe("CANCELLED");
+      expect(cancelled.conversation.attributionTrackingCode).toBeNull();
+
+      const restarted = turn(cancelled.conversation, { text: cabsIntro });
+      expect(restarted.conversation.status).toBe("ACTIVE");
+      expect(restarted.conversation.attributionTrackingCode).toBe("CABS26");
+      expect(restarted.conversation.leadSubSource).toBe("Cabs");
+    });
+
+    it("D: a reconciled fresh start accepts Auto (Outside) intro", () => {
+      const fresh = createInitialConversationState("919876543210");
+      expect(fresh.attributionTrackingCode).toBeNull();
+      const attributed = turn(fresh, { text: autoOutIntro });
+      expect(attributed.conversation.attributionTrackingCode).toBe("AUTO-OUT26");
+      expect(attributed.conversation.leadSubSource).toBe("Auto (Outside)");
+    });
+  });
+
   it("shows Welcome and Start Registration for plain start on a fresh conversation", () => {
     const result = turn(null, { text: "start" });
     expect(result.conversation.currentStep).toBe("AWAITING_START");

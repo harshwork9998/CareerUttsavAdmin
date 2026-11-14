@@ -373,6 +373,7 @@ describe("website attempt failure handling", () => {
       var registrationAttemptId = "";
       var regSubmitInFlight = false;
       var currentStep = 1;
+      var cuActiveTrackingCode = null;
       ${script}
       return {
         advanceFromVerifiedContact,

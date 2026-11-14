@@ -166,6 +166,9 @@ export interface StudentRegistration extends RegistrationBase {
   kind: "student";
   /** Where this completed registration was finished. Missing values are Unknown. */
   source?: import("@/lib/registration-source").RegistrationSource;
+  /** Marketing snapshot at completion; null/undefined displays as unattributed. */
+  leadSource?: string | null;
+  leadSubSource?: string | null;
   studentName: string;
   email: string;
   phone: string;
@@ -707,6 +710,9 @@ export interface StudentRegistrationAnalytics {
   byCity: ChartDataPoint[];
   /** Hometown / location students entered on the registration form */
   byRegistrantCity: ChartDataPoint[];
+  byLeadMedium?: ChartDataPoint[];
+  byLeadSource?: ChartDataPoint[];
+  byLeadSubSource?: ChartDataPoint[];
   bySeminar: ChartDataPoint[];
   /** Weekly registrations Aug–Dec 2026 */
   weeklyTrend: ChartDataPoint[];

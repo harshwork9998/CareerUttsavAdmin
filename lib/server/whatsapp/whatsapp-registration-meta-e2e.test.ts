@@ -244,6 +244,7 @@ describe("whatsapp registration meta e2e (mocked)", () => {
     expect(createStudentRegistrationMock.mock.calls[0]?.[1]).toEqual({
       trustedInternalRegistration: true,
       attemptId: null,
+      attributionSnapshot: null,
     });
     expect(generatePassMock).toHaveBeenCalledWith({
       registrationId: REGISTRATION_NUMBER,

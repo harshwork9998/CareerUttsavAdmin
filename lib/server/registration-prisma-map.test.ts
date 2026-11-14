@@ -56,6 +56,9 @@ function baseRecord(
     ambassadorPhone: null,
     ambassadorEmail: null,
     source: "UNKNOWN",
+    leadSource: null,
+    leadSubSource: null,
+    attributionTrackingCode: null,
     registrationSeminars: [
       {
         id: "rsem-1",

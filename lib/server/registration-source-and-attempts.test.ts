@@ -106,6 +106,8 @@ vi.mock("@/lib/server/admin-auth", () => ({
 }));
 
 import { GET as listAttempts, POST as createAttempt } from "@/app/api/registration-attempts/route";
+import { createPrismaRegistration } from "@/lib/server/registration-prisma-store";
+import { isPrismaRegistrationPersistence } from "@/lib/server/registration-persistence-mode";
 import { PATCH as updateAttempt } from "@/app/api/registration-attempts/[id]/route";
 import { consumePhoneVerification, sendOtp, verifyOtp } from "@/lib/otp";
 import { __resetOtpStoreForTests, __setOtpStoreForTests } from "@/lib/otp/persistence";
@@ -276,7 +278,10 @@ describe("registration source and attempts", () => {
     );
     expect(headers[1]).toBe("Pass ID");
     expect(headers[2]).toBe("Lead Medium");
+    expect(headers[3]).toBe("Lead Source");
+    expect(headers[4]).toBe("Lead Sub-source");
     expect(exportHeadersForKind("student")[2]).toBe("Lead Medium");
+    expect(exportHeadersForKind("student")[3]).toBe("Lead Source");
     expect(exportHeadersForKind("school")).not.toContain("Lead Medium");
 
     const registration = {
@@ -618,6 +623,158 @@ describe("registration source and attempts", () => {
     expect(exportHeadersForKind("student")).not.toEqual([
       ...PARTIAL_REGISTRATION_EXPORT_HEADERS,
     ]);
+  });
+
+  describe("lead attribution persistence", () => {
+    const attributionPhones = [
+      "9111111111",
+      "9222222222",
+      "9333333333",
+      "9444444444",
+    ] as const;
+
+    it.each([
+      ["AUTO-IN26", "Auto (Inside)", 0],
+      ["AUTO-OUT26", "Auto (Outside)", 1],
+      ["CABS26", "Cabs", 2],
+    ] as const)(
+      "persists website attribution for %s",
+      async (code, subSource, phoneIndex) => {
+        const phone = attributionPhones[phoneIndex]!;
+        const email = `attrib-${code.toLowerCase()}@example.com`;
+        storedRegistrations.value = [];
+        __setRegistrationAttemptStoreForTests([]);
+        const token = await verificationToken(phone);
+        const attemptResponse = await createAttempt(
+          new Request("http://localhost/api/registration-attempts", {
+            method: "POST",
+            body: JSON.stringify({
+              eventId: CURRENT_EVENT_ID,
+              phone,
+              name: "Attrib Student",
+              email,
+              phoneVerificationToken: token,
+              trackingCode: code,
+            }),
+          })
+        );
+        expect(attemptResponse.status).toBe(200);
+        const { attemptId } = (await attemptResponse.json()) as {
+          attemptId: string;
+        };
+        expect(
+          (await listRegistrationAttempts())[0]?.attributionTrackingCode
+        ).toBe(code);
+
+        const completed = await createRegistrationForApi(
+          {
+            ...studentBody({
+              phone,
+              email,
+              studentName: "Attrib Student",
+            }),
+            trackingCode: code,
+            phoneVerificationToken: token,
+            attemptId,
+          },
+          new Request("http://localhost/api/registrations"),
+          { isAdminRequest: false }
+        );
+        expect(completed.ok).toBe(true);
+        if (completed.ok && completed.registration.kind === "student") {
+          expect(completed.registration.source).toBe("WEBSITE");
+          expect(completed.registration.leadSource).toBe("Overhead Marketing");
+          expect(completed.registration.leadSubSource).toBe(subSource);
+        }
+      }
+    );
+
+    it("does not block registration when tracking code is invalid", async () => {
+      const phone = attributionPhones[3]!;
+      const email = "unattrib@example.com";
+      storedRegistrations.value = [];
+      __setRegistrationAttemptStoreForTests([]);
+      const token = await verificationToken(phone);
+      const attemptResponse = await createAttempt(
+        new Request("http://localhost/api/registration-attempts", {
+          method: "POST",
+          body: JSON.stringify({
+            eventId: CURRENT_EVENT_ID,
+            phone,
+            name: "No Attrib",
+            email,
+            phoneVerificationToken: token,
+            trackingCode: "NOT-A-REAL-CODE",
+          }),
+        })
+      );
+      expect(attemptResponse.status).toBe(200);
+      const { attemptId } = (await attemptResponse.json()) as {
+        attemptId: string;
+      };
+      expect(
+        (await listRegistrationAttempts())[0]?.attributionTrackingCode
+      ).toBeNull();
+
+      const completed = await createRegistrationForApi(
+        {
+          ...studentBody({ phone, email, studentName: "No Attrib" }),
+          trackingCode: "NOT-A-REAL-CODE",
+          phoneVerificationToken: token,
+          attemptId,
+        },
+        new Request("http://localhost/api/registrations"),
+        { isAdminRequest: false }
+      );
+      expect(completed.ok).toBe(true);
+      if (completed.ok && completed.registration.kind === "student") {
+        expect(completed.registration.source).toBe("WEBSITE");
+        expect(completed.registration.leadSource).toBeNull();
+        expect(completed.registration.leadSubSource).toBeNull();
+      }
+    });
+
+    it("passes attribution snapshot into prisma create", async () => {
+      const phone = "9555555555";
+      const email = "prisma-attrib@example.com";
+      storedRegistrations.value = [];
+      __setRegistrationAttemptStoreForTests([]);
+      vi.mocked(isPrismaRegistrationPersistence).mockReturnValue(true);
+      vi.mocked(createPrismaRegistration).mockResolvedValue({
+        ...studentBody({ phone, email }),
+        id: "reg-prisma-attrib",
+        registrationNumber: "CU-BLR-2026-00999",
+        source: "WEBSITE",
+        status: "Confirmed",
+        paymentStatus: "Waived",
+        registeredAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+        eventTitle: sampleEvent.title,
+        state: "Karnataka",
+        leadSource: "Overhead Marketing",
+        leadSubSource: "Cabs",
+      } as StudentRegistration);
+
+      const token = await verificationToken(phone);
+      const result = await createStudentRegistration(
+        studentBody({ phone, email, trackingCode: "CABS26" }),
+        { phoneVerificationToken: token }
+      );
+      expect(result.ok).toBe(true);
+      expect(createPrismaRegistration).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: "student" }),
+        expect.anything(),
+        expect.objectContaining({
+          source: "WEBSITE",
+          attribution: {
+            leadSource: "Overhead Marketing",
+            leadSubSource: "Cabs",
+            attributionTrackingCode: "CABS26",
+          },
+        })
+      );
+      vi.mocked(isPrismaRegistrationPersistence).mockReturnValue(false);
+    });
   });
 });
 

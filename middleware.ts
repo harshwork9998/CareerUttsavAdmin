@@ -55,7 +55,8 @@ function isPublicRegistrationApi(pathname: string) {
     pathname === "/api/registration-attempts" ||
     pathname.startsWith("/api/registration-attempts/") ||
     pathname === "/api/send-otp" ||
-    pathname === "/api/verify-otp"
+    pathname === "/api/verify-otp" ||
+    pathname === "/api/public/lead-attribution"
   );
 }
 
@@ -110,5 +111,6 @@ export const config = {
     "/api/registration-attempts/:path*",
     "/api/send-otp",
     "/api/verify-otp",
+    "/api/public/lead-attribution",
   ],
 };
