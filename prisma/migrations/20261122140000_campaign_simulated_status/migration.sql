@@ -1,0 +1,1 @@
+ALTER TYPE "WhatsAppCampaignRecipientStatus" ADD VALUE IF NOT EXISTS 'SIMULATED';

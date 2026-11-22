@@ -69,3 +69,34 @@ export function buildMetaMessagesUrl(config: MetaClientConfig): string {
 export function buildMetaMediaUrl(config: MetaClientConfig): string {
   return `https://graph.facebook.com/${config.graphApiVersion}/${config.phoneNumberId}/media`;
 }
+
+export type WhatsAppBusinessAccountConfigResult =
+  | { ok: true; wabaId: string }
+  | {
+      ok: false;
+      errorCode: "WHATSAPP_BUSINESS_ACCOUNT_ID_NOT_CONFIGURED";
+      message: string;
+    };
+
+export function getWhatsAppBusinessAccountId(): WhatsAppBusinessAccountConfigResult {
+  const wabaId = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID?.trim();
+  if (!wabaId) {
+    return {
+      ok: false,
+      errorCode: "WHATSAPP_BUSINESS_ACCOUNT_ID_NOT_CONFIGURED",
+      message:
+        "Add WHATSAPP_BUSINESS_ACCOUNT_ID to server configuration to load approved templates from Meta.",
+    };
+  }
+  return { ok: true, wabaId };
+}
+
+export function buildMetaMessageTemplatesUrl(
+  config: MetaClientConfig,
+  wabaId: string,
+  query?: Record<string, string>
+): string {
+  const params = new URLSearchParams(query);
+  const qs = params.toString();
+  return `https://graph.facebook.com/${config.graphApiVersion}/${wabaId}/message_templates${qs ? `?${qs}` : ""}`;
+}

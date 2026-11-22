@@ -528,6 +528,7 @@ model AdminUser {
   updatedAt           DateTime
   passwordResetTokens AdminPasswordResetToken[]
   relationshipSpoc    Spoc?                   @relation(fields: [relationshipSpocId], references: [id], onDelete: SetNull)
+  whatsAppCampaigns   WhatsAppCampaign[]
 
   @@index([role])
   @@index([status])
@@ -683,5 +684,107 @@ model WhatsAppInboundMessage {
 
   @@index([waId])
   @@map("whatsapp_inbound_messages")
+}
+
+// ─── WhatsApp bulk campaigns (marketing template sends) ───────────────────────
+
+enum WhatsAppCampaignStatus {
+  DRAFT
+  RUNNING
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+enum WhatsAppCampaignRecipientStatus {
+  INVALID
+  DUPLICATE
+  OPTED_OUT
+  SKIPPED
+  PENDING
+  CLAIMED
+  NEEDS_REVIEW
+  SIMULATED
+  ACCEPTED
+  SENT
+  DELIVERED
+  READ
+  FAILED
+  UNKNOWN
+}
+
+model WhatsAppCampaign {
+  id                  String                 @id @default(cuid())
+  name                String
+  status              WhatsAppCampaignStatus @default(DRAFT)
+  templateName        String?
+  templateLanguage    String?
+  /// Snapshot of template components from Meta for preview / validation.
+  templateSnapshot    Json?
+  /// Variable mapping: body/header static values and column names.
+  variableMapping     Json?
+  consentConfirmedAt  DateTime?
+  consentConfirmedBy  String?
+  createdByAdminId    String
+  startedAt           DateTime?
+  completedAt         DateTime?
+  pausedAt            DateTime?
+  sendDelayMs         Int                    @default(400)
+  batchSize           Int                    @default(25)
+  testRecipientWaId   String?
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+
+  createdBy AdminUser               @relation(fields: [createdByAdminId], references: [id], onDelete: Restrict)
+  recipients WhatsAppCampaignRecipient[]
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("whatsapp_campaigns")
+}
+
+model WhatsAppCampaignRecipient {
+  id            String                          @id @default(cuid())
+  campaignId    String
+  waId          String
+  phoneLast10   String
+  rowNumber     Int?
+  rowData       Json?
+  status        WhatsAppCampaignRecipientStatus @default(PENDING)
+  metaMessageId String?
+  attemptCount  Int                             @default(0)
+  claimedAt     DateTime?
+  /// Set immediately before a Meta send is attempted; never return to PENDING after this.
+  submissionStartedAt DateTime?
+  acceptedAt    DateTime?
+  sentAt        DateTime?
+  deliveredAt   DateTime?
+  readAt        DateTime?
+  failedAt      DateTime?
+  skipReason    String?
+  lastError     String?
+  createdAt     DateTime                        @default(now())
+  updatedAt     DateTime                        @updatedAt
+
+  campaign WhatsAppCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, waId])
+  @@unique([metaMessageId])
+  @@index([campaignId, status])
+  @@index([waId])
+  @@map("whatsapp_campaign_recipients")
+}
+
+model WhatsAppSuppression {
+  id          String   @id @default(cuid())
+  phoneLast10 String   @unique
+  waId        String?
+  reason      String
+  source      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([waId])
+  @@map("whatsapp_suppressions")
 }
 

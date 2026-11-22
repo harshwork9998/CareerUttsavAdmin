@@ -10,6 +10,8 @@ export const USER_ALLOWED_HREFS = [
   "/seminars",
 ] as const;
 
+const CAMPAIGN_SUPERUSER_ONLY = "/campaigns";
+
 const SUPERUSER_HREFS = NAV_ITEMS.map((item) => item.href);
 
 export const ROUTES_BY_ROLE: Record<RoleName, readonly string[]> = {
@@ -23,10 +25,18 @@ export function getDefaultRouteForRole(role: RoleName): string {
 
 export function getNavItemsForRole(role: RoleName): NavItem[] {
   const allowed = new Set<string>(ROUTES_BY_ROLE[role]);
-  return NAV_ITEMS.filter((item) => allowed.has(item.href));
+  return NAV_ITEMS.filter((item) => {
+    if (item.href === CAMPAIGN_SUPERUSER_ONLY) {
+      return role === "superuser";
+    }
+    return allowed.has(item.href);
+  });
 }
 
 export function canAccessRoute(role: RoleName, pathname: string): boolean {
+  if (pathname === CAMPAIGN_SUPERUSER_ONLY || pathname.startsWith(`${CAMPAIGN_SUPERUSER_ONLY}/`)) {
+    return role === "superuser";
+  }
   const allowed = ROUTES_BY_ROLE[role];
   return allowed.some(
     (href) => pathname === href || pathname.startsWith(`${href}/`)

@@ -11,6 +11,7 @@ export const NAV_ITEMS = [
   { title: "Dashboard", href: "/dashboard", icon: "LayoutDashboard" },
   { title: "Events", href: "/events", icon: "CalendarDays" },
   { title: "Registrations", href: "/registrations", icon: "Users" },
+  { title: "Campaigns", href: "/campaigns", icon: "Megaphone" },
   { title: "Partners", href: "/partners", icon: "Handshake" },
   { title: "Seminars", href: "/seminars", icon: "Mic2" },
   { title: "Users", href: "/users", icon: "UserCog" },

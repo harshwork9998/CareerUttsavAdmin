@@ -1,3 +1,5 @@
+import { applyCampaignDeliveryStatus } from "@/lib/server/whatsapp/campaign-delivery-webhook";
+import { handleInboundOptOutIfNeeded } from "@/lib/server/whatsapp/campaign-opt-out-handler";
 import {
   extractNormalizedWhatsAppMessages,
   extractNormalizedWhatsAppStatuses,
@@ -91,6 +93,13 @@ async function processInboundUserMessageSerialized(
     return;
   }
 
+  if (await handleInboundOptOutIfNeeded({ waId, text: message.textBody })) {
+    await markWhatsAppInboundMessageProcessed(message.messageId);
+    return;
+  }
+
+  const turnContext = await loadWhatsAppConversationTurnContext(waId);
+
   if (!isSupportedConversationMessageType(message.type)) {
     safeLogConversationProgress({
       messageId: message.messageId,
@@ -104,8 +113,8 @@ async function processInboundUserMessageSerialized(
   }
 
   const sessionExpired = await deleteExpiredWhatsAppConversation(waId);
-  const { conversation: existingConversation, previousActivityAt } =
-    await loadWhatsAppConversationTurnContext(waId);
+  const existingConversation = turnContext.conversation;
+  const previousActivityAt = turnContext.previousActivityAt;
   const [seminarOptions, eventArtworkSeminarOptions, seminarDayCatalog] =
     await Promise.all([
       getWhatsAppSeminarOptions(),
@@ -199,6 +208,12 @@ export async function processVerifiedWhatsAppWebhook(rawBody: string): Promise<v
 
   const statuses = extractNormalizedWhatsAppStatuses(payload);
   for (const status of statuses) {
+    void applyCampaignDeliveryStatus(status).catch((error: unknown) => {
+      console.warn(
+        "[whatsapp-campaign] delivery update failed",
+        error instanceof Error ? error.message : "unknown"
+      );
+    });
     safeLogWhatsAppDeliveryStatus(status);
   }
 }
