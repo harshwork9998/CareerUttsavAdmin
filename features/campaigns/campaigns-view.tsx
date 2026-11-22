@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, Pause, Play, Plus } from "lucide-react";
+import { Download, MoreHorizontal, Pause, Play, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,8 +20,22 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { CampaignVariableMapping } from "@/lib/server/whatsapp/campaign-variable-mapping";
-import type { TemplateCapability } from "@/lib/server/whatsapp/campaign-template-capability";
+import {
+  assessTemplateCapability,
+  type TemplateCapability,
+} from "@/lib/server/whatsapp/campaign-template-capability";
 import type { MetaMessageTemplate } from "@/lib/server/whatsapp/meta-templates";
+import { isDraftSetupStep } from "@/lib/server/whatsapp/campaign-wizard-resume";
+import {
+  type CampaignDetailPayload,
+  useCampaignResume,
+} from "@/features/campaigns/use-campaign-resume";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type CampaignListItem = {
   id: string;
@@ -75,16 +90,29 @@ function Stat({ label, value }: { label: string; value: number }) {
 
 export function CampaignsView() {
   const queryClient = useQueryClient();
-  const [step, setStep] = useState(0);
-  const [campaignId, setCampaignId] = useState<string | null>(null);
+  const {
+    step,
+    campaignId,
+    setCampaignId,
+    clearCampaign,
+    uploadHeaders,
+    setUploadHeaders,
+    selectedTemplateKey,
+    variableMapping,
+    setVariableMapping,
+    consentChecked,
+    setConsentChecked,
+    applyCampaignDetail,
+    goToStep,
+    onTemplateSelected,
+    allowsSetupNavigation,
+    assessSendReadiness,
+  } = useCampaignResume();
   const [newCampaignName, setNewCampaignName] = useState("");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [mobileColumn, setMobileColumn] = useState("");
-  const [uploadHeaders, setUploadHeaders] = useState<string[]>([]);
-  const [selectedTemplateKey, setSelectedTemplateKey] = useState("");
-  const [variableMapping, setVariableMapping] = useState<CampaignVariableMapping>({});
-  const [consentChecked, setConsentChecked] = useState(false);
   const [testMobile, setTestMobile] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<CampaignListItem | null>(null);
 
   const campaignsQuery = useQuery({
     queryKey: ["campaigns"],
@@ -114,21 +142,18 @@ export function CampaignsView() {
     queryFn: async () => {
       const response = await fetch(`/api/campaigns/${campaignId}`);
       if (!response.ok) throw new Error("Could not load campaign.");
-      return (await response.json()) as {
-        campaign: {
-          id: string;
-          name: string;
-          status: string;
-          templateName: string | null;
-          consentConfirmedAt: string | null;
-        };
-        counts: CampaignCounts;
-      };
+      return (await response.json()) as CampaignDetailPayload;
     },
     enabled: Boolean(campaignId),
     refetchInterval: (query) =>
       query.state.data?.campaign.status === "RUNNING" ? 3000 : false,
   });
+
+  useEffect(() => {
+    if (detailQuery.data) {
+      applyCampaignDetail(detailQuery.data);
+    }
+  }, [detailQuery.data, applyCampaignDetail]);
 
   const createCampaign = useMutation({
     mutationFn: async (name: string) => {
@@ -143,7 +168,7 @@ export function CampaignsView() {
     },
     onSuccess: (campaign) => {
       setCampaignId(campaign.id);
-      setStep(1);
+      goToStep(1);
       void queryClient.invalidateQueries({ queryKey: ["campaigns"] });
     },
   });
@@ -173,7 +198,7 @@ export function CampaignsView() {
       toast.success(
         `${data.acceptedCount} ready to send · ${data.skippedCount} skipped`
       );
-      setStep(2);
+      goToStep(2);
       void queryClient.invalidateQueries({ queryKey: ["campaign", campaignId] });
     },
   });
@@ -198,7 +223,7 @@ export function CampaignsView() {
     },
     onSuccess: () => {
       toast.success("Template saved.");
-      setStep(3);
+      goToStep(3);
       void queryClient.invalidateQueries({ queryKey: ["campaign", campaignId] });
     },
   });
@@ -236,8 +261,28 @@ export function CampaignsView() {
     },
     onSuccess: () => {
       toast.success("Campaign started.");
-      setStep(4);
+      goToStep(4);
       void queryClient.invalidateQueries({ queryKey: ["campaign", campaignId] });
+    },
+  });
+
+  const deleteCampaignMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await fetch(`/api/campaigns/${id}`, { method: "DELETE" });
+      const data = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(data.error ?? "Could not delete campaign.");
+      }
+    },
+    onSuccess: (_data, id) => {
+      toast.success("Campaign deleted.");
+      if (campaignId === id) {
+        clearCampaign();
+      }
+      void queryClient.invalidateQueries({ queryKey: ["campaigns"] });
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
     },
   });
 
@@ -249,21 +294,46 @@ export function CampaignsView() {
     [templatesQuery.data, selectedTemplateKey]
   );
 
-  useEffect(() => {
-    if (!selectedTemplate) return;
-    setVariableMapping({
-      header: selectedTemplate.capability.headerVariableSlots.map(() => ({
-        kind: "static",
-        value: "",
-      })),
-      body: selectedTemplate.capability.bodyVariableSlots.map(() => ({
-        kind: "static",
-        value: "",
-      })),
-    });
-  }, [selectedTemplate]);
-
   const counts = detailQuery.data?.counts;
+  const campaignStatus = detailQuery.data?.campaign.status;
+  const openingExistingCampaign =
+    Boolean(campaignId) &&
+    step === 0 &&
+    !detailQuery.data &&
+    !detailQuery.isError &&
+    (detailQuery.isLoading || detailQuery.isFetching);
+  const templateCapability = useMemo(() => {
+    if (selectedTemplate?.capability) {
+      return selectedTemplate.capability;
+    }
+    const snapshot = detailQuery.data?.campaign.templateSnapshot;
+    if (snapshot) {
+      return assessTemplateCapability(snapshot);
+    }
+    return null;
+  }, [detailQuery.data?.campaign.templateSnapshot, selectedTemplate]);
+
+  const sendReadiness = useMemo(() => {
+    if (!counts || !campaignStatus) {
+      return { ready: false, blockingReasons: [] as string[] };
+    }
+    return assessSendReadiness(
+      campaignStatus,
+      detailQuery.data?.campaign.templateName ?? null,
+      detailQuery.data?.campaign.templateLanguage ?? null,
+      templateCapability?.headerVariableCount ?? 0,
+      templateCapability?.bodyVariableCount ?? 0,
+      counts.pending
+    );
+  }, [
+    assessSendReadiness,
+    campaignStatus,
+    counts,
+    detailQuery.data?.campaign.templateLanguage,
+    detailQuery.data?.campaign.templateName,
+    templateCapability?.bodyVariableCount,
+    templateCapability?.headerVariableCount,
+  ]);
 
   return (
     <div className="space-y-6 p-4 md:p-6">
@@ -279,7 +349,36 @@ export function CampaignsView() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {step === 0 && (
+          {openingExistingCampaign ? (
+            <p className="text-sm text-muted-foreground">Opening campaign…</p>
+          ) : null}
+
+          {!openingExistingCampaign && campaignId &&
+            campaignStatus &&
+            allowsSetupNavigation(campaignStatus) &&
+            isDraftSetupStep(step) && (
+              <div className="flex flex-wrap gap-2 border-b pb-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => goToStep(step - 1, { userNavigated: true })}
+                  disabled={step <= 1}
+                >
+                  Back
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => clearCampaign()}
+                >
+                  All campaigns
+                </Button>
+              </div>
+            )}
+
+          {!openingExistingCampaign && step === 0 && (
             <>
               <div className="flex flex-col gap-2 sm:flex-row">
                 <Input
@@ -303,27 +402,50 @@ export function CampaignsView() {
                 <div className="space-y-2">
                   <p className="text-sm font-medium">Previous campaigns</p>
                   {(campaignsQuery.data ?? []).map((campaign) => (
-                    <button
+                    <div
                       key={campaign.id}
-                      type="button"
-                      className="flex w-full items-center justify-between rounded-lg border p-3 text-left hover:bg-muted/40"
-                      onClick={() => {
-                        setCampaignId(campaign.id);
-                        setStep(4);
-                      }}
+                      className="flex w-full items-center gap-2 rounded-lg border p-2 hover:bg-muted/40"
                     >
-                      <span className="font-medium">{campaign.name}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {campaign.status}
-                      </span>
-                    </button>
+                      <button
+                        type="button"
+                        className="flex min-w-0 flex-1 items-center justify-between p-1 text-left"
+                        onClick={() => setCampaignId(campaign.id)}
+                      >
+                        <span className="font-medium">{campaign.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {campaign.status}
+                        </span>
+                      </button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="shrink-0"
+                            aria-label={`Options for ${campaign.name}`}
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => setDeleteTarget(campaign)}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   ))}
                 </div>
               )}
             </>
           )}
 
-          {step === 1 && campaignId && (
+          {!openingExistingCampaign && step === 1 && campaignId && (
             <>
               <div className="space-y-2">
                 <Label htmlFor="campaign-file">Upload Excel or CSV</Label>
@@ -359,10 +481,19 @@ export function CampaignsView() {
               >
                 Continue
               </Button>
+              {counts && counts.pending > 0 && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => goToStep(2, { userNavigated: true })}
+                >
+                  Continue to template
+                </Button>
+              )}
             </>
           )}
 
-          {step === 2 && campaignId && (
+          {!openingExistingCampaign && step === 2 && campaignId && (
             <>
               {templatesQuery.isLoading && (
                 <p className="text-sm text-muted-foreground">Loading templates…</p>
@@ -378,7 +509,12 @@ export function CampaignsView() {
                     <Label>Approved template</Label>
                     <Select
                       value={selectedTemplateKey}
-                      onValueChange={setSelectedTemplateKey}
+                      onValueChange={(key) => {
+                        const template = templatesQuery.data?.find(
+                          (item) => `${item.name}:${item.language}` === key
+                        );
+                        onTemplateSelected(key, template?.capability);
+                      }}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Choose template" />
@@ -421,7 +557,7 @@ export function CampaignsView() {
             </>
           )}
 
-          {step === 3 && counts && (
+          {!openingExistingCampaign && step === 3 && counts && (
             <>
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                 <Stat label="Total rows" value={counts.total} />
@@ -466,16 +602,30 @@ export function CampaignsView() {
                 </Button>
               </div>
 
-              <Button
-                onClick={() => startCampaign.mutate()}
-                disabled={!consentChecked || startCampaign.isPending}
-              >
-                Confirm and send campaign
-              </Button>
+              {!sendReadiness.ready && sendReadiness.blockingReasons.length > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  {sendReadiness.blockingReasons[0]}
+                </p>
+              )}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => goToStep(2, { userNavigated: true })}
+                >
+                  Edit template
+                </Button>
+                <Button
+                  onClick={() => startCampaign.mutate()}
+                  disabled={!sendReadiness.ready || startCampaign.isPending}
+                >
+                  Confirm and send campaign
+                </Button>
+              </div>
             </>
           )}
 
-          {step === 4 && campaignId && counts && detailQuery.data && (
+          {!openingExistingCampaign && step === 4 && campaignId && counts && detailQuery.data && (
             <>
               <p className="text-lg font-semibold">{detailQuery.data.campaign.name}</p>
               <p className="text-sm text-muted-foreground">
@@ -536,6 +686,28 @@ export function CampaignsView() {
           )}
         </CardContent>
       </Card>
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+        title="Delete this campaign?"
+        description={
+          deleteTarget
+            ? `Are you sure you want to delete ${deleteTarget.name}?`
+            : undefined
+        }
+        confirmLabel="Delete campaign"
+        cancelLabel="Cancel"
+        variant="destructive"
+        loading={deleteCampaignMutation.isPending}
+        onConfirm={async () => {
+          if (!deleteTarget) return;
+          await deleteCampaignMutation.mutateAsync(deleteTarget.id);
+          setDeleteTarget(null);
+        }}
+      />
     </div>
   );
 }

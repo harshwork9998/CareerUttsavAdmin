@@ -173,7 +173,7 @@ export async function processWhatsAppCampaignSends(input?: {
   await markUnknownDeliveryStatuses(now);
 
   const runningCampaigns = await prisma.whatsAppCampaign.findMany({
-    where: { status: "RUNNING" },
+    where: { status: "RUNNING", deletedAt: null },
     select: {
       id: true,
       batchSize: true,

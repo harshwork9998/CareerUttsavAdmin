@@ -528,7 +528,8 @@ model AdminUser {
   updatedAt           DateTime
   passwordResetTokens AdminPasswordResetToken[]
   relationshipSpoc    Spoc?                   @relation(fields: [relationshipSpocId], references: [id], onDelete: SetNull)
-  whatsAppCampaigns   WhatsAppCampaign[]
+  whatsAppCampaigns        WhatsAppCampaign[]
+  whatsAppCampaignsDeleted WhatsAppCampaign[] @relation("WhatsAppCampaignDeletedBy")
 
   @@index([role])
   @@index([status])
@@ -732,14 +733,18 @@ model WhatsAppCampaign {
   sendDelayMs         Int                    @default(400)
   batchSize           Int                    @default(25)
   testRecipientWaId   String?
+  deletedAt           DateTime?
+  deletedByAdminId    String?
   createdAt           DateTime               @default(now())
   updatedAt           DateTime               @updatedAt
 
   createdBy AdminUser               @relation(fields: [createdByAdminId], references: [id], onDelete: Restrict)
+  deletedBy AdminUser?              @relation("WhatsAppCampaignDeletedBy", fields: [deletedByAdminId], references: [id], onDelete: SetNull)
   recipients WhatsAppCampaignRecipient[]
 
   @@index([status])
   @@index([createdAt])
+  @@index([deletedAt])
   @@map("whatsapp_campaigns")
 }
 

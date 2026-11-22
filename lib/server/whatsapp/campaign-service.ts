@@ -29,9 +29,14 @@ import {
   assertWhatsAppCampaignLiveSendAllowed,
   readCampaignMaxRecipientsPerLaunch,
 } from "@/lib/server/whatsapp/campaign-live-send";
+import {
+  deriveImportHeadersFromRowData,
+  readVariableMappingFromJson,
+} from "@/lib/server/whatsapp/campaign-wizard-resume";
 
 export async function listCampaigns() {
   return prisma.whatsAppCampaign.findMany({
+    where: { deletedAt: null },
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
@@ -46,13 +51,33 @@ export async function listCampaigns() {
   });
 }
 
+async function loadCampaignImportHeaders(campaignId: string): Promise<string[]> {
+  const sample = await prisma.whatsAppCampaignRecipient.findFirst({
+    where: { campaignId, rowNumber: { not: null } },
+    select: { rowData: true },
+    orderBy: { rowNumber: "asc" },
+  });
+  if (!sample?.rowData || typeof sample.rowData !== "object") {
+    return [];
+  }
+  return deriveImportHeadersFromRowData(
+    sample.rowData as Record<string, string>
+  );
+}
+
 export async function getCampaignDetail(campaignId: string) {
   const campaign = await prisma.whatsAppCampaign.findUnique({
     where: { id: campaignId },
   });
-  if (!campaign) return null;
+  if (!campaign || campaign.deletedAt) return null;
   const counts = await countCampaignRecipients(campaignId);
-  return { campaign, counts };
+  const importHeaders = await loadCampaignImportHeaders(campaignId);
+  return {
+    campaign,
+    counts,
+    importHeaders,
+    variableMapping: readVariableMappingFromJson(campaign.variableMapping),
+  };
 }
 
 export function staffFacingError(message: string): string {
@@ -67,9 +92,9 @@ export async function importCampaignContacts(input: {
 }) {
   const campaign = await prisma.whatsAppCampaign.findUnique({
     where: { id: input.campaignId },
-    select: { id: true, status: true },
+    select: { id: true, status: true, deletedAt: true },
   });
-  if (!campaign || campaign.status !== "DRAFT") {
+  if (!campaign || campaign.deletedAt || campaign.status !== "DRAFT") {
     throw new Error("This campaign cannot accept a new contact list.");
   }
 
@@ -201,7 +226,7 @@ export async function startCampaign(campaignId: string) {
   const campaign = await prisma.whatsAppCampaign.findUnique({
     where: { id: campaignId },
   });
-  if (!campaign) throw new Error("Campaign not found.");
+  if (!campaign || campaign.deletedAt) throw new Error("Campaign not found.");
   if (!campaign.consentConfirmedAt) {
     throw new Error("Confirm consent before sending.");
   }

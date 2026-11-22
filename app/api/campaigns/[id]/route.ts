@@ -8,6 +8,7 @@ import {
 } from "@/lib/server/whatsapp/campaign-service";
 import type { CampaignVariableMapping } from "@/lib/server/whatsapp/campaign-variable-mapping";
 import type { MetaMessageTemplate } from "@/lib/server/whatsapp/meta-templates";
+import { deleteCampaign } from "@/lib/server/whatsapp/campaign-delete";
 import { setCampaignStatus } from "@/lib/server/whatsapp/campaign-store";
 
 export const dynamic = "force-dynamic";
@@ -69,5 +70,25 @@ export async function PATCH(request: Request, context: RouteContext) {
     const message =
       error instanceof Error ? error.message : "This update could not be saved.";
     return NextResponse.json({ error: message }, { status: 400 });
+  }
+}
+
+export async function DELETE(_request: Request, context: RouteContext) {
+  const auth = await requireSuperuser();
+  if (auth instanceof NextResponse) return auth;
+
+  const { id } = await context.params;
+
+  try {
+    const result = await deleteCampaign({
+      campaignId: id,
+      adminUserId: auth.user.id,
+    });
+    return NextResponse.json({ ok: true, outcome: result.outcome });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "This campaign could not be deleted.";
+    const status = message === "Campaign not found." ? 404 : 400;
+    return NextResponse.json({ error: message }, { status });
   }
 }
