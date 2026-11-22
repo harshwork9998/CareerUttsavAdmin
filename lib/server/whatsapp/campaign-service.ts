@@ -3,7 +3,7 @@ import { assessTemplateCapability } from "@/lib/server/whatsapp/campaign-templat
 import type { CampaignVariableMapping } from "@/lib/server/whatsapp/campaign-variable-mapping";
 import {
   buildTemplateComponentsFromMapping,
-  validateVariableMapping,
+  validateCampaignTemplateMapping,
 } from "@/lib/server/whatsapp/campaign-variable-mapping";
 import { toWhatsAppRecipientWaId } from "@/lib/server/whatsapp/campaign-phone";
 import { countCampaignRecipients } from "@/lib/server/whatsapp/campaign-stats";
@@ -144,10 +144,9 @@ export async function applyCampaignTemplate(input: {
     );
   }
 
-  const mappingError = validateVariableMapping({
+  const mappingError = validateCampaignTemplateMapping({
+    capability,
     mapping: input.variableMapping,
-    headerSlots: capability.headerVariableCount,
-    bodySlots: capability.bodyVariableCount,
   });
   if (mappingError) {
     throw new Error(mappingError);
@@ -177,6 +176,21 @@ export async function sendCampaignTest(input: {
   });
   if (!campaign?.templateName || !campaign.templateLanguage) {
     throw new Error("Choose a template before sending a test.");
+  }
+
+  const templateSnapshot = campaign.templateSnapshot as MetaMessageTemplate | null;
+  if (templateSnapshot) {
+    const capability = assessTemplateCapability(templateSnapshot);
+    const mapping = (campaign.variableMapping as CampaignVariableMapping | null) ?? {
+      body: [],
+    };
+    const mappingError = validateCampaignTemplateMapping({
+      capability,
+      mapping,
+    });
+    if (mappingError) {
+      throw new Error(mappingError);
+    }
   }
 
   const waId = toWhatsAppRecipientWaId(input.testMobile);
@@ -232,6 +246,21 @@ export async function startCampaign(campaignId: string) {
   }
   if (!campaign.templateName || !campaign.templateLanguage) {
     throw new Error("Choose a template before sending.");
+  }
+
+  const templateSnapshot = campaign.templateSnapshot as MetaMessageTemplate | null;
+  if (templateSnapshot) {
+    const capability = assessTemplateCapability(templateSnapshot);
+    const mapping = (campaign.variableMapping as CampaignVariableMapping | null) ?? {
+      body: [],
+    };
+    const mappingError = validateCampaignTemplateMapping({
+      capability,
+      mapping,
+    });
+    if (mappingError) {
+      throw new Error(mappingError);
+    }
   }
 
   const pending = await prisma.whatsAppCampaignRecipient.count({

@@ -1,4 +1,8 @@
-import type { CampaignVariableMapping } from "@/lib/server/whatsapp/campaign-variable-mapping";
+import {
+  buildInitialVariableMapping,
+  type CampaignVariableMapping,
+  validateCampaignTemplateMapping,
+} from "@/lib/server/whatsapp/campaign-variable-mapping";
 import type { TemplateCapability } from "@/lib/server/whatsapp/campaign-template-capability";
 import type { CampaignRecipientCounts } from "@/lib/server/whatsapp/campaign-stats";
 import type { MetaMessageTemplate } from "@/lib/server/whatsapp/meta-templates";
@@ -68,8 +72,7 @@ export function assessCampaignSendReadiness(input: {
   templateName: string | null;
   templateLanguage: string | null;
   variableMapping: CampaignVariableMapping | null;
-  headerSlots: number;
-  bodySlots: number;
+  capability: TemplateCapability | null;
   consentConfirmed: boolean;
   pendingRecipients: number;
 }): CampaignSendReadiness {
@@ -88,24 +91,13 @@ export function assessCampaignSendReadiness(input: {
     blockingReasons.push("Confirm consent before sending.");
   }
 
-  const mapping = input.variableMapping;
-  if (mapping && (input.headerSlots > 0 || input.bodySlots > 0)) {
-    const headerLen = mapping.header?.length ?? 0;
-    const bodyLen = mapping.body?.length ?? 0;
-    if (headerLen !== input.headerSlots || bodyLen !== input.bodySlots) {
-      blockingReasons.push("Complete all template personalisation fields.");
-    } else {
-      const sources = [...(mapping.header ?? []), ...(mapping.body ?? [])];
-      for (const source of sources) {
-        if (source.kind === "static" && !source.value?.trim()) {
-          blockingReasons.push("Complete all template personalisation fields.");
-          break;
-        }
-        if (source.kind === "column" && !source.column?.trim()) {
-          blockingReasons.push("Complete all template personalisation fields.");
-          break;
-        }
-      }
+  if (input.capability && input.variableMapping) {
+    const mappingError = validateCampaignTemplateMapping({
+      capability: input.capability,
+      mapping: input.variableMapping,
+    });
+    if (mappingError) {
+      blockingReasons.push(mappingError);
     }
   }
 
@@ -115,16 +107,7 @@ export function assessCampaignSendReadiness(input: {
 export function buildEmptyVariableMapping(
   capability: TemplateCapability
 ): CampaignVariableMapping {
-  return {
-    header: capability.headerVariableSlots.map(() => ({
-      kind: "static",
-      value: "",
-    })),
-    body: capability.bodyVariableSlots.map(() => ({
-      kind: "static",
-      value: "",
-    })),
-  };
+  return buildInitialVariableMapping(capability);
 }
 
 export function templateOptionKey(

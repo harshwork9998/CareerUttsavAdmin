@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { assessTemplateCapability } from "@/lib/server/whatsapp/campaign-template-capability";
+import { CAREER_UTTSAV_PRINCIPAL_TEMPLATE } from "@/lib/server/whatsapp/campaign-template-fixtures";
 import {
   assessCampaignSendReadiness,
   deriveCampaignWizardStep,
@@ -81,8 +83,7 @@ describe("assessCampaignSendReadiness", () => {
       templateName: null,
       templateLanguage: null,
       variableMapping: null,
-      headerSlots: 0,
-      bodySlots: 0,
+      capability: null,
       consentConfirmed: false,
       pendingRecipients: 0,
     });
@@ -96,28 +97,36 @@ describe("assessCampaignSendReadiness", () => {
       templateName: "hello",
       templateLanguage: "en",
       variableMapping: { header: [], body: [] },
-      headerSlots: 0,
-      bodySlots: 0,
+      capability: assessTemplateCapability({
+        name: "hello",
+        language: "en",
+        status: "APPROVED",
+        components: [{ type: "BODY", text: "Hi" }],
+      }),
       consentConfirmed: true,
       pendingRecipients: 3,
     });
     expect(result.ready).toBe(true);
   });
 
-  it("blocks incomplete template variable mapping", () => {
+  it("blocks document templates without pdf attachment", () => {
+    const capability = assessTemplateCapability(CAREER_UTTSAV_PRINCIPAL_TEMPLATE);
     const result = assessCampaignSendReadiness({
       status: "DRAFT",
-      templateName: "hello",
+      templateName: "career_uttsav_principal",
       templateLanguage: "en",
       variableMapping: {
-        body: [{ kind: "static", value: "" }],
+        body: [{ kind: "static", value: "School" }],
+        buttonUrls: [
+          { urlButtonIndex: 1, source: { kind: "static", value: "invite" } },
+        ],
       },
-      headerSlots: 0,
-      bodySlots: 1,
+      capability,
       consentConfirmed: true,
       pendingRecipients: 3,
     });
     expect(result.ready).toBe(false);
+    expect(result.blockingReasons.join(" ")).toMatch(/PDF/i);
   });
 });
 

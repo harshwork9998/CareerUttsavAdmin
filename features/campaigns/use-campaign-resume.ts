@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-import type { CampaignVariableMapping } from "@/lib/server/whatsapp/campaign-variable-mapping";
 import {
   assessCampaignSendReadiness,
   buildEmptyVariableMapping,
@@ -12,6 +11,7 @@ import {
   parseStoredTemplateKey,
   readVariableMappingFromJson,
 } from "@/lib/server/whatsapp/campaign-wizard-resume";
+import type { CampaignVariableMapping } from "@/lib/server/whatsapp/campaign-variable-mapping";
 import type { CampaignRecipientCounts } from "@/lib/server/whatsapp/campaign-stats";
 import type { TemplateCapability } from "@/lib/server/whatsapp/campaign-template-capability";
 import type { MetaMessageTemplate } from "@/lib/server/whatsapp/meta-templates";
@@ -167,8 +167,7 @@ export function useCampaignResume() {
       status: string,
       templateName: string | null,
       templateLanguage: string | null,
-      headerSlots: number,
-      bodySlots: number,
+      capability: TemplateCapability | null,
       pending: number
     ) =>
       assessCampaignSendReadiness({
@@ -176,8 +175,7 @@ export function useCampaignResume() {
         templateName,
         templateLanguage,
         variableMapping,
-        headerSlots,
-        bodySlots,
+        capability,
         consentConfirmed: consentChecked,
         pendingRecipients: pending,
       }),

@@ -19,10 +19,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { CampaignVariableMapping } from "@/lib/server/whatsapp/campaign-variable-mapping";
+import type {
+  CampaignButtonUrlMapping,
+  CampaignVariableMapping,
+} from "@/lib/server/whatsapp/campaign-variable-mapping";
 import {
   assessTemplateCapability,
   type TemplateCapability,
+  type TemplateUrlButtonSlot,
 } from "@/lib/server/whatsapp/campaign-template-capability";
 import type { MetaMessageTemplate } from "@/lib/server/whatsapp/meta-templates";
 import { isDraftSetupStep } from "@/lib/server/whatsapp/campaign-wizard-resume";
@@ -112,6 +116,8 @@ export function CampaignsView() {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [mobileColumn, setMobileColumn] = useState("");
   const [testMobile, setTestMobile] = useState("");
+  const [headerPdfFile, setHeaderPdfFile] = useState<File | null>(null);
+  const [headerMediaIdInput, setHeaderMediaIdInput] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<CampaignListItem | null>(null);
 
   const campaignsQuery = useQuery({
@@ -199,6 +205,48 @@ export function CampaignsView() {
         `${data.acceptedCount} ready to send · ${data.skippedCount} skipped`
       );
       goToStep(2);
+      void queryClient.invalidateQueries({ queryKey: ["campaign", campaignId] });
+    },
+  });
+
+  const uploadHeaderPdf = useMutation({
+    mutationFn: async () => {
+      if (!campaignId) throw new Error("No campaign selected.");
+      const template = templatesQuery.data?.find(
+        (item) => `${item.name}:${item.language}` === selectedTemplateKey
+      );
+      if (!template) throw new Error("Choose a template first.");
+
+      const form = new FormData();
+      form.append("template", JSON.stringify(template.template));
+
+      if (headerMediaIdInput.trim()) {
+        form.append("mediaId", headerMediaIdInput.trim());
+      } else if (headerPdfFile) {
+        form.append("file", headerPdfFile);
+      } else {
+        throw new Error("Choose a PDF file or paste a Meta media ID.");
+      }
+
+      const response = await fetch(`/api/campaigns/${campaignId}/header-document`, {
+        method: "POST",
+        body: form,
+      });
+      const data = (await response.json()) as {
+        error?: string;
+        mediaId?: string;
+      };
+      if (!response.ok) throw new Error(data.error ?? "Could not attach PDF.");
+      return data.mediaId ?? "";
+    },
+    onSuccess: (mediaId) => {
+      setVariableMapping((previous) => ({
+        ...previous,
+        headerDocumentMediaId: mediaId,
+        headerDocumentFilename:
+          headerPdfFile?.name ?? previous.headerDocumentFilename,
+      }));
+      toast.success("PDF attached.");
       void queryClient.invalidateQueries({ queryKey: ["campaign", campaignId] });
     },
   });
@@ -321,8 +369,7 @@ export function CampaignsView() {
       campaignStatus,
       detailQuery.data?.campaign.templateName ?? null,
       detailQuery.data?.campaign.templateLanguage ?? null,
-      templateCapability?.headerVariableCount ?? 0,
-      templateCapability?.bodyVariableCount ?? 0,
+      templateCapability,
       counts.pending
     );
   }, [
@@ -331,8 +378,7 @@ export function CampaignsView() {
     counts,
     detailQuery.data?.campaign.templateLanguage,
     detailQuery.data?.campaign.templateName,
-    templateCapability?.bodyVariableCount,
-    templateCapability?.headerVariableCount,
+    templateCapability,
   ]);
 
   return (
@@ -534,13 +580,70 @@ export function CampaignsView() {
                     </Select>
                   </div>
 
-                  {selectedTemplate?.capability.previewBody && (
-                    <p className="rounded-md bg-muted p-3 text-sm">
-                      {selectedTemplate.capability.previewBody}
-                    </p>
+                  {(selectedTemplate?.capability.previewHeader ||
+                    selectedTemplate?.capability.previewBody) && (
+                    <div className="space-y-2 rounded-md bg-muted p-3 text-sm">
+                      {selectedTemplate.capability.previewHeader && (
+                        <p>
+                          <span className="font-medium">Header: </span>
+                          {selectedTemplate.capability.previewHeader}
+                        </p>
+                      )}
+                      {selectedTemplate.capability.previewBody && (
+                        <p>{selectedTemplate.capability.previewBody}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {selectedTemplate?.capability.requiresHeaderDocument && (
+                    <div className="space-y-3 rounded-lg border p-3">
+                      <p className="text-sm font-medium">Attach PDF</p>
+                      <Input
+                        type="file"
+                        accept=".pdf,application/pdf"
+                        onChange={(event) =>
+                          setHeaderPdfFile(event.target.files?.[0] ?? null)
+                        }
+                      />
+                      <div className="space-y-1">
+                        <Label>Or paste Meta media ID</Label>
+                        <Input
+                          value={headerMediaIdInput}
+                          onChange={(event) =>
+                            setHeaderMediaIdInput(event.target.value)
+                          }
+                          placeholder="From a previous WhatsApp upload"
+                        />
+                      </div>
+                      {variableMapping.headerDocumentMediaId?.trim() && (
+                        <p className="text-xs text-muted-foreground">
+                          Attached for this campaign.
+                          {variableMapping.headerDocumentFilename
+                            ? ` (${variableMapping.headerDocumentFilename})`
+                            : ""}
+                        </p>
+                      )}
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        disabled={uploadHeaderPdf.isPending || !selectedTemplateKey}
+                        onClick={() => uploadHeaderPdf.mutate()}
+                      >
+                        {variableMapping.headerDocumentMediaId
+                          ? "Replace PDF"
+                          : "Upload PDF"}
+                      </Button>
+                    </div>
                   )}
 
                   <VariableFields
+                    mapping={variableMapping}
+                    headers={uploadHeaders}
+                    onChange={setVariableMapping}
+                  />
+
+                  <ButtonUrlFields
+                    slots={selectedTemplate?.capability.urlButtonSlots ?? []}
                     mapping={variableMapping}
                     headers={uploadHeaders}
                     onChange={setVariableMapping}
@@ -596,7 +699,7 @@ export function CampaignsView() {
                 <Button
                   variant="outline"
                   onClick={() => sendTest.mutate()}
-                  disabled={sendTest.isPending}
+                  disabled={!sendReadiness.ready || sendTest.isPending}
                 >
                   Send test
                 </Button>
@@ -805,6 +908,106 @@ function VariableFields({
                   else copy.body![slot.index] = next;
                   onChange(copy);
                 }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose column" />
+                </SelectTrigger>
+                <SelectContent>
+                  {headers.map((header) => (
+                    <SelectItem key={header} value={header}>
+                      {header}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ButtonUrlFields({
+  slots,
+  mapping,
+  headers,
+  onChange,
+}: {
+  slots: TemplateUrlButtonSlot[];
+  mapping: CampaignVariableMapping;
+  headers: string[];
+  onChange: (value: CampaignVariableMapping) => void;
+}) {
+  const dynamic = slots.filter((slot) => slot.dynamic);
+  if (dynamic.length === 0) return null;
+
+  const buttonUrls = mapping.buttonUrls ?? [];
+
+  const updateButtonSource = (
+    urlButtonIndex: number,
+    source: CampaignButtonUrlMapping["source"]
+  ) => {
+    const nextUrls = [...buttonUrls];
+    const existingIndex = nextUrls.findIndex(
+      (row) => row.urlButtonIndex === urlButtonIndex
+    );
+  const row: CampaignButtonUrlMapping = { urlButtonIndex, source };
+    if (existingIndex >= 0) nextUrls[existingIndex] = row;
+    else nextUrls.push(row);
+    onChange({ ...mapping, buttonUrls: nextUrls });
+  };
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm font-medium">Personalise link buttons</p>
+      {dynamic.map((slot) => {
+        const entry = buttonUrls.find(
+          (row) => row.urlButtonIndex === slot.urlButtonIndex
+        );
+        const source = entry?.source ?? { kind: "static" as const, value: "" };
+        return (
+          <div key={slot.urlButtonIndex} className="rounded-lg border p-3 space-y-2">
+            <p className="text-sm font-medium">{slot.label}</p>
+            <Select
+              value={source.kind}
+              onValueChange={(kind) => {
+                updateButtonSource(
+                  slot.urlButtonIndex,
+                  kind === "column"
+                    ? { kind: "column", column: headers[0] ?? "" }
+                    : { kind: "static", value: "" }
+                );
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="static">Same text for everyone</SelectItem>
+                <SelectItem value="column">Use a column from the file</SelectItem>
+              </SelectContent>
+            </Select>
+            {source.kind === "static" ? (
+              <Input
+                value={source.value ?? ""}
+                onChange={(event) =>
+                  updateButtonSource(slot.urlButtonIndex, {
+                    kind: "static",
+                    value: event.target.value,
+                  })
+                }
+                placeholder="Link suffix (after the fixed part)"
+              />
+            ) : (
+              <Select
+                value={source.column ?? ""}
+                onValueChange={(column) =>
+                  updateButtonSource(slot.urlButtonIndex, {
+                    kind: "column",
+                    column,
+                  })
+                }
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Choose column" />

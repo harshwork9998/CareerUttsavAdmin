@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { assessTemplateCapability } from "@/lib/server/whatsapp/campaign-template-capability";
 import type { MetaMessageTemplate } from "@/lib/server/whatsapp/meta-templates";
+import { CAREER_UTTSAV_PRINCIPAL_TEMPLATE } from "@/lib/server/whatsapp/campaign-template-fixtures";
 
 describe("assessTemplateCapability", () => {
   it("supports simple body text templates", () => {
@@ -22,7 +23,17 @@ describe("assessTemplateCapability", () => {
     expect(capability.bodyVariableCount).toBe(2);
   });
 
-  it("blocks media headers", () => {
+  it("supports career_uttsav_principal document header with URL buttons", () => {
+    const capability = assessTemplateCapability(CAREER_UTTSAV_PRINCIPAL_TEMPLATE);
+    expect(capability.supported).toBe(true);
+    expect(capability.requiresHeaderDocument).toBe(true);
+    expect(capability.bodyVariableCount).toBe(1);
+    expect(capability.urlButtonSlots).toHaveLength(2);
+    expect(capability.urlButtonSlots[0]?.dynamic).toBe(false);
+    expect(capability.urlButtonSlots[1]?.dynamic).toBe(true);
+  });
+
+  it("blocks picture and video headers", () => {
     const template: MetaMessageTemplate = {
       name: "banner",
       language: "en",

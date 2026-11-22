@@ -75,13 +75,17 @@ export type SendWhatsAppImageInput = {
   caption?: string;
 };
 
-export type WhatsAppTemplateComponentParameter = {
-  type: "text";
-  text: string;
-};
+export type WhatsAppTemplateComponentParameter =
+  | { type: "text"; text: string }
+  | {
+      type: "document";
+      document: { id: string; filename?: string };
+    };
 
 export type WhatsAppTemplateComponent = {
-  type: "body" | "header";
+  type: "body" | "header" | "button";
+  sub_type?: "url";
+  index?: string;
   parameters?: WhatsAppTemplateComponentParameter[];
 };
 
