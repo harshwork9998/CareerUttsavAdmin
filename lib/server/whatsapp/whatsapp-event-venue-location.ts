@@ -7,8 +7,8 @@ import { STUDENT_REGISTRATION_VENUE } from "@/lib/server/student-registration-em
  */
 export const WHATSAPP_EVENT_VENUE_CONFIG = {
   mapsUrl: "https://maps.app.goo.gl/hYWT87vrq2h1qCeH7",
-  latitude: 13.0119254,
-  longitude: 77.5927428,
+  latitude: 13.004975665714735,
+  longitude: 77.5881406,
   name: "Career Uttsav 2026",
   address: STUDENT_REGISTRATION_VENUE,
   /** Block production LOCATION sends until ops confirms the pin. */

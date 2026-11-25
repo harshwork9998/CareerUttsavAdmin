@@ -31,6 +31,11 @@ describe("whatsapp event venue location", () => {
     ]);
   });
 
+  it("uses operator-supplied Google Maps pin coordinates", () => {
+    expect(WHATSAPP_EVENT_VENUE_LATITUDE).toBe(13.004975665714735);
+    expect(WHATSAPP_EVENT_VENUE_LONGITUDE).toBe(77.5881406);
+  });
+
   it("uses the canonical venue name and address", () => {
     process.env.WHATSAPP_EVENT_VENUE_OPERATOR_CONFIRMED = "true";
     const action = buildWhatsAppEventVenueLocationAction();
