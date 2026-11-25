@@ -61,10 +61,16 @@ export function validatePartnerContactPhones(
     const result = normalizeContactPhones(
       next.primaryContact,
       previous?.primaryContact,
-      "Primary contact mobile"
+      "Primary contact mobile",
+      { requirePhoneWhenPartial: false }
     );
     if (!result.ok) return result;
     if (result.contact) patch.primaryContact = result.contact;
+    const email =
+      (patch.primaryContact ?? next.primaryContact).email?.trim() ?? "";
+    if (email && !isPartnerPortalEmail(email)) {
+      return { ok: false, error: "Enter a valid primary contact email" };
+    }
   }
 
   if (next.secondaryContact) {

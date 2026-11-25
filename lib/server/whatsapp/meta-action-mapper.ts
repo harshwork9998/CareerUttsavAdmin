@@ -3,6 +3,7 @@ import {
   sendWhatsAppButtons,
   sendWhatsAppImage,
   sendWhatsAppList,
+  sendWhatsAppLocation,
   sendWhatsAppText,
   sendWhatsAppUrlCta,
   uploadWhatsAppMedia,
@@ -85,6 +86,24 @@ export function validateWhatsAppButtonAction(
     }
   }
 
+  return { ok: true };
+}
+
+export function validateWhatsAppLocationAction(
+  action: Extract<WhatsAppBotAction, { type: "LOCATION" }>
+): MetaActionValidationResult {
+  if (!Number.isFinite(action.latitude) || action.latitude < -90 || action.latitude > 90) {
+    return validationError("META_LOCATION_LATITUDE_INVALID", "Location latitude is out of range");
+  }
+  if (!Number.isFinite(action.longitude) || action.longitude < -180 || action.longitude > 180) {
+    return validationError("META_LOCATION_LONGITUDE_INVALID", "Location longitude is out of range");
+  }
+  if (!action.name.trim()) {
+    return validationError("META_LOCATION_NAME_MISSING", "Location messages require a venue name");
+  }
+  if (!action.address.trim()) {
+    return validationError("META_LOCATION_ADDRESS_MISSING", "Location messages require an address");
+  }
   return { ok: true };
 }
 
@@ -287,6 +306,32 @@ export async function dispatchWhatsAppBotActionToMeta(
       }
       return {
         actionType: "LIST",
+        success: true,
+        messageId: result.messageId,
+      };
+    }
+    case "LOCATION": {
+      const validation = validateWhatsAppLocationAction(action);
+      if (!validation.ok) {
+        return {
+          actionType: "LOCATION",
+          success: false,
+          errorCode: validation.errorCode,
+          retryable: false,
+        };
+      }
+      const result = await sendWhatsAppLocation({
+        to,
+        latitude: action.latitude,
+        longitude: action.longitude,
+        name: action.name,
+        address: action.address,
+      });
+      if (!result.success) {
+        return toDispatchFailure("LOCATION", result);
+      }
+      return {
+        actionType: "LOCATION",
         success: true,
         messageId: result.messageId,
       };

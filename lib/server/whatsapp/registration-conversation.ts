@@ -145,6 +145,13 @@ export type WhatsAppBotAction =
       body: string;
       displayText: string;
       url: string;
+    }
+  | {
+      type: "LOCATION";
+      latitude: number;
+      longitude: number;
+      name: string;
+      address: string;
     };
 
 export type IncomingConversationMessage = {

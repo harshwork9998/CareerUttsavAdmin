@@ -611,6 +611,7 @@ enum WhatsAppConversationStep {
 
 enum WhatsAppPostRegistrationTriggerKind {
   INSTAGRAM
+  CHANNEL_INVITE
   PARENT_INVITE
   FRIEND_INVITE
 }
@@ -642,6 +643,8 @@ model WhatsAppRegistrationConversation {
   leadSource             String?
   leadSubSource          String?
   lastInboundAt          DateTime?
+  /// Set only after Meta accepts the registration entry-pass QR MEDIA send.
+  postRegistrationEntryPassDeliveredAt DateTime?
   highestReminderStageSent Int                @default(0)
   lastReminderAttemptAt  DateTime?
   createdAt          DateTime                   @default(now())
@@ -653,6 +656,7 @@ model WhatsAppRegistrationConversation {
 
   @@index([status])
   @@index([expiresAt])
+  @@index([postRegistrationEntryPassDeliveredAt])
   @@map("whatsapp_registration_conversations")
 }
 

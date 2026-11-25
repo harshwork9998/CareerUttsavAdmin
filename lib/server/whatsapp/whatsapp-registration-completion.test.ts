@@ -226,11 +226,7 @@ describe("whatsapp registration completion", () => {
       waId: "919876543210",
       registrationId: "reg-001",
     });
-    expect(scheduleGrowthMock).toHaveBeenCalledOnce();
-    expect(scheduleGrowthMock.mock.calls[0]?.[0]).toMatchObject({
-      waId: "919876543210",
-      registrationId: "reg-001",
-    });
+    expect(scheduleGrowthMock).not.toHaveBeenCalled();
     expect(generatePassMock).toHaveBeenCalledWith({
       registrationId: "CU-BLR-2026-00042",
       seminarTitles: [CAREER_UTTSAV_SEMINARS[0]],

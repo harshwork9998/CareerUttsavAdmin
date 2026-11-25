@@ -41,7 +41,6 @@ import {
   loadWhatsAppConversationRecordByWaId,
 } from "@/lib/server/whatsapp/whatsapp-conversation-store";
 import { reconcileCompletedWhatsAppConversation } from "@/lib/server/whatsapp/whatsapp-completed-conversation-reconcile";
-import { schedulePostRegistrationGrowthTriggers } from "@/lib/server/whatsapp/whatsapp-post-registration-schedule";
 import {
   getWhatsAppEventArtworkSeminarOptions,
   getWhatsAppSeminarOptions,
@@ -611,21 +610,6 @@ export async function completeWhatsAppRegistrationForConversation(
     status: "SUCCESS",
     registrationId: registration.id,
   });
-
-  const completedAt = new Date();
-  try {
-    await schedulePostRegistrationGrowthTriggers({
-      waId,
-      registrationId: registration.id,
-      completedAt,
-      conversation: finalized,
-    });
-  } catch (error) {
-    console.error(
-      "[whatsapp-growth] schedule failed",
-      error instanceof Error ? error.message : "unknown"
-    );
-  }
 
   return {
     status: "SUCCESS",

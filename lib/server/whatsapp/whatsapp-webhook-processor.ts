@@ -14,7 +14,12 @@ import {
   resolveConversationRefreshExpiry,
   type WhatsAppBotAction,
 } from "@/lib/server/whatsapp/registration-conversation";
-import { dispatchWhatsAppBotActions } from "@/lib/server/whatsapp/whatsapp-bot-dispatcher";
+import {
+  dispatchWhatsAppBotActions,
+  registrationEntryPassQrDelivered,
+} from "@/lib/server/whatsapp/whatsapp-bot-dispatcher";
+import { markPostRegistrationEntryPassDelivered } from "@/lib/server/whatsapp/whatsapp-growth-schedule-eligibility";
+import { schedulePostRegistrationGrowthTriggers } from "@/lib/server/whatsapp/whatsapp-post-registration-schedule";
 import { processWhatsAppRegistrationConversationTurnAsync } from "@/lib/server/whatsapp/whatsapp-registration-duplicate-flow";
 import {
   deleteExpiredWhatsAppConversation,
@@ -147,6 +152,9 @@ async function processInboundUserMessageSerialized(
   });
 
   const actions: WhatsAppBotAction[] = [...turn.actions];
+  let registrationCompletion:
+    | Awaited<ReturnType<typeof completeWhatsAppRegistrationForConversation>>
+    | null = null;
 
   if (
     saved.status === "READY_TO_REGISTER" &&
@@ -154,6 +162,7 @@ async function processInboundUserMessageSerialized(
     !saved.completedRegistrationId
   ) {
     const completion = await completeWhatsAppRegistrationForConversation(waId);
+    registrationCompletion = completion;
     actions.push(...completion.actions);
     if (completion.conversation) {
       saved = await saveWhatsAppConversationState(completion.conversation, {
@@ -182,7 +191,35 @@ async function processInboundUserMessageSerialized(
     });
   }
 
-  await dispatchWhatsAppBotActions(waId, actions);
+  const dispatchSummary = await dispatchWhatsAppBotActions(waId, actions);
+
+  if (
+    registrationCompletion?.status === "SUCCESS" &&
+    registrationCompletion.registrationId &&
+    registrationCompletion.conversation &&
+    registrationEntryPassQrDelivered(dispatchSummary, actions)
+  ) {
+    const entryPassDeliveredAt = new Date();
+    await markPostRegistrationEntryPassDelivered(waId, entryPassDeliveredAt);
+    try {
+      await schedulePostRegistrationGrowthTriggers({
+        waId,
+        registrationId: registrationCompletion.registrationId,
+        completedAt: entryPassDeliveredAt,
+        conversation: registrationCompletion.conversation,
+      });
+    } catch (error) {
+      console.error("[whatsapp-growth] schedule failed", {
+        event: "growth_schedule_failed",
+        sender: maskWaId(waId),
+        registrationId: registrationCompletion.registrationId,
+        error: error instanceof Error ? error.message : "unknown",
+        recovery: "worker_recovery_pass",
+        entryPassDeliveredAt: entryPassDeliveredAt.toISOString(),
+      });
+    }
+  }
+
   await markWhatsAppInboundMessageProcessed(message.messageId);
 }
 

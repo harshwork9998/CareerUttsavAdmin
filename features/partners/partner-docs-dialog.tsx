@@ -47,6 +47,7 @@ import { PortalSpeakerPhoto } from "@/features/partners/portal-speaker-photo";
 import { speakerHasPersistedPhoto } from "@/lib/partner-portal-speaker";
 import type { Event, Partner, PartnerPortalDocument } from "@/types";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PartnerReminderDialog } from "@/features/partners/partner-reminder-dialog";
 import {
   Dialog,
@@ -565,6 +566,9 @@ export function PartnerDocsDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [sidebarTab, setSidebarTab] = useState<"documents" | "communications">(
+    "documents"
+  );
   const [reminderOpen, setReminderOpen] = useState(false);
   const [history, setHistory] = useState<CommunicationHistoryItem[]>([]);
   const [lastReminder, setLastReminder] = useState<CommunicationLastReminder | null>(null);
@@ -648,7 +652,10 @@ export function PartnerDocsDialog({
   }, [uploadStatus, selectedKey]);
 
   useEffect(() => {
-    if (!open) setSelectedKey(null);
+    if (!open) {
+      setSelectedKey(null);
+      setSidebarTab("documents");
+    }
   }, [open]);
 
   const reminderChip = uploadStatus
@@ -722,7 +729,36 @@ export function PartnerDocsDialog({
             className="flex min-h-0 flex-col border-b lg:border-b-0 lg:border-r"
             style={{ borderColor: LINE.subtle, background: PAPER.surface }}
           >
-            <div className="min-h-0 flex-1 overflow-y-auto p-3">
+            <Tabs
+              value={sidebarTab}
+              onValueChange={(value) =>
+                setSidebarTab(
+                  value === "communications" ? "communications" : "documents"
+                )
+              }
+              className="flex min-h-0 flex-1 flex-col"
+            >
+              <TabsList
+                className="mx-3 mt-3 grid h-9 w-[calc(100%-1.5rem)] shrink-0 grid-cols-2 gap-0.5 p-0.5"
+                style={{ background: PAPER.muted }}
+              >
+                <TabsTrigger
+                  value="documents"
+                  className="h-8 rounded-md px-2 text-xs font-semibold data-[state=active]:shadow-sm"
+                >
+                  Documents
+                </TabsTrigger>
+                <TabsTrigger
+                  value="communications"
+                  className="h-8 rounded-md px-2 text-xs font-semibold data-[state=active]:shadow-sm"
+                >
+                  Communication History
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent
+                value="documents"
+                className="mt-0 min-h-0 flex-1 overflow-y-auto p-3 data-[state=inactive]:hidden"
+              >
               <p
                 className="mb-2 px-1 text-[11px] font-semibold tracking-[0.14em] uppercase"
                 style={{ color: INK.muted }}
@@ -843,12 +879,11 @@ export function PartnerDocsDialog({
                   </ul>
                 </div>
               ) : null}
-            </div>
-
-            <div
-              className="shrink-0 border-t p-3"
-              style={{ borderColor: LINE.subtle }}
-            >
+              </TabsContent>
+              <TabsContent
+                value="communications"
+                className="mt-0 flex min-h-0 flex-1 flex-col p-3 data-[state=inactive]:hidden"
+              >
               <p
                 className="px-1 text-[11px] font-semibold tracking-[0.14em] uppercase"
                 style={{ color: INK.muted }}
@@ -860,7 +895,7 @@ export function PartnerDocsDialog({
                   No communications sent yet.
                 </p>
               ) : (
-                <ul className="mt-1 max-h-36 overflow-y-auto">
+                <ul className="mt-1 min-h-0 flex-1 overflow-y-auto">
                   {history.map((item) => (
                     <li
                       key={item.id}
@@ -920,7 +955,8 @@ export function PartnerDocsDialog({
                 <Bell className="h-4 w-4" />
                 Send reminder
               </Button>
-            </div>
+              </TabsContent>
+            </Tabs>
           </aside>
 
           <div className="flex min-h-0 flex-col">

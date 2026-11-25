@@ -41,6 +41,10 @@ import {
   WHATSAPP_PARENT_INVITE_BODY,
   WHATSAPP_PARENT_INVITE_CTA_LABEL,
   WHATSAPP_PARENT_INVITE_SHARE_TEXT,
+  WHATSAPP_CHANNEL_INVITE_BODY,
+  WHATSAPP_CHANNEL_INVITE_CTA_LABEL,
+  WHATSAPP_OFFICIAL_CHANNEL_URL,
+  WHATSAPP_POST_REGISTRATION_CHANNEL_DELAY_MS,
   WHATSAPP_POST_REGISTRATION_FRIEND_DELAY_MS,
   WHATSAPP_POST_REGISTRATION_INSTAGRAM_DELAY_MS,
   WHATSAPP_POST_REGISTRATION_PARENT_DELAY_MS,
@@ -49,7 +53,11 @@ import { WHATSAPP_POST_REGISTRATION_CLAIM_LEASE_MS } from "@/lib/server/whatsapp
 import { runSerializedForWaId } from "@/lib/server/whatsapp/whatsapp-wa-id-serializer";
 
 type TriggerStatus = "PENDING" | "CLAIMED" | "SENT" | "CANCELLED";
-type TriggerKind = "INSTAGRAM" | "PARENT_INVITE" | "FRIEND_INVITE";
+type TriggerKind =
+  | "INSTAGRAM"
+  | "CHANNEL_INVITE"
+  | "PARENT_INVITE"
+  | "FRIEND_INVITE";
 
 type StoredTrigger = {
   id: string;
@@ -67,6 +75,13 @@ type StoredTrigger = {
 const rows: StoredTrigger[] = [];
 let conversationRecord: Record<string, unknown> | null = null;
 const dispatchMock = vi.fn();
+const isPhoneSuppressedMock = vi.fn();
+let lastInboundAtMock: Date | null = new Date("2026-10-22T12:00:00.000Z");
+const conversationFindManyMock = vi.fn(async () => [] as unknown[]);
+
+vi.mock("@/lib/server/whatsapp/campaign-suppression", () => ({
+  isPhoneSuppressed: (...args: unknown[]) => isPhoneSuppressedMock(...args),
+}));
 
 vi.mock("@/lib/server/prisma", () => ({
   prisma: {
@@ -181,12 +196,25 @@ vi.mock("@/lib/server/prisma", () => ({
         }
         return { count: 0 };
       },
+      count: async ({ where }: { where: { registrationId: string } }) =>
+        rows.filter((row) => row.registrationId === where.registrationId).length,
     },
     whatsAppRegistrationConversation: {
-      findUnique: async ({ where }: { where: { waId: string } }) => {
+      findUnique: async ({
+        where,
+        select,
+      }: {
+        where: { waId: string };
+        select?: { lastInboundAt?: boolean };
+      }) => {
+        if (where.waId !== "919876543210") return null;
+        if (select?.lastInboundAt) {
+          return { lastInboundAt: lastInboundAtMock };
+        }
         if (!conversationRecord || conversationRecord.waId !== where.waId) return null;
         return conversationRecord;
       },
+      findMany: (...args: unknown[]) => conversationFindManyMock(...args),
     },
   },
 }));
@@ -248,9 +276,14 @@ async function scheduleCompleted(): Promise<void> {
 
 describe("post-registration growth", () => {
   beforeEach(() => {
+    process.env.WHATSAPP_EVENT_VENUE_OPERATOR_CONFIRMED = "true";
     rows.splice(0, rows.length);
     conversationRecord = null;
+    conversationFindManyMock.mockResolvedValue([]);
     dispatchMock.mockReset();
+    isPhoneSuppressedMock.mockReset();
+    isPhoneSuppressedMock.mockResolvedValue(false);
+    lastInboundAtMock = new Date("2026-10-22T12:00:00.000Z");
     dispatchMock.mockResolvedValue({
       dispatched: 1,
       failed: 0,
@@ -268,7 +301,13 @@ describe("post-registration growth", () => {
       qrPngBase64: Buffer.from("qr").toString("base64"),
       studentName: "Aarav Sharma",
     });
-    expect(actions.map((action) => action.type)).toEqual(["TEXT", "MEDIA", "TEXT"]);
+    expect(actions.map((action) => action.type)).toEqual([
+      "TEXT",
+      "MEDIA",
+      "LOCATION",
+      "TEXT",
+      "TEXT",
+    ]);
     expect(actions.at(-1)).toMatchObject({
       type: "TEXT",
       body: "\u{1F4F1} Save this QR code. You\u2019ll need it when you arrive.",
@@ -277,12 +316,16 @@ describe("post-registration growth", () => {
     expect(actions.some((action) => action.type === "URL_CTA")).toBe(false);
   });
 
-  it("anchors Instagram, parents, and friends to one completion time", () => {
+  it("anchors Instagram, channel, parents, and friends to one completion time", () => {
     const due = postRegistrationGrowthDueAt(completedAt);
     expect(due.INSTAGRAM.getTime() - completedAt.getTime()).toBe(
       WHATSAPP_POST_REGISTRATION_INSTAGRAM_DELAY_MS
     );
     expect(WHATSAPP_POST_REGISTRATION_INSTAGRAM_DELAY_MS).toBe(10_000);
+    expect(due.CHANNEL_INVITE.getTime() - completedAt.getTime()).toBe(
+      WHATSAPP_POST_REGISTRATION_CHANNEL_DELAY_MS
+    );
+    expect(WHATSAPP_POST_REGISTRATION_CHANNEL_DELAY_MS).toBe(30 * 60 * 1000);
     expect(due.PARENT_INVITE.getTime() - completedAt.getTime()).toBe(
       WHATSAPP_POST_REGISTRATION_PARENT_DELAY_MS
     );
@@ -326,6 +369,59 @@ describe("post-registration growth", () => {
     expect(again.checked).toBe(0);
     expect(dispatchMock).not.toHaveBeenCalled();
     expect(rows.filter((row) => row.kind === "INSTAGRAM" && row.status === "SENT")).toHaveLength(1);
+  });
+
+  it("sends the channel invite once after 30 minutes", async () => {
+    await scheduleCompleted();
+    await processPostRegistrationGrowthTriggers(
+      new Date(completedAt.getTime() + WHATSAPP_POST_REGISTRATION_INSTAGRAM_DELAY_MS)
+    );
+    dispatchMock.mockClear();
+
+    const early = await processPostRegistrationGrowthTriggers(
+      new Date(completedAt.getTime() + 29 * 60 * 1000)
+    );
+    expect(early.sentChannelInvite).toBe(0);
+    expect(dispatchMock).not.toHaveBeenCalled();
+
+    const due = await processPostRegistrationGrowthTriggers(
+      new Date(completedAt.getTime() + WHATSAPP_POST_REGISTRATION_CHANNEL_DELAY_MS)
+    );
+    expect(due.sentChannelInvite).toBe(1);
+    const action = dispatchMock.mock.calls[0]?.[1]?.[0];
+    expect(action).toMatchObject({
+      type: "URL_CTA",
+      body: WHATSAPP_CHANNEL_INVITE_BODY,
+      displayText: WHATSAPP_CHANNEL_INVITE_CTA_LABEL,
+      url: WHATSAPP_OFFICIAL_CHANNEL_URL,
+    });
+    dispatchMock.mockClear();
+    const again = await processPostRegistrationGrowthTriggers(
+      new Date(completedAt.getTime() + WHATSAPP_POST_REGISTRATION_CHANNEL_DELAY_MS + 60_000)
+    );
+    expect(again.checked).toBe(0);
+    expect(dispatchMock).not.toHaveBeenCalled();
+  });
+
+  it("cancels channel invite for globally suppressed recipients", async () => {
+    await scheduleCompleted();
+  for (const row of rows) {
+      if (row.kind !== "CHANNEL_INVITE") {
+        row.status = "SENT";
+      }
+    }
+    isPhoneSuppressedMock.mockResolvedValue(true);
+    const dueAt = new Date(
+      completedAt.getTime() + WHATSAPP_POST_REGISTRATION_CHANNEL_DELAY_MS
+    );
+    dispatchMock.mockClear();
+    const result = await processPostRegistrationGrowthTriggers(dueAt);
+    expect(result.sentChannelInvite).toBe(0);
+    expect(result.cancelled).toBeGreaterThanOrEqual(1);
+    expect(dispatchMock).not.toHaveBeenCalled();
+    const channel = rows.find((row) => row.kind === "CHANNEL_INVITE");
+    expect(channel?.status).toBe("CANCELLED");
+    expect(channel?.lastError).toBe("suppressed");
   });
 
   it("sends the parent invite once with an editable share link", async () => {
@@ -478,10 +574,10 @@ describe("post-registration growth", () => {
     expect(rows.find((row) => row.kind === "INSTAGRAM")?.status).toBe("CANCELLED");
   });
 
-  it("schedules the same three rows again without duplicating them", async () => {
+  it("schedules the same four rows again without duplicating them", async () => {
     await scheduleCompleted();
     await scheduleCompleted();
-    expect(rows).toHaveLength(3);
+    expect(rows).toHaveLength(4);
   });
 
   it("maps a URL CTA through the Meta payload without a reply button", async () => {

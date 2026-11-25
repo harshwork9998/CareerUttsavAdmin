@@ -1,12 +1,16 @@
 import { normalizeWaId } from "@/lib/server/whatsapp/registration-conversation";
 import type { WhatsAppConversationState } from "@/lib/server/whatsapp/registration-conversation";
 import { dispatchWhatsAppBotActions } from "@/lib/server/whatsapp/whatsapp-bot-dispatcher";
+import { channelInvitePromotionalBlockReason } from "@/lib/server/whatsapp/whatsapp-growth-channel-policy";
+import { maskWaId } from "@/lib/server/whatsapp/meta-webhook";
 import { loadWhatsAppConversationRecordByWaId } from "@/lib/server/whatsapp/whatsapp-conversation-store";
 import { buildPostRegistrationGrowthAction } from "@/lib/server/whatsapp/whatsapp-post-registration-messages";
+import { recoverMissingPostRegistrationGrowthSchedules } from "@/lib/server/whatsapp/whatsapp-post-registration-recovery";
 import {
   cancelPostRegistrationGrowthTrigger,
   claimPostRegistrationGrowthTrigger,
   listDuePostRegistrationGrowthTriggers,
+  loadWhatsAppConversationLastInboundAt,
   markPostRegistrationGrowthTriggerSent,
   releasePostRegistrationGrowthTrigger,
   type PostRegistrationGrowthTriggerRow,
@@ -16,11 +20,16 @@ import { runSerializedForWaId } from "@/lib/server/whatsapp/whatsapp-wa-id-seria
 export type PostRegistrationGrowthProcessorResult = {
   checked: number;
   sentInstagram: number;
+  sentChannelInvite: number;
   sentParentInvite: number;
   sentFriendInvite: number;
   skipped: number;
   failed: number;
   cancelled: number;
+  recoveryExamined: number;
+  recoveryRecovered: number;
+  recoveryFailed: number;
+  recoverySkippedWithoutQrEvidence: number;
 };
 
 export function postRegistrationGrowthSendBlockReason(input: {
@@ -47,11 +56,16 @@ function emptyResult(): PostRegistrationGrowthProcessorResult {
   return {
     checked: 0,
     sentInstagram: 0,
+    sentChannelInvite: 0,
     sentParentInvite: 0,
     sentFriendInvite: 0,
     skipped: 0,
     failed: 0,
     cancelled: 0,
+    recoveryExamined: 0,
+    recoveryRecovered: 0,
+    recoveryFailed: 0,
+    recoverySkippedWithoutQrEvidence: 0,
   };
 }
 
@@ -85,6 +99,25 @@ async function processTrigger(
       return;
     }
 
+    if (trigger.kind === "CHANNEL_INVITE") {
+      const lastInboundAt = await loadWhatsAppConversationLastInboundAt(trigger.waId);
+      const promotionalBlock = await channelInvitePromotionalBlockReason({
+        waId: trigger.waId,
+        now,
+        lastInboundAt,
+      });
+      if (promotionalBlock) {
+        await cancelPostRegistrationGrowthTrigger(trigger.id, promotionalBlock);
+        result.cancelled += 1;
+        console.info("[whatsapp-growth] channel invite skipped", {
+          sender: maskWaId(trigger.waId),
+          registrationId: trigger.registrationId,
+          reason: promotionalBlock,
+        });
+        return;
+      }
+    }
+
     const action = buildPostRegistrationGrowthAction({
       kind: trigger.kind,
       studentName: conversation?.studentName ?? null,
@@ -102,6 +135,7 @@ async function processTrigger(
 
     await markPostRegistrationGrowthTriggerSent(trigger.id, now);
     if (trigger.kind === "INSTAGRAM") result.sentInstagram += 1;
+    else if (trigger.kind === "CHANNEL_INVITE") result.sentChannelInvite += 1;
     else if (trigger.kind === "PARENT_INVITE") result.sentParentInvite += 1;
     else result.sentFriendInvite += 1;
   });
@@ -110,8 +144,14 @@ async function processTrigger(
 export async function processPostRegistrationGrowthTriggers(
   now = new Date()
 ): Promise<PostRegistrationGrowthProcessorResult> {
-  const due = await listDuePostRegistrationGrowthTriggers(now);
   const result = emptyResult();
+  const recovery = await recoverMissingPostRegistrationGrowthSchedules(now);
+  result.recoveryExamined = recovery.examined;
+  result.recoveryRecovered = recovery.recovered;
+  result.recoveryFailed = recovery.failed;
+  result.recoverySkippedWithoutQrEvidence = recovery.skippedWithoutQrEvidence;
+
+  const due = await listDuePostRegistrationGrowthTriggers(now);
   result.checked = due.length;
 
   for (const trigger of due) {

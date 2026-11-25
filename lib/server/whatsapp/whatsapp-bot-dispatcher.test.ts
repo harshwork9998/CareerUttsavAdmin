@@ -19,6 +19,7 @@ describe("whatsapp bot dispatcher", () => {
   const originalEnv = { ...process.env };
 
   beforeEach(() => {
+    process.env.WHATSAPP_EVENT_VENUE_OPERATOR_CONFIRMED = "true";
     process.env.WHATSAPP_ACCESS_TOKEN = "test-access-token-local-only";
     process.env.WHATSAPP_PHONE_NUMBER_ID = "123456789012345";
     process.env.WHATSAPP_GRAPH_API_VERSION = "v22.0";
@@ -52,9 +53,16 @@ describe("whatsapp bot dispatcher", () => {
 
     const summary = await dispatchWhatsAppBotActions(WA_ID, actions);
 
-    expect(summary.dispatched).toBe(3);
+    expect(summary.dispatched).toBe(5);
     expect(summary.failed).toBe(0);
-    expect(actionTypes).toEqual(["text", "MEDIA_UPLOAD", "image", "text"]);
+    expect(actionTypes).toEqual([
+      "text",
+      "MEDIA_UPLOAD",
+      "image",
+      "location",
+      "text",
+      "text",
+    ]);
   });
 
   it("uses waId international digits as the Meta recipient", async () => {
@@ -100,10 +108,38 @@ describe("whatsapp bot dispatcher", () => {
 
     const summary = await dispatchWhatsAppBotActions(WA_ID, actions);
     expect(summary.failed).toBe(1);
-    expect(summary.dispatched).toBe(2);
-    expect(summary.results).toHaveLength(3);
+    expect(summary.dispatched).toBe(4);
+    expect(summary.results).toHaveLength(5);
     expect(summary.results[0].success).toBe(false);
     expect(summary.results[1].success).toBe(true);
+  });
+
+  it("skips location follow-up messages when entry pass QR delivery fails", async () => {
+    const fetchMock = vi.fn(async (url) => {
+      if (String(url).endsWith("/media")) {
+        return mockJsonResponse(500, {
+          error: { message: "upload failed", code: 2 },
+        });
+      }
+      return mockJsonResponse(200, {
+        messages: [{ id: "wamid.text" }],
+      });
+    });
+    setMetaClientFetchForTests(fetchMock as typeof fetch);
+
+    const actions = buildWhatsAppRegistrationSuccessActions({
+      registrationNumber: "CU-BLR-2026-00042",
+      qrPngBase64: Buffer.from("same-qr-png").toString("base64"),
+    });
+
+    const summary = await dispatchWhatsAppBotActions(WA_ID, actions);
+    expect(summary.results).toHaveLength(5);
+    expect(summary.results[1]).toMatchObject({
+      actionType: "MEDIA",
+      success: false,
+    });
+    expect(summary.results.slice(2).every((result) => result.errorCode === "SKIPPED_REGISTRATION_QR_NOT_DELIVERED")).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("fails safely when outbound configuration is missing", async () => {

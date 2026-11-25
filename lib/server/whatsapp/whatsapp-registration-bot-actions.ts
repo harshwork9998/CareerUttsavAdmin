@@ -1,5 +1,66 @@
 import type { WhatsAppBotAction } from "@/lib/server/whatsapp/registration-conversation";
 import { exportWhatsAppFirstName } from "@/lib/server/whatsapp/registration-conversation";
+import {
+  buildWhatsAppEventVenueLocationAction,
+  isWhatsAppEventVenueLocationEnabled,
+  WHATSAPP_EVENT_LOCATION_EXPLANATION_BODY,
+} from "@/lib/server/whatsapp/whatsapp-event-venue-location";
+
+export const WHATSAPP_REGISTRATION_ENTRY_PASS_FILENAME =
+  "career-uttsav-event-pass.png";
+
+export const WHATSAPP_REGISTRATION_SAVE_QR_BODY =
+  "📱 Save this QR code. You’ll need it when you arrive.";
+
+export function buildWhatsAppRegistrationPassFollowUpActions(): WhatsAppBotAction[] {
+  const actions: WhatsAppBotAction[] = [];
+  if (isWhatsAppEventVenueLocationEnabled()) {
+    actions.push(
+      buildWhatsAppEventVenueLocationAction(),
+      {
+        type: "TEXT",
+        body: WHATSAPP_EVENT_LOCATION_EXPLANATION_BODY,
+      }
+    );
+  }
+  actions.push({
+    type: "TEXT",
+    body: WHATSAPP_REGISTRATION_SAVE_QR_BODY,
+  });
+  return actions;
+}
+
+export function isWhatsAppRegistrationEntryPassMedia(
+  action: WhatsAppBotAction
+): boolean {
+  return (
+    action.type === "MEDIA" &&
+    action.filename === WHATSAPP_REGISTRATION_ENTRY_PASS_FILENAME
+  );
+}
+
+export function isWhatsAppRegistrationPassFollowUpAction(
+  action: WhatsAppBotAction
+): boolean {
+  if (isWhatsAppEventVenueLocationEnabled()) {
+    if (action.type === "LOCATION") {
+      return true;
+    }
+    if (
+      action.type === "TEXT" &&
+      action.body === WHATSAPP_EVENT_LOCATION_EXPLANATION_BODY
+    ) {
+      return true;
+    }
+  }
+  if (
+    action.type === "TEXT" &&
+    action.body === WHATSAPP_REGISTRATION_SAVE_QR_BODY
+  ) {
+    return true;
+  }
+  return false;
+}
 
 export function buildWhatsAppSeminarSelectionCompleteActions(
   selectedCount = 3
@@ -56,14 +117,11 @@ And here’s your entry pass 👇`,
     {
       type: "MEDIA",
       mimeType: "image/png",
-      filename: "career-uttsav-event-pass.png",
+      filename: WHATSAPP_REGISTRATION_ENTRY_PASS_FILENAME,
       contentBase64: input.qrPngBase64,
       caption: "Your Career Uttsav entry QR code",
     },
-    {
-      type: "TEXT",
-      body: "📱 Save this QR code. You’ll need it when you arrive.",
-    }
+    ...buildWhatsAppRegistrationPassFollowUpActions()
   );
 
   return actions;
@@ -88,17 +146,16 @@ export function buildWhatsAppAlreadyRegisteredActions(input: {
   }
 
   if (input.qrPngBase64) {
-    actions.push({
-      type: "MEDIA",
-      mimeType: "image/png",
-      filename: "career-uttsav-event-pass.png",
-      contentBase64: input.qrPngBase64,
-      caption: "Your Career Uttsav entry QR code",
-    });
-    actions.push({
-      type: "TEXT",
-      body: "📱 Save this QR code. You’ll need it when you arrive.",
-    });
+    actions.push(
+      {
+        type: "MEDIA",
+        mimeType: "image/png",
+        filename: WHATSAPP_REGISTRATION_ENTRY_PASS_FILENAME,
+        contentBase64: input.qrPngBase64,
+        caption: "Your Career Uttsav entry QR code",
+      },
+      ...buildWhatsAppRegistrationPassFollowUpActions()
+    );
   }
 
   return actions;

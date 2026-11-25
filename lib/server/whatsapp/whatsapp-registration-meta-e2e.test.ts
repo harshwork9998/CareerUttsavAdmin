@@ -147,6 +147,7 @@ describe("whatsapp registration meta e2e (mocked)", () => {
     process.env.WHATSAPP_ACCESS_TOKEN = "test-access-token-local-only";
     process.env.WHATSAPP_PHONE_NUMBER_ID = "123456789012345";
     process.env.WHATSAPP_GRAPH_API_VERSION = "v22.0";
+    process.env.WHATSAPP_EVENT_VENUE_OPERATOR_CONFIRMED = "true";
 
     getSeminarsMock.mockResolvedValue(seminarOptions);
     getCatalogMock.mockResolvedValue(seminarDayCatalog);
@@ -285,9 +286,11 @@ describe("whatsapp registration meta e2e (mocked)", () => {
     expect(completion.conversation?.completedRegistrationId).toBe("reg-001");
     expect(outboundTypes).toContain("interactive");
     expect(outboundTypes).toContain("text");
-    expect(outboundTypes.at(-4)).toBe("text");
-    expect(outboundTypes.at(-3)).toBe("MEDIA_UPLOAD");
-    expect(outboundTypes.at(-2)).toBe("image");
+    expect(outboundTypes.at(-6)).toBe("text");
+    expect(outboundTypes.at(-5)).toBe("MEDIA_UPLOAD");
+    expect(outboundTypes.at(-4)).toBe("image");
+    expect(outboundTypes.at(-3)).toBe("location");
+    expect(outboundTypes.at(-2)).toBe("text");
     expect(outboundTypes.at(-1)).toBe("text");
     expect(outboundTypes.filter((type) => type === "MEDIA_UPLOAD")).toHaveLength(
       2
@@ -354,6 +357,7 @@ describe("whatsapp registration completion delivery failures (mocked)", () => {
     process.env.WHATSAPP_ACCESS_TOKEN = "test-access-token-local-only";
     process.env.WHATSAPP_PHONE_NUMBER_ID = "123456789012345";
     process.env.WHATSAPP_GRAPH_API_VERSION = "v22.0";
+    process.env.WHATSAPP_EVENT_VENUE_OPERATOR_CONFIRMED = "true";
     vi.mocked(getRegistrationForApi).mockResolvedValue(createdRegistration);
   });
 
@@ -483,10 +487,18 @@ describe("whatsapp registration completion delivery failures (mocked)", () => {
     const summary = await dispatchWhatsAppBotActions(WA_ID, completion.actions);
 
     expect(createStudentRegistrationMock).toHaveBeenCalledOnce();
-    expect(summary.results).toHaveLength(3);
+    expect(summary.results).toHaveLength(5);
     expect(summary.results[0].success).toBe(true);
     expect(summary.results[1].success).toBe(false);
-    expect(summary.results[2]?.success).toBe(true);
+    expect(summary.results[2]?.errorCode).toBe(
+      "SKIPPED_REGISTRATION_QR_NOT_DELIVERED"
+    );
+    expect(summary.results[3]?.errorCode).toBe(
+      "SKIPPED_REGISTRATION_QR_NOT_DELIVERED"
+    );
+    expect(summary.results[4]?.errorCode).toBe(
+      "SKIPPED_REGISTRATION_QR_NOT_DELIVERED"
+    );
   });
 
   it("keeps a completed conversation completed after delivery failure", async () => {

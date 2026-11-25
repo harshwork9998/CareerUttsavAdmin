@@ -208,9 +208,6 @@ function isChapter1Complete(partner: Partner): boolean {
     partner.name?.trim() &&
       partner.city?.trim() &&
       partner.state?.trim() &&
-      partner.primaryContact?.name?.trim() &&
-      partner.primaryContact?.phone?.trim() &&
-      partner.primaryContact?.email?.trim() &&
       isRelationshipOwnerReady(partner.relationshipOwner)
   );
 }
@@ -1088,14 +1085,16 @@ export function PartnerJourney({ partnerId }: { partnerId?: string }) {
     else if (city.trim().length < 2) next.city = "Enter at least 2 characters";
     if (!state.trim()) next.state = "Required";
     else if (!isIndianStateOrUt(state.trim())) next.state = "Select a state or UT";
-    if (!primary.name.trim() || !primary.phone.trim() || !primary.email.trim()) {
-      next.primary = "Primary contact needs name, phone & email";
-    } else if (!isPartnerPortalEmail(primary.email)) {
+    if (
+      primary.email.trim() &&
+      !isPartnerPortalEmail(primary.email)
+    ) {
       next.primary = "Enter a valid primary contact email";
     } else {
       const phoneErr = mobileErrorForSubmit(
         primary.phone,
-        partner?.primaryContact?.phone ?? ""
+        partner?.primaryContact?.phone ?? "",
+        { required: false }
       );
       if (phoneErr) next.primary = phoneErr;
     }
@@ -2316,6 +2315,7 @@ function ChapterPartnerDetails(props: {
           value={props.primary}
           onChange={props.setPrimary}
           error={props.errors.primary}
+          optional
         />
         <FieldError message={props.errors.primary} />
       </div>

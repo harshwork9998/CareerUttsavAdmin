@@ -75,6 +75,14 @@ export type SendWhatsAppImageInput = {
   caption?: string;
 };
 
+export type SendWhatsAppLocationInput = {
+  to: string;
+  latitude: number;
+  longitude: number;
+  name: string;
+  address: string;
+};
+
 export type WhatsAppTemplateComponentParameter =
   | { type: "text"; text: string }
   | {
@@ -515,6 +523,35 @@ export async function uploadWhatsAppMedia(
     mediaId,
   });
   return { success: true, mediaId };
+}
+
+export async function sendWhatsAppLocation(
+  input: SendWhatsAppLocationInput
+): Promise<MetaSendResult> {
+  const configResult = getMetaClientConfig();
+  if (!configResult.ok) {
+    return {
+      success: false,
+      errorCode: configResult.errorCode,
+      retryable: false,
+    };
+  }
+
+  return sendMetaMessagePayload({
+    config: configResult.config,
+    to: input.to,
+    actionType: "LOCATION",
+    payload: {
+      ...buildBaseMessagePayload(input.to),
+      type: "location",
+      location: {
+        latitude: input.latitude,
+        longitude: input.longitude,
+        name: input.name,
+        address: input.address,
+      },
+    },
+  });
 }
 
 export async function sendWhatsAppImage(

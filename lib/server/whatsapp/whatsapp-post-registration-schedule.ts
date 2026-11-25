@@ -9,6 +9,7 @@ import { startPostRegistrationGrowthWorker } from "@/lib/server/whatsapp/whatsap
 
 const GROWTH_KINDS: PostRegistrationGrowthKind[] = [
   "INSTAGRAM",
+  "CHANNEL_INVITE",
   "PARENT_INVITE",
   "FRIEND_INVITE",
 ];

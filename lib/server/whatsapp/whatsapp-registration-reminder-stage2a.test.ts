@@ -51,11 +51,16 @@ vi.mock("@/lib/server/whatsapp/whatsapp-post-registration-processor", () => ({
   processPostRegistrationGrowthTriggers: async () => ({
     checked: 0,
     sentInstagram: 0,
+    sentChannelInvite: 0,
     sentParentInvite: 0,
     sentFriendInvite: 0,
     skipped: 0,
     failed: 0,
     cancelled: 0,
+    recoveryExamined: 0,
+    recoveryRecovered: 0,
+    recoveryFailed: 0,
+    recoverySkippedWithoutQrEvidence: 0,
   }),
 }));
 
@@ -435,11 +440,16 @@ describe("WhatsApp registration reminder Stage 2A", () => {
       growth: {
         checked: 0,
         sentInstagram: 0,
+        sentChannelInvite: 0,
         sentParentInvite: 0,
         sentFriendInvite: 0,
         skipped: 0,
         failed: 0,
         cancelled: 0,
+        recoveryExamined: 0,
+        recoveryRecovered: 0,
+        recoveryFailed: 0,
+        recoverySkippedWithoutQrEvidence: 0,
       },
     });
   });

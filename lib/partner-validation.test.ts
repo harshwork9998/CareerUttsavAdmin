@@ -30,21 +30,47 @@ function basePartner(secondary: PartnerContact): Partial<Partner> {
   };
 }
 
-describe("Partner secondary contact validation", () => {
-  it("keeps primary contact mobile required when cleared on update", () => {
+describe("Partner primary contact validation", () => {
+  it("allows name-only primary contact without mobile", () => {
+    const result = validatePartnerContactPhones(
+      {
+        primaryContact: { name: "Contact", designation: "", phone: "", email: "" },
+      },
+      null
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it("rejects invalid primary email when supplied", () => {
+    const result = validatePartnerContactPhones(
+      {
+        primaryContact: { ...fullPrimary, email: "not-an-email" },
+      },
+      null
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toContain("primary contact email");
+    }
+  });
+
+  it("allows clearing primary phone when other fields remain", () => {
     const previous = {
       id: "p1",
       ...basePartner(emptySecondary),
     } as Partner;
 
-    const missingPrimaryPhone = validatePartnerContactPhones(
+    const clearedPhone = validatePartnerContactPhones(
       {
         primaryContact: { ...fullPrimary, phone: "" },
       },
       previous
     );
-    expect(missingPrimaryPhone.ok).toBe(false);
+    expect(clearedPhone.ok).toBe(true);
   });
+});
+
+describe("Partner secondary contact validation", () => {
 
   it("allows completely blank secondary contact", () => {
     const result = validatePartnerContactPhones(

@@ -7,8 +7,21 @@ import { buildEditableWhatsAppShareUrl } from "@/lib/server/whatsapp/whatsapp-sh
 type UrlCtaAction = Extract<WhatsAppBotAction, { type: "URL_CTA" }>;
 
 export const WHATSAPP_POST_REGISTRATION_INSTAGRAM_DELAY_MS = 10 * 1000;
+export const WHATSAPP_POST_REGISTRATION_CHANNEL_DELAY_MS = 30 * 60 * 1000;
 export const WHATSAPP_POST_REGISTRATION_PARENT_DELAY_MS = 60 * 60 * 1000;
 export const WHATSAPP_POST_REGISTRATION_FRIEND_DELAY_MS = 3 * 60 * 60 * 1000;
+
+export const WHATSAPP_OFFICIAL_CHANNEL_URL =
+  "https://whatsapp.com/channel/0029Vb5JS7s7dmeWgCFiLe3m";
+
+export const WHATSAPP_CHANNEL_INVITE_BODY = `🎓 Stay Connected with Career Uttsav!
+
+Join our official WhatsApp Channel for event
+updates, important announcements and highlights.
+
+Stay informed as we get closer to the event!`;
+
+export const WHATSAPP_CHANNEL_INVITE_CTA_LABEL = "Join Channel";
 
 export const WHATSAPP_INSTAGRAM_PROFILE_URL =
   "https://www.instagram.com/careeruttsav/";
@@ -36,6 +49,7 @@ ${CAREER_UTTSAV_PUBLIC_REGISTRATION_URL}`;
 
 export type PostRegistrationGrowthKind =
   | "INSTAGRAM"
+  | "CHANNEL_INVITE"
   | "PARENT_INVITE"
   | "FRIEND_INVITE";
 
@@ -46,6 +60,9 @@ export function postRegistrationGrowthDueAt(
   return {
     INSTAGRAM: new Date(
       completedMs + WHATSAPP_POST_REGISTRATION_INSTAGRAM_DELAY_MS
+    ),
+    CHANNEL_INVITE: new Date(
+      completedMs + WHATSAPP_POST_REGISTRATION_CHANNEL_DELAY_MS
     ),
     PARENT_INVITE: new Date(
       completedMs + WHATSAPP_POST_REGISTRATION_PARENT_DELAY_MS
@@ -94,6 +111,15 @@ Bring your gang along.
 
 Career Uttsav is more fun when you explore it together.`;
 
+export function buildChannelInviteGrowthAction(): UrlCtaAction {
+  return {
+    type: "URL_CTA",
+    body: WHATSAPP_CHANNEL_INVITE_BODY,
+    displayText: WHATSAPP_CHANNEL_INVITE_CTA_LABEL,
+    url: WHATSAPP_OFFICIAL_CHANNEL_URL,
+  };
+}
+
 export function buildFriendInviteGrowthAction(): UrlCtaAction {
   return {
     type: "URL_CTA",
@@ -109,6 +135,9 @@ export function buildPostRegistrationGrowthAction(input: {
 }): WhatsAppBotAction {
   if (input.kind === "INSTAGRAM") {
     return buildInstagramGrowthAction(input.studentName);
+  }
+  if (input.kind === "CHANNEL_INVITE") {
+    return buildChannelInviteGrowthAction();
   }
   if (input.kind === "PARENT_INVITE") {
     return buildParentInviteGrowthAction();

@@ -16,6 +16,16 @@ export type PostRegistrationGrowthTriggerRow = {
   lastError: string | null;
 };
 
+export async function loadWhatsAppConversationLastInboundAt(
+  waId: string
+): Promise<Date | null> {
+  const row = await prisma.whatsAppRegistrationConversation.findUnique({
+    where: { waId },
+    select: { lastInboundAt: true },
+  });
+  return row?.lastInboundAt ?? null;
+}
+
 export async function insertPostRegistrationGrowthTriggers(
   rows: Array<{
     waId: string;
