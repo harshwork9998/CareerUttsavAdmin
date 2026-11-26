@@ -7,12 +7,16 @@ import {
   __setWhatsAppFaqBudgetForTests,
   estimateWhatsAppFaqAiUsd,
 } from "@/lib/server/whatsapp/faq/whatsapp-faq-budget";
-import { whatsAppFaqAiModel } from "@/lib/server/whatsapp/faq/whatsapp-faq-config";
+import { __clearWhatsAppFaqContextForTests } from "@/lib/server/whatsapp/faq/whatsapp-faq-context";
+import { whatsAppFaqAiMaxCallsPerHour, whatsAppFaqAiModel } from "@/lib/server/whatsapp/faq/whatsapp-faq-config";
 import { findWhatsAppFaqEntry } from "@/lib/server/whatsapp/faq/whatsapp-faq-knowledge";
 import { loadWhatsAppFaqKnowledge } from "@/lib/server/whatsapp/faq/whatsapp-faq-knowledge";
 import { matchWhatsAppFaqLocally } from "@/lib/server/whatsapp/faq/whatsapp-faq-local-match";
 import {
   __setWhatsAppFaqAiClientForTests,
+  buildWhatsAppFaqAiPrompt,
+  fullFaqPromptChars,
+  whatsAppFaqAiCallCeiling,
   whatsAppFaqAiChatRequestBody,
   whatsAppFaqAiReservationUsd,
 } from "@/lib/server/whatsapp/faq/whatsapp-faq-openai";
@@ -58,6 +62,9 @@ describe("whatsapp faq knowledge and routing", () => {
     delete process.env.WHATSAPP_FAQ_AI_MODEL;
     __setWhatsAppFaqAiClientForTests(null);
     __setWhatsAppFaqBudgetForTests({ spentUsd: 0, calls: 0, perWaIdHour: {} });
+    __clearWhatsAppFaqContextForTests();
+    delete process.env.WHATSAPP_EVENT_VENUE_OPERATOR_CONFIRMED;
+    delete process.env.WHATSAPP_FAQ_AI_MAX_CALLS_PER_HOUR;
     resolveDuplicateMock.mockResolvedValue({ resolution: { outcome: "none" } });
     passMock.mockResolvedValue("qr");
   });
@@ -69,6 +76,11 @@ describe("whatsapp faq knowledge and routing", () => {
     expect(knowledge.report.excluded.some((row) => row.id === "CU-004")).toBe(true);
     expect(knowledge.report.excluded.some((row) => row.id === "CU-139")).toBe(true);
     expect(knowledge.entries.some((row) => row.id === "CU-004")).toBe(false);
+    expect(knowledge.entries.some((row) => row.id === "CU-002")).toBe(false);
+    const dates = knowledge.entries.find((row) => row.id === "RULE-DATES");
+    expect(dates?.answer).toContain("19 and 20 December 2026");
+    expect(dates?.answer).not.toMatch(/\b\d{1,2}(?::\d{2})?\s*(am|pm)\b/i);
+    expect(knowledge.entries.find((row) => row.id === "CU-003")?.answer).not.toContain("when it is enabled");
   });
 
   it("matches every included canonical question locally or records why not", () => {
@@ -246,46 +258,80 @@ describe("whatsapp faq knowledge and routing", () => {
     expect(result?.actions[0]).toMatchObject({ type: "TEXT" });
   });
 
-  it("sends Hindi wording to the mocked model instead of guessing locally", async () => {
+  it("answers common hinglish about entry and food without the model", async () => {
+    const client = vi.fn();
+    __setWhatsAppFaqAiClientForTests(client);
     process.env.WHATSAPP_FAQ_AI_ENABLED = "true";
-    process.env.WHATSAPP_FAQ_AI_ALLOWLIST = "919876543210";
+    const free = await tryAnswerWhatsAppFaq({
+      conversation: conversation(),
+      text: "kya yeh event free hai",
+      seminarOptions: [],
+      seminarDayCatalog: catalog,
+    });
+    const food = await tryAnswerWhatsAppFaq({
+      conversation: conversation(),
+      text: "bhai khana milega kya?",
+      seminarOptions: [],
+      seminarDayCatalog: catalog,
+    });
+    expect(client).not.toHaveBeenCalled();
+    expect(String((free?.actions[0] as { body?: string }).body).toLowerCase()).toContain("free");
+    expect(String((food?.actions[0] as { body?: string }).body).toLowerCase()).toContain("bite");
+  });
+
+  it("accepts a safe paraphrased reply and hides registration details from the model", async () => {
+    process.env.WHATSAPP_FAQ_AI_ENABLED = "true";
     __setWhatsAppFaqAiClientForTests(async (input) => {
       expect(input.model).toBe("gpt-6-luna");
-      expect(input.user).toContain("kya yeh event free hai");
+      expect(input.user).not.toContain("aarav@example.com");
+      expect(input.user).not.toContain("Aarav");
+      expect(input.system).toContain("recentFaqIds");
       return {
-        content: JSON.stringify({ faqIds: ["CU-005"], reply: "Haan, entry free hai." }),
+        content: JSON.stringify({
+          faqIds: ["CU-001"],
+          reply: "Career Uttsav is a two-day career and education fair.",
+        }),
         inputTokens: 20,
-        outputTokens: 10,
+        outputTokens: 12,
       };
     });
     const result = await tryAnswerWhatsAppFaq({
       conversation: conversation(),
-      text: "kya yeh event free hai",
+      text: "could you explain this event in a totally different way please",
       seminarOptions: [],
       seminarDayCatalog: catalog,
     });
     expect(result?.actions[0]).toMatchObject({
       type: "TEXT",
-      body: findWhatsAppFaqEntry("CU-005")?.answer,
+      body: "Career Uttsav is a two-day career and education fair.",
     });
   });
 
-  it("falls back when the model times out", async () => {
+  it("falls back when the model times out and reserves the bounded prompt", async () => {
     process.env.WHATSAPP_FAQ_AI_ENABLED = "true";
     process.env.WHATSAPP_FAQ_AI_ALLOWLIST = "919876543210";
+    const text = "could you explain this event in a totally different way please";
+    const ceiling = whatsAppFaqAiCallCeiling({
+      redactedText: redactWhatsAppFaqText(text),
+      previousFaqIds: [],
+      contextTopic: "general",
+      registrationStatus: "not_started",
+    });
     __setWhatsAppFaqAiClientForTests(async () => {
-      throw new Error("openai_timeout");
+      throw new Error("This operation was aborted");
     });
     const result = await tryAnswerWhatsAppFaq({
       conversation: conversation(),
-      text: "kya yeh event free hai",
+      text,
       seminarOptions: [],
       seminarDayCatalog: catalog,
     });
-    expect(result?.actions[0]).toMatchObject({ type: "TEXT" });
-    expect(String((result?.actions[0] as { body?: string }).body)).toContain("Chirag Jain");
+    expect(String((result?.actions[0] as { body?: string }).body)).toContain("took too long");
+    expect(String((result?.actions[0] as { body?: string }).body)).not.toContain("continue your registration");
     const usage = __readWhatsAppFaqBudgetForTests();
-    expect(usage).toMatchObject({ spentUsd: estimateWhatsAppFaqAiUsd(4000, 0) });
+    if (typeof usage !== "string") {
+      expect(usage.spentUsd).toBeCloseTo(ceiling?.usd ?? -1, 6);
+    }
   });
 
   it("keeps local FAQ and AI off for numbers that are not allowlisted", async () => {
@@ -363,8 +409,8 @@ describe("whatsapp faq knowledge and routing", () => {
       seminarOptions: [],
       seminarDayCatalog: catalog,
     });
-    const second = JSON.parse(seen[1] ?? "{}") as { previousFaqIds?: string[] };
-    expect(second.previousFaqIds).toEqual([]);
+    const second = JSON.parse(seen[1] ?? "{}") as { recentFaqIds?: string[] };
+    expect(second.recentFaqIds).toEqual([]);
   });
 
   it("refuses AI when the usage file is marked corrupt", async () => {
@@ -379,7 +425,7 @@ describe("whatsapp faq knowledge and routing", () => {
       seminarDayCatalog: catalog,
     });
     expect(client).not.toHaveBeenCalled();
-    expect(String((result?.actions[0] as { body?: string }).body)).toContain("Chirag Jain");
+    expect(String((result?.actions[0] as { body?: string }).body)).toContain("couldn't look that up");
   });
 
   it("does not call AI for numbers outside the allowlist", async () => {
@@ -426,7 +472,7 @@ describe("whatsapp faq knowledge and routing", () => {
       seminarDayCatalog: catalog,
     });
     expect(client).not.toHaveBeenCalled();
-    expect(String((result?.actions[0] as { body?: string }).body)).toContain("Chirag Jain");
+    expect(String((result?.actions[0] as { body?: string }).body)).toContain("couldn't look that up");
   });
 
   it("keeps overlapping AI calls inside the spend cap in this process", async () => {
@@ -470,7 +516,7 @@ describe("whatsapp faq knowledge and routing", () => {
     const results = await Promise.all([first, second]);
     const bodies = results.map((result) => String((result?.actions[0] as { body?: string }).body));
     expect(bodies.some((body) => body.includes(findWhatsAppFaqEntry("CU-001")?.answer ?? "missing"))).toBe(true);
-    expect(bodies.some((body) => body.includes("assistant limit"))).toBe(true);
+    expect(bodies.some((body) => body.includes("spending limit"))).toBe(true);
     const usage = __readWhatsAppFaqBudgetForTests();
     expect(typeof usage).not.toBe("string");
     if (typeof usage !== "string") {
@@ -514,5 +560,206 @@ describe("whatsapp faq knowledge and routing", () => {
     if (typeof usage !== "string") {
       expect(usage.spentUsd).toBeCloseTo(estimateWhatsAppFaqAiUsd(1_000, 1_000) * 2, 6);
     }
+  });
+
+  it("answers the pilot phrases locally, including spelling and follow-ups", async () => {
+    process.env.WHATSAPP_EVENT_VENUE_OPERATOR_CONFIRMED = "true";
+    const asked = [
+      "When is Career Utsav?",
+      "Ok what will happen there?",
+      "where is it?",
+      "where is career utsav",
+      "what about the entry?",
+      "bhai khana milega kya?",
+      "who all will be there?",
+      "what about seminars",
+    ];
+    const ids: string[] = [];
+    for (const text of asked) {
+      const result = await tryAnswerWhatsAppFaq({
+        conversation: conversation(),
+        text,
+        seminarOptions: [],
+        seminarDayCatalog: catalog,
+      });
+      ids.push(String((result?.actions[0] as { body?: string }).body));
+    }
+    expect(ids[0]).toContain("19 and 20 December 2026");
+    expect(ids[0]).not.toMatch(/\b\d{1,2}:\d{2}\b/);
+    expect(ids[1].toLowerCase()).toContain("career");
+    expect(ids[3]).toContain("Gate No. 9");
+    expect(ids[3]).not.toContain("when it is enabled");
+    expect(ids[4].toLowerCase()).toContain("free");
+    expect(ids[5].toLowerCase()).toContain("bite");
+    expect(ids[7].toLowerCase()).toContain("seminar");
+
+    const where = await tryAnswerWhatsAppFaq({
+      conversation: conversation(),
+      text: "where is career utsav",
+      seminarOptions: [],
+      seminarDayCatalog: catalog,
+    });
+    const location = where?.actions.find((action) => action.type === "LOCATION");
+    expect(location).toMatchObject({ type: "LOCATION", locationPurpose: "venue_faq" });
+
+    const followed = conversation();
+    await tryAnswerWhatsAppFaq({
+      conversation: followed,
+      text: "What is Career Uttsav?",
+      seminarOptions: [],
+      seminarDayCatalog: catalog,
+    });
+    const when = await tryAnswerWhatsAppFaq({
+      conversation: followed,
+      text: "When is it?",
+      seminarOptions: [],
+      seminarDayCatalog: catalog,
+    });
+    const parents = await tryAnswerWhatsAppFaq({
+      conversation: followed,
+      text: "Can my parents come?",
+      seminarOptions: [],
+      seminarDayCatalog: catalog,
+    });
+    const parking = await tryAnswerWhatsAppFaq({
+      conversation: followed,
+      text: "What about parking?",
+      seminarOptions: [],
+      seminarDayCatalog: catalog,
+    });
+    expect(String((when?.actions[0] as { body?: string }).body)).toContain("19 and 20 December 2026");
+    expect(String((parents?.actions[0] as { body?: string }).body).toLowerCase()).toContain("parent");
+    expect(String((parking?.actions[0] as { body?: string }).body).toLowerCase()).toContain("parking");
+  });
+
+  it("does not tell a completed visitor to register again", async () => {
+    const result = await tryAnswerWhatsAppFaq({
+      conversation: conversation("COMPLETED"),
+      text: "what about the entry?",
+      seminarOptions: [],
+      seminarDayCatalog: catalog,
+    });
+    const body = String((result?.actions[0] as { body?: string }).body);
+    expect(body).toContain("already complete");
+    expect(body.toLowerCase()).toContain("free");
+    expect(body.toLowerCase()).not.toContain("register right here");
+    expect(result?.actions.some((action) => action.type === "MEDIA")).toBe(false);
+  });
+
+  it("resends a pass for natural QR requests and refuses negative or unregistered ones", async () => {
+    resolveDuplicateMock.mockResolvedValue({
+      resolution: {
+        outcome: "phone",
+        registration: { id: "reg-001", registrationNumber: "CU-BLR-2026-00042" },
+      },
+    });
+    getRegistrationMock.mockResolvedValue({ kind: "student", seminarInterests: [] });
+    const sent = await tryAnswerWhatsAppFaq({
+      conversation: conversation("COMPLETED"),
+      text: "give me my qr",
+      seminarOptions: [],
+      seminarDayCatalog: catalog,
+    });
+    expect(passMock).toHaveBeenCalledTimes(1);
+    expect(sent?.actions.some((action) => action.type === "MEDIA")).toBe(true);
+
+    passMock.mockClear();
+    const shared = await tryAnswerWhatsAppFaq({
+      conversation: conversation("COMPLETED"),
+      text: "Share the registration QR",
+      seminarOptions: [],
+      seminarDayCatalog: catalog,
+    });
+    expect(shared?.actions.some((action) => action.type === "MEDIA")).toBe(true);
+
+    passMock.mockClear();
+    const refused = await tryAnswerWhatsAppFaq({
+      conversation: conversation("COMPLETED"),
+      text: "what is a qr code?",
+      seminarOptions: [],
+      seminarDayCatalog: catalog,
+    });
+    expect(passMock).not.toHaveBeenCalled();
+    expect(String((refused?.actions[0] as { body?: string }).body).toLowerCase()).toContain("won't send");
+
+    const declined = await tryAnswerWhatsAppFaq({
+      conversation: conversation("COMPLETED"),
+      text: "do not send my qr",
+      seminarOptions: [],
+      seminarDayCatalog: catalog,
+    });
+    expect(passMock).not.toHaveBeenCalled();
+    expect(declined?.actions.some((action) => action.type === "MEDIA")).toBe(false);
+
+    resolveDuplicateMock.mockResolvedValue({ resolution: { outcome: "none" } });
+    const missing = await tryAnswerWhatsAppFaq({
+      conversation: conversation(),
+      text: "Mera QR bhejo",
+      seminarOptions: [],
+      seminarDayCatalog: catalog,
+    });
+    expect(passMock).not.toHaveBeenCalled();
+    expect(String((missing?.actions[0] as { body?: string }).body).toLowerCase()).toContain("registration");
+    expect(missing?.conversation).toBeUndefined();
+  });
+
+  it("sends the seminar poster for programme and engineering questions without inventing times", async () => {
+    const state = conversation("AWAITING_EMAIL");
+    const programme = await tryAnswerWhatsAppFaq({
+      conversation: state,
+      text: "what about seminars",
+      seminarOptions: [],
+      seminarDayCatalog: catalog,
+    });
+    expect(programme?.actions.some((action) => action.type === "MEDIA")).toBe(true);
+    expect(programme?.actions.some((action) => action.type === "TEXT" && String((action as { body?: string }).body).includes("email"))).toBe(false);
+    expect(state.currentStep).toBe("AWAITING_EMAIL");
+    const engineering = await tryAnswerWhatsAppFaq({
+      conversation: conversation(),
+      text: "Are there engineering-related sessions?",
+      seminarOptions: [],
+      seminarDayCatalog: catalog,
+    });
+    const body = String((engineering?.actions[0] as { body?: string }).body);
+    expect(body.toLowerCase()).toContain("engineering");
+    expect(body).not.toMatch(/\b\d{1,2}:\d{2}\s*(am|pm)\b/i);
+    expect(engineering?.actions.some((action) => action.type === "MEDIA" && action.filename === "career-uttsav-2026-seminars.png")).toBe(true);
+  });
+
+  it("stops extra lookups at the configured hourly limit and keeps the $4 cap", async () => {
+    process.env.WHATSAPP_FAQ_AI_ENABLED = "true";
+    expect(whatsAppFaqAiMaxCallsPerHour()).toBe(60);
+    process.env.WHATSAPP_FAQ_AI_MAX_CALLS_PER_HOUR = "500";
+    expect(whatsAppFaqAiMaxCallsPerHour()).toBe(120);
+    process.env.WHATSAPP_FAQ_AI_MAX_CALLS_PER_HOUR = "1";
+    const hour = new Date().toISOString().slice(0, 13);
+    __setWhatsAppFaqBudgetForTests({
+      spentUsd: 0,
+      calls: 1,
+      perWaIdHour: { "9876543210": { hour, count: 1 } },
+    });
+    const client = vi.fn();
+    __setWhatsAppFaqAiClientForTests(client);
+    const result = await tryAnswerWhatsAppFaq({
+      conversation: conversation(),
+      text: "could you explain this event in a totally different way please",
+      seminarOptions: [],
+      seminarDayCatalog: catalog,
+    });
+    expect(client).not.toHaveBeenCalled();
+    expect(String((result?.actions[0] as { body?: string }).body)).toContain("hourly limit");
+  });
+
+  it("uses a smaller catalogue than the full stored answers", () => {
+    const prompt = buildWhatsAppFaqAiPrompt({
+      redactedText: "where is it?",
+      previousFaqIds: ["CU-001"],
+      contextTopic: "event",
+      registrationStatus: "completed",
+    });
+    const nextSize = prompt.system.length + prompt.user.length;
+    expect(nextSize).toBeLessThan(fullFaqPromptChars());
+    expect(prompt.user).not.toContain("aarav@example.com");
+    expect(prompt.system.startsWith("You are the Career Uttsav WhatsApp assistant.")).toBe(true);
   });
 });

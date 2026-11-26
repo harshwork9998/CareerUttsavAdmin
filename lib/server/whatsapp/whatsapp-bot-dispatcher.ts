@@ -64,6 +64,11 @@ export async function dispatchWhatsAppBotActions(
       isWhatsAppRegistrationPassFollowUpAction(action) &&
       !registrationEntryPassDelivered
     ) {
+      console.info("[whatsapp-dispatch] follow-up suppressed", {
+        actionType: action.type,
+        reason: "registration_qr_not_delivered",
+        locationPurpose: action.type === "LOCATION" ? (action.locationPurpose ?? "registration_follow_up") : undefined,
+      });
       results.push({
         actionType: action.type,
         success: false,
@@ -71,6 +76,13 @@ export async function dispatchWhatsAppBotActions(
         retryable: false,
       });
       continue;
+    }
+
+    if (action.type === "LOCATION") {
+      console.info("[whatsapp-dispatch] location", {
+        purpose: action.locationPurpose ?? "registration_follow_up",
+        suppressed: false,
+      });
     }
 
     const result = await dispatchWhatsAppBotActionToMeta(to, action);

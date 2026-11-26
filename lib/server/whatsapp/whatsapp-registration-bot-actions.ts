@@ -42,16 +42,15 @@ export function isWhatsAppRegistrationEntryPassMedia(
 export function isWhatsAppRegistrationPassFollowUpAction(
   action: WhatsAppBotAction
 ): boolean {
-  if (isWhatsAppEventVenueLocationEnabled()) {
-    if (action.type === "LOCATION") {
-      return true;
-    }
-    if (
-      action.type === "TEXT" &&
-      action.body === WHATSAPP_EVENT_LOCATION_EXPLANATION_BODY
-    ) {
-      return true;
-    }
+  if (action.type === "LOCATION") {
+    return action.locationPurpose !== "venue_faq";
+  }
+  if (
+    isWhatsAppEventVenueLocationEnabled() &&
+    action.type === "TEXT" &&
+    action.body === WHATSAPP_EVENT_LOCATION_EXPLANATION_BODY
+  ) {
+    return true;
   }
   if (
     action.type === "TEXT" &&

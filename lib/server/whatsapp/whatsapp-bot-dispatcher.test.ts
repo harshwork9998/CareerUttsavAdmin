@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { buildWhatsAppEventVenueLocationAction } from "@/lib/server/whatsapp/whatsapp-event-venue-location";
 import { buildWhatsAppRegistrationSuccessActions } from "@/lib/server/whatsapp/whatsapp-registration-bot-actions";
 import { dispatchWhatsAppBotActions } from "@/lib/server/whatsapp/whatsapp-bot-dispatcher";
 import { setMetaClientFetchForTests } from "@/lib/server/whatsapp/meta-client";
@@ -140,6 +141,23 @@ describe("whatsapp bot dispatcher", () => {
     });
     expect(summary.results.slice(2).every((result) => result.errorCode === "SKIPPED_REGISTRATION_QR_NOT_DELIVERED")).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("sends a standalone venue location when the batch has no QR", async () => {
+    const fetchMock = vi.fn(async (_url, init) => {
+      const body = JSON.parse(String(init?.body));
+      return mockJsonResponse(200, {
+        messages: [{ id: `wamid.${body.type}` }],
+      });
+    });
+    setMetaClientFetchForTests(fetchMock as typeof fetch);
+    const summary = await dispatchWhatsAppBotActions(WA_ID, [
+      { type: "TEXT", body: "Career Uttsav 2026 is at Gate No. 9, Princess Golf, Palace Grounds, Bengaluru." },
+      buildWhatsAppEventVenueLocationAction("venue_faq"),
+    ]);
+    expect(summary.failed).toBe(0);
+    expect(summary.results.map((result) => result.actionType)).toEqual(["TEXT", "LOCATION"]);
+    expect(summary.results.every((result) => result.success)).toBe(true);
   });
 
   it("fails safely when outbound configuration is missing", async () => {

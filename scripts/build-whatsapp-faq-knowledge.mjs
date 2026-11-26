@@ -91,7 +91,7 @@ for (const row of faqs) {
       alternatePhrasings: alts ? alts.split(";").map((part) => part.trim()).filter(Boolean) : [],
       keywords: keywordsFrom(question, alts),
       answer:
-        "Career Uttsav 2026 is at Gate No. 9, Princess Golf, Palace Grounds, Bengaluru. I can share the location pin when it is enabled for WhatsApp.",
+        "Career Uttsav 2026 is at Gate No. 9, Princess Golf, Palace Grounds, Bengaluru.",
       actions: ["SEND_VENUE_LOCATION"],
       source: "existing_registration_venue_constant",
     });
@@ -174,6 +174,22 @@ entries.push({
   answer: `Session times and daily opening hours are not confirmed in the organiser FAQ yet. ${SUPPORT_CHIRAG}`,
   actions: [],
   source: "pending_confirmations",
+});
+
+entries.push({
+  id: "RULE-DATES",
+  category: "Event",
+  status: "organiser_confirmed",
+  question: "When is Career Uttsav?",
+  alternatePhrasings: ["when is the event", "event dates", "kab hai"],
+  keywords: ["when", "date", "dates", "december"],
+  answer: "Career Uttsav is on 19 and 20 December 2026. Opening hours are not confirmed yet.",
+  actions: [],
+  source: "confirmed_event_dates",
+});
+conditional.push({
+  id: "RULE-DATES",
+  reason: "CU-002 stays excluded as an approved draft. This entry uses the confirmed 19 and 20 December 2026 dates and does not publish opening hours.",
 });
 
 const seminarRows = seminars.map((row) => ({

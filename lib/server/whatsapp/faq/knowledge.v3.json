@@ -313,7 +313,7 @@
         "uttsav",
         "happening"
       ],
-      "answer": "Career Uttsav 2026 is at Gate No. 9, Princess Golf, Palace Grounds, Bengaluru. I can share the location pin when it is enabled for WhatsApp.",
+      "answer": "Career Uttsav 2026 is at Gate No. 9, Princess Golf, Palace Grounds, Bengaluru.",
       "actions": [
         "SEND_VENUE_LOCATION"
       ],
@@ -761,7 +761,7 @@
         "maps",
         "location"
       ],
-      "answer": "Career Uttsav 2026 is at Gate No. 9, Princess Golf, Palace Grounds, Bengaluru. I can share the location pin when it is enabled for WhatsApp.",
+      "answer": "Career Uttsav 2026 is at Gate No. 9, Princess Golf, Palace Grounds, Bengaluru.",
       "actions": [
         "SEND_VENUE_LOCATION"
       ],
@@ -2147,6 +2147,26 @@
       "answer": "Session times and daily opening hours are not confirmed in the organiser FAQ yet. Please contact Chirag Jain on 6364224321 for help with this.",
       "actions": [],
       "source": "pending_confirmations"
+    },
+    {
+      "id": "RULE-DATES",
+      "category": "Event",
+      "status": "organiser_confirmed",
+      "question": "When is Career Uttsav?",
+      "alternatePhrasings": [
+        "when is the event",
+        "event dates",
+        "kab hai"
+      ],
+      "keywords": [
+        "when",
+        "date",
+        "dates",
+        "december"
+      ],
+      "answer": "Career Uttsav is on 19 and 20 December 2026. Opening hours are not confirmed yet.",
+      "actions": [],
+      "source": "confirmed_event_dates"
     }
   ],
   "report": {
@@ -2268,7 +2288,8 @@
       "RULE-PARENTS",
       "RULE-SUPPORT",
       "RULE-BUS-COST",
-      "RULE-TIMINGS"
+      "RULE-TIMINGS",
+      "RULE-DATES"
     ],
     "excluded": [
       {
@@ -2411,6 +2432,10 @@
       {
         "id": "RULE-SUPPORT",
         "reason": "Drafts promised human handover or callbacks. No agent inbox exists, so the bot shares Chirag's number instead."
+      },
+      {
+        "id": "RULE-DATES",
+        "reason": "CU-002 stays excluded as an approved draft. This entry uses the confirmed 19 and 20 December 2026 dates and does not publish opening hours."
       }
     ]
   }

@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import {
+  whatsAppFaqAiMaxCallsPerHour,
   whatsAppFaqAiMaxUsd,
   whatsAppFaqAiModel,
 } from "@/lib/server/whatsapp/faq/whatsapp-faq-config";
@@ -38,7 +39,6 @@ type UsageFile = {
 };
 
 const USAGE_PATH = path.join(process.cwd(), "data", "whatsapp-faq-ai-usage.json");
-const MAX_CALLS_PER_WA_ID_PER_HOUR = 8;
 
 type Reservation = {
   id: string;
@@ -139,7 +139,7 @@ export function whatsAppFaqAiBudgetDecision(waId: string, now = new Date()): {
   const bucket = current.perWaIdHour[key];
   const pending = reservations.filter((row) => row.waKey === key && row.hour === hour).length;
   const used = (bucket && bucket.hour === hour ? bucket.count : 0) + pending;
-  if (used >= MAX_CALLS_PER_WA_ID_PER_HOUR) {
+  if (used >= whatsAppFaqAiMaxCallsPerHour()) {
     return { allowed: false, reason: "rate_limited" };
   }
   return { allowed: true };

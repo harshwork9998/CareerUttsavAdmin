@@ -26,17 +26,37 @@ import {
   isWhatsAppFaqEnabled,
 } from "@/lib/server/whatsapp/faq/whatsapp-faq-config";
 import {
+  estimateWhatsAppFaqAiUsd,
   reserveWhatsAppFaqAiCall,
   settleWhatsAppFaqAiReservation,
 } from "@/lib/server/whatsapp/faq/whatsapp-faq-budget";
+import {
+  readWhatsAppFaqContext,
+  rememberWhatsAppFaqContext,
+  topicForFaqEntry,
+} from "@/lib/server/whatsapp/faq/whatsapp-faq-context";
+import {
+  classifyWhatsAppQrRequest,
+  matchWhatsAppFaqIntent,
+} from "@/lib/server/whatsapp/faq/whatsapp-faq-intents";
 import { matchWhatsAppFaqLocally } from "@/lib/server/whatsapp/faq/whatsapp-faq-local-match";
 import {
   actionsFromFaqEntries,
   answerWhatsAppFaqWithAi,
-  whatsAppFaqAiReservationUsd,
+  whatsAppFaqAiCallCeiling,
 } from "@/lib/server/whatsapp/faq/whatsapp-faq-openai";
 import { redactWhatsAppFaqText } from "@/lib/server/whatsapp/faq/whatsapp-faq-redact";
-import type { WhatsAppFaqAction, WhatsAppFaqEntry } from "@/lib/server/whatsapp/faq/whatsapp-faq-knowledge";
+import { findWhatsAppFaqEntry, type WhatsAppFaqAction, type WhatsAppFaqEntry } from "@/lib/server/whatsapp/faq/whatsapp-faq-knowledge";
+import {
+  adaptFaqAnswerForRegistration,
+  completedEntryAnswer,
+  faqFallbackText,
+  qrRefusalAnswer,
+  qrUnregisteredAnswer,
+  storedFaqReply,
+  whatsAppFaqRegistrationStance,
+  type WhatsAppFaqRegistrationStance,
+} from "@/lib/server/whatsapp/faq/whatsapp-faq-reply";
 
 const QUESTION_START =
   /^(what|when|where|who|why|how|can|could|is|are|do|does|will|should|tell|send|share|which)\b/i;
@@ -44,40 +64,14 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SEMINAR_NUMBERS = /^\d{1,2}(\s*,\s*\d{1,2}){0,3}$/;
 const GREETING = /^(hi|hii|hello|hey|namaste|start|register)$/i;
 
-const recentTopics = new Map<string, { ids: string[]; at: number }>();
-const TOPIC_TTL_MS = 20 * 60 * 1000;
-const MAX_TOPIC_USERS = 500;
-
-function rememberTopics(waId: string, ids: string[]): void {
-  if (ids.length === 0) return;
-  const now = Date.now();
-  for (const [key, row] of recentTopics) {
-    if (now - row.at > TOPIC_TTL_MS) recentTopics.delete(key);
-  }
-  recentTopics.delete(waId);
-  recentTopics.set(waId, { ids, at: now });
-  while (recentTopics.size > MAX_TOPIC_USERS) {
-    const oldest = recentTopics.keys().next().value;
-    if (!oldest) break;
-    recentTopics.delete(oldest);
-  }
-}
-
-function previousTopics(waId: string): string[] {
-  const row = recentTopics.get(waId);
-  if (!row || Date.now() - row.at > TOPIC_TTL_MS) {
-    if (row) recentTopics.delete(waId);
-    return [];
-  }
-  return row.ids;
-}
-
 export function looksLikeRegistrationAnswer(
   step: WhatsAppConversationStep,
   text: string
 ): boolean {
   const trimmed = text.trim();
   if (!trimmed || QUESTION_START.test(trimmed) || trimmed.includes("?")) return false;
+  if (classifyWhatsAppQrRequest(trimmed)) return false;
+  if (matchWhatsAppFaqIntent(trimmed)) return false;
   if (step === "AWAITING_EMAIL") return EMAIL.test(trimmed);
   if (step === "AWAITING_NAME") return trimmed.split(/\s+/).length <= 5 && trimmed.length <= 60;
   if (step === "AWAITING_SEMINARS") return SEMINAR_NUMBERS.test(trimmed);
@@ -92,7 +86,48 @@ function looksLikeFaq(step: WhatsAppConversationStep, text: string): boolean {
   return text.trim().split(/\s+/).length >= 4;
 }
 
-async function actionsForAllowlist(
+function failureClass(error: unknown): "timeout" | "api_error" {
+  const message = error instanceof Error ? error.message : "";
+  const name = error instanceof Error ? error.name : "";
+  if (name === "AbortError" || /aborted|timeout/i.test(message)) return "timeout";
+  return "api_error";
+}
+
+async function passActions(conversation: WhatsAppConversationState): Promise<WhatsAppBotAction[]> {
+  const phone = requireIndianMobile(conversation.waId, "WhatsApp mobile number");
+  if (!phone.ok) {
+    return [{ type: "TEXT", body: qrUnregisteredAnswer(whatsAppFaqRegistrationStance(conversation)) }];
+  }
+  const duplicate = await resolveStudentRegistrationDuplicate({
+    eventId: CURRENT_EVENT_ID,
+    phone: phone.mobile,
+  });
+  if (duplicate.resolution.outcome !== "phone" && duplicate.resolution.outcome !== "both") {
+    console.info("[whatsapp-faq] qr", { outcome: "unregistered" });
+    return [{ type: "TEXT", body: qrUnregisteredAnswer(whatsAppFaqRegistrationStance(conversation)) }];
+  }
+  if (
+    conversation.completedRegistrationId &&
+    conversation.completedRegistrationId !== duplicate.resolution.registration.id
+  ) {
+    console.info("[whatsapp-faq] qr", { outcome: "ownership_mismatch" });
+    return [{ type: "TEXT", body: "I can only resend the pass linked to this WhatsApp number." }];
+  }
+  const registration = await getRegistrationForApi(duplicate.resolution.registration.id);
+  const qrPngBase64 = await generateWhatsAppEntryPassPngBase64({
+    registrationId: duplicate.resolution.registration.registrationNumber,
+    seminarTitles: seminarTitlesForEventPass(
+      registration && registration.kind === "student" ? registration : null
+    ),
+  });
+  console.info("[whatsapp-faq] qr", { outcome: "sent" });
+  return buildWhatsAppAlreadyRegisteredActions({
+    registrationNumber: duplicate.resolution.registration.registrationNumber,
+    qrPngBase64,
+  });
+}
+
+async function actionsForEntries(
   actions: WhatsAppFaqAction[],
   conversation: WhatsAppConversationState
 ): Promise<WhatsAppBotAction[]> {
@@ -102,45 +137,10 @@ async function actionsForAllowlist(
       outbound.push(buildWhatsAppSeminarPickerMediaAction());
     }
     if (action === "SEND_VENUE_LOCATION" && isWhatsAppEventVenueLocationEnabled()) {
-      outbound.push(buildWhatsAppEventVenueLocationAction());
+      outbound.push(buildWhatsAppEventVenueLocationAction("venue_faq"));
     }
     if (action === "RESEND_ENTRY_PASS") {
-      const phone = requireIndianMobile(conversation.waId, "WhatsApp mobile number");
-      if (!phone.ok) continue;
-      const duplicate = await resolveStudentRegistrationDuplicate({
-        eventId: CURRENT_EVENT_ID,
-        phone: phone.mobile,
-      });
-      if (duplicate.resolution.outcome !== "phone" && duplicate.resolution.outcome !== "both") {
-        outbound.push({
-          type: "TEXT",
-          body: "I can't find a completed registration on this WhatsApp number yet.",
-        });
-        continue;
-      }
-      if (
-        conversation.completedRegistrationId &&
-        conversation.completedRegistrationId !== duplicate.resolution.registration.id
-      ) {
-        outbound.push({
-          type: "TEXT",
-          body: "I can only resend the pass linked to this WhatsApp number.",
-        });
-        continue;
-      }
-      const registration = await getRegistrationForApi(duplicate.resolution.registration.id);
-      const qrPngBase64 = await generateWhatsAppEntryPassPngBase64({
-        registrationId: duplicate.resolution.registration.registrationNumber,
-        seminarTitles: seminarTitlesForEventPass(
-          registration && registration.kind === "student" ? registration : null
-        ),
-      });
-      outbound.push(
-        ...buildWhatsAppAlreadyRegisteredActions({
-          registrationNumber: duplicate.resolution.registration.registrationNumber,
-          qrPngBase64,
-        })
-      );
+      outbound.push(...(await passActions(conversation)));
     }
   }
   return outbound;
@@ -166,6 +166,14 @@ function resumePrompt(
   );
 }
 
+function localReply(entries: WhatsAppFaqEntry[], stance: WhatsAppFaqRegistrationStance): string {
+  if (stance === "completed" && entries.length === 1 && entries[0]?.id === "CU-005") {
+    return completedEntryAnswer();
+  }
+  if (entries.length === 1) return adaptFaqAnswerForRegistration(entries[0].answer, stance);
+  return storedFaqReply(entries, stance);
+}
+
 export async function tryAnswerWhatsAppFaq(input: {
   conversation: WhatsAppConversationState;
   text?: string;
@@ -177,80 +185,144 @@ export async function tryAnswerWhatsAppFaq(input: {
   if (!isWhatsAppFaqAllowedForWaId(input.conversation.waId)) return null;
   if (input.interactiveId) return null;
   const text = input.text?.trim() ?? "";
-  if (!text || !looksLikeFaq(input.conversation.currentStep, text)) return null;
+  if (!text) return null;
+
+  const stance = whatsAppFaqRegistrationStance(input.conversation);
+  const context = readWhatsAppFaqContext(input.conversation.waId);
+  const finish = async (
+    entries: WhatsAppFaqEntry[],
+    reply: string,
+    extra: WhatsAppBotAction[] = []
+  ) => {
+    rememberWhatsAppFaqContext(input.conversation.waId, entries);
+    const actions: WhatsAppBotAction[] = [];
+    if (reply) actions.push({ type: "TEXT", body: reply });
+    actions.push(...extra);
+    actions.push(...(await actionsForEntries(actionsFromFaqEntries(entries), input.conversation)));
+    if (!entries.some((entry) => entry.actions.includes("SEND_SEMINAR_POSTER"))) {
+      actions.push(...resumePrompt(input.conversation, input.seminarOptions, input.seminarDayCatalog));
+    }
+    return actions.length > 0 ? { actions } : null;
+  };
+
+  const qr = classifyWhatsAppQrRequest(text);
+  if (qr === "refuse") {
+    console.info("[whatsapp-faq] qr", { outcome: "refused" });
+    return finish([], qrRefusalAnswer());
+  }
+  if (qr === "send") {
+    const extra = await passActions(input.conversation);
+    const pass = findWhatsAppFaqEntry("CU-020");
+    if (pass) rememberWhatsAppFaqContext(input.conversation.waId, [pass]);
+    const actions = [...extra];
+    if (!extra.some((action) => action.type === "MEDIA")) {
+      actions.push(...resumePrompt(input.conversation, input.seminarOptions, input.seminarDayCatalog));
+    }
+    return actions.length > 0 ? { actions } : null;
+  }
+
+  if (!looksLikeFaq(input.conversation.currentStep, text)) return null;
 
   let entries: WhatsAppFaqEntry[] = [];
   let reply = "";
-  const local = matchWhatsAppFaqLocally(text);
+  const local = matchWhatsAppFaqLocally(text, context);
   if (local?.reliable) {
     entries = [local.entry];
-    reply = local.entry.answer;
-    console.info("[whatsapp-faq] local", { faqId: local.entry.id, score: local.score });
-  } else if (
-    isWhatsAppFaqAiEnabled()
-  ) {
+    reply = localReply(entries, stance);
+    console.info("[whatsapp-faq] local", {
+      faqId: local.entry.id,
+      score: local.score,
+      topic: topicForFaqEntry(local.entry),
+    });
+  } else if (isWhatsAppFaqAiEnabled()) {
     const redactedText = redactWhatsAppFaqText(text);
-    const previousFaqIds = previousTopics(input.conversation.waId);
-    const reserveUsd = whatsAppFaqAiReservationUsd({ redactedText, previousFaqIds });
+    const ceiling = whatsAppFaqAiCallCeiling({
+      redactedText,
+      previousFaqIds: context.faqIds,
+      contextTopic: context.topic,
+      registrationStatus: stance,
+    });
     const reservation =
-      reserveUsd == null
+      ceiling == null
         ? { allowed: false as const, reason: "model_unpriced" }
         : await reserveWhatsAppFaqAiCall({
             waId: input.conversation.waId,
-            reserveUsd,
+            reserveUsd: ceiling.usd,
           });
     if (!reservation.allowed) {
       console.info("[whatsapp-faq] ai skipped", { reason: reservation.reason });
-      reply = "I can help with confirmed event questions, but the assistant limit is reached for now. Please contact Chirag Jain on 6364224321.";
+      const kind =
+        reservation.reason === "rate_limited"
+          ? "rate_limited"
+          : reservation.reason === "budget_exhausted"
+            ? "budget_exhausted"
+            : "unavailable";
+      reply = faqFallbackText({ kind, stance });
     } else {
+      if (!ceiling || !("id" in reservation)) {
+        reply = faqFallbackText({ kind: "unavailable", stance });
+        return finish(entries, reply);
+      }
+      const held = ceiling;
+      const reservationId = reservation.id;
+      const started = Date.now();
       try {
         const ai = await answerWhatsAppFaqWithAi({
           redactedText,
-          previousFaqIds,
+          previousFaqIds: context.faqIds,
+          contextTopic: context.topic,
+          registrationStatus: stance,
         });
+        const elapsedMs = Date.now() - started;
         await settleWhatsAppFaqAiReservation({
-          id: reservation.id,
+          id: reservationId,
           waId: input.conversation.waId,
           inputTokens: ai.inputTokens,
           outputTokens: ai.outputTokens,
         });
         entries = ai.entries;
-        reply = ai.reply || "I don't have a confirmed answer for that yet. Please contact Chirag Jain on 6364224321.";
+        reply = ai.reply || faqFallbackText({ kind: "unknown", stance });
         console.info("[whatsapp-faq] ai", {
           faqIds: entries.map((entry) => entry.id),
           inputTokens: ai.inputTokens,
           outputTokens: ai.outputTokens,
+          elapsedMs,
+          estimatedUsd: estimateWhatsAppFaqAiUsd(ai.inputTokens, ai.outputTokens),
+          composed: ai.composed,
         });
       } catch (error) {
+        const elapsedMs = Date.now() - started;
+        const kind = failureClass(error);
         console.info("[whatsapp-faq] ai failed", {
-          reason: error instanceof Error ? error.message : "unknown",
+          failureClass: kind,
+          elapsedMs,
+          reservedInputTokens: held.inputTokens,
+          reservedOutputTokens: held.outputTokens,
         });
         try {
           await settleWhatsAppFaqAiReservation({
-            id: reservation.id,
+            id: reservationId,
             waId: input.conversation.waId,
-            inputTokens: 4000,
-            outputTokens: 0,
+            inputTokens: held.inputTokens,
+            outputTokens: held.outputTokens,
           });
         } catch {
           // The usage file is already fail-closed for the next call.
         }
-        reply = "I couldn't look that up just now. Please contact Chirag Jain on 6364224321, or continue your registration.";
+        reply = faqFallbackText({ kind, stance });
       }
     }
   } else if (local) {
     entries = [local.entry];
-    reply = local.entry.answer;
+    reply = localReply(entries, stance);
+    console.info("[whatsapp-faq] local", {
+      faqId: local.entry.id,
+      score: local.score,
+      topic: topicForFaqEntry(local.entry),
+    });
   } else {
     return null;
   }
 
-  rememberTopics(input.conversation.waId, entries.map((entry) => entry.id));
-  const actions: WhatsAppBotAction[] = [];
-  if (reply) actions.push({ type: "TEXT", body: reply });
-  actions.push(...(await actionsForAllowlist(actionsFromFaqEntries(entries), input.conversation)));
-  if (!entries.some((entry) => entry.actions.includes("SEND_SEMINAR_POSTER"))) {
-    actions.push(...resumePrompt(input.conversation, input.seminarOptions, input.seminarDayCatalog));
-  }
-  return actions.length > 0 ? { actions } : null;
+  return finish(entries, reply);
 }

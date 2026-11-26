@@ -12,12 +12,33 @@ import {
   whatsAppFaqEntries,
   type WhatsAppFaqEntry,
 } from "@/lib/server/whatsapp/faq/whatsapp-faq-knowledge";
+import {
+  storedFaqReply,
+  validateComposedFaqReply,
+  type WhatsAppFaqRegistrationStance,
+} from "@/lib/server/whatsapp/faq/whatsapp-faq-reply";
+
+export const WHATSAPP_FAQ_AI_MAX_OUTPUT_TOKENS = 800;
+
+const SYSTEM_RULES = [
+  "You are the Career Uttsav WhatsApp assistant. Return JSON only:",
+  '{"faqIds":["CU-001"],"reply":"short answer","actions":[]}.',
+  "faqIds must be copied from the catalogue. Use [] when none apply.",
+  "Resolve it, there, that event, and both days using contextTopic and recentFaqIds.",
+  "reply is one short warm WhatsApp message. You may paraphrase or translate.",
+  "Use only catalogue facts. Do not invent dates, times, prices, speakers, or which universities are attending.",
+  "registrationStatus is decided by the server. Do not claim someone is registered unless it says completed.",
+  "Do not tell a completed registration to register again.",
+  "Allowed actions are SEND_SEMINAR_POSTER and SEND_VENUE_LOCATION. Do not ask to send a QR code.",
+].join(" ");
 
 export type WhatsAppFaqAiResult = {
   entries: WhatsAppFaqEntry[];
   reply: string;
+  composed: boolean;
   inputTokens: number;
   outputTokens: number;
+  promptChars: number;
 };
 
 type FaqAiClient = (input: {
@@ -40,7 +61,7 @@ export function whatsAppFaqAiChatRequestBody(input: {
 }) {
   return {
     model: input.model,
-    max_completion_tokens: 800,
+    max_completion_tokens: WHATSAPP_FAQ_AI_MAX_OUTPUT_TOKENS,
     reasoning_effort: "none" as const,
     response_format: { type: "json_object" as const },
     messages: [
@@ -50,44 +71,77 @@ export function whatsAppFaqAiChatRequestBody(input: {
   };
 }
 
-function buildWhatsAppFaqAiPrompt(input: {
-  redactedText: string;
-  previousFaqIds: string[];
-}): { system: string; user: string } {
-  const facts = whatsAppFaqEntries().map((entry) => ({
+function catalogue() {
+  return whatsAppFaqEntries().map((entry) => ({
     id: entry.id,
     question: entry.question,
-    answer: entry.answer,
-    actions: entry.actions,
+    fact: entry.answer.replace(/\s+/g, " ").slice(0, 48),
   }));
+}
+
+let cachedCatalogue = "";
+
+function catalogueJson(): string {
+  if (!cachedCatalogue) cachedCatalogue = JSON.stringify(catalogue());
+  return cachedCatalogue;
+}
+
+export function buildWhatsAppFaqAiPrompt(input: {
+  redactedText: string;
+  previousFaqIds: string[];
+  contextTopic?: string;
+  registrationStatus?: WhatsAppFaqRegistrationStance;
+}): { system: string; user: string } {
   return {
-    system: [
-      "Choose FAQ ids that answer the user. Return JSON only: {\"faqIds\":[\"CU-001\"]}.",
-      "faqIds must be copied from the supplied facts. Use [] when none apply.",
-      "Do not add facts. The server will send the stored answers for those ids.",
-    ].join(" "),
+    system: `${SYSTEM_RULES}\nCatalogue:\n${catalogueJson()}`,
     user: JSON.stringify({
-      facts,
-      previousFaqIds: input.previousFaqIds,
+      contextTopic: input.contextTopic ?? "general",
+      recentFaqIds: input.previousFaqIds,
+      registrationStatus: input.registrationStatus ?? "not_started",
       message: input.redactedText,
     }),
   };
 }
 
-/** Upper bound held before the request, so overlapping calls in this process stay inside the cap. */
-export function whatsAppFaqAiReservationUsd(input: {
+export function whatsAppFaqAiCallCeiling(input: {
   redactedText: string;
   previousFaqIds: string[];
-}): number | null {
+  contextTopic?: string;
+  registrationStatus?: WhatsAppFaqRegistrationStance;
+}): { usd: number; inputTokens: number; outputTokens: number; promptChars: number } | null {
   const model = whatsAppFaqAiModel();
   if (!whatsAppFaqModelRates(model)) return null;
   const prompt = buildWhatsAppFaqAiPrompt(input);
-  const inputTokens = Math.ceil((prompt.system.length + prompt.user.length) / 2);
-  const usd = Math.max(
-    estimateWhatsAppFaqAiUsd(inputTokens, 800, model),
-    estimateWhatsAppFaqAiUsd(4000, 0, model)
-  );
-  return Math.round(usd * 1_000_000) / 1_000_000;
+  const promptChars = prompt.system.length + prompt.user.length;
+  const inputTokens = Math.max(1, Math.ceil(promptChars / 2));
+  const outputTokens = WHATSAPP_FAQ_AI_MAX_OUTPUT_TOKENS;
+  return {
+    usd: Math.round(estimateWhatsAppFaqAiUsd(inputTokens, outputTokens, model) * 1_000_000) / 1_000_000,
+    inputTokens,
+    outputTokens,
+    promptChars,
+  };
+}
+
+/** @deprecated Use whatsAppFaqAiCallCeiling. Kept so reservation callers stay one number. */
+export function whatsAppFaqAiReservationUsd(input: {
+  redactedText: string;
+  previousFaqIds: string[];
+  contextTopic?: string;
+  registrationStatus?: WhatsAppFaqRegistrationStance;
+}): number | null {
+  return whatsAppFaqAiCallCeiling(input)?.usd ?? null;
+}
+
+export function fullFaqPromptChars(): number {
+  return whatsAppFaqEntries().reduce((sum, entry) => {
+    return sum + JSON.stringify({
+      id: entry.id,
+      question: entry.question,
+      answer: entry.answer,
+      actions: entry.actions,
+    }).length;
+  }, 0);
 }
 
 async function defaultClient(input: {
@@ -138,29 +192,53 @@ async function defaultClient(input: {
 export async function answerWhatsAppFaqWithAi(input: {
   redactedText: string;
   previousFaqIds: string[];
+  contextTopic?: string;
+  registrationStatus?: WhatsAppFaqRegistrationStance;
 }): Promise<WhatsAppFaqAiResult> {
   const prompt = buildWhatsAppFaqAiPrompt(input);
-  const system = prompt.system;
-  const user = prompt.user;
   const client = clientOverride ?? defaultClient;
   const raw = await client({
     model: whatsAppFaqAiModel(),
-    system,
-    user,
+    system: prompt.system,
+    user: prompt.user,
     timeoutMs: whatsAppFaqAiTimeoutMs(),
   });
-  const parsed = JSON.parse(raw.content) as { faqIds?: string[] };
+  const promptChars = prompt.system.length + prompt.user.length;
+  const stance = input.registrationStatus ?? "not_started";
+  let parsed: { faqIds?: string[]; reply?: string } = {};
+  try {
+    parsed = JSON.parse(raw.content) as { faqIds?: string[]; reply?: string };
+  } catch (error) {
+    const failure = new Error("faq_invalid_json");
+    (failure as Error & { cause?: unknown }).cause = error;
+    throw failure;
+  }
   const entries = (parsed.faqIds ?? [])
     .map((id) => findWhatsAppFaqEntry(String(id)))
     .filter((entry): entry is WhatsAppFaqEntry => Boolean(entry));
+  const unique: WhatsAppFaqEntry[] = [];
+  for (const entry of entries) {
+    if (!unique.some((row) => row.id === entry.id)) unique.push(entry);
+  }
+  const validated = validateComposedFaqReply({
+    reply: typeof parsed.reply === "string" ? parsed.reply : "",
+    entries: unique,
+    stance,
+  });
   return {
-    entries,
-    reply: entries.map((entry) => entry.answer).join("\n\n").slice(0, 1200),
+    entries: unique,
+    reply: validated.ok ? validated.reply : storedFaqReply(unique, stance),
+    composed: validated.ok,
     inputTokens: raw.inputTokens,
     outputTokens: raw.outputTokens,
+    promptChars,
   };
 }
 
 export function actionsFromFaqEntries(entries: WhatsAppFaqEntry[]): ReturnType<typeof sanitizeWhatsAppFaqActions> {
   return sanitizeWhatsAppFaqActions(entries.flatMap((entry) => entry.actions));
+}
+
+export function __clearWhatsAppFaqCatalogueCacheForTests(): void {
+  cachedCatalogue = "";
 }

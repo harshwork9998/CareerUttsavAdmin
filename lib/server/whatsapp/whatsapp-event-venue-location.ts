@@ -36,12 +36,15 @@ to the venue.
 
 We look forward to welcoming you! 🎓`;
 
-export function buildWhatsAppEventVenueLocationAction(): WhatsAppBotAction {
+export function buildWhatsAppEventVenueLocationAction(
+  locationPurpose: "registration_follow_up" | "venue_faq" = "registration_follow_up"
+): WhatsAppBotAction {
   return {
     type: "LOCATION",
     latitude: WHATSAPP_EVENT_VENUE_LATITUDE,
     longitude: WHATSAPP_EVENT_VENUE_LONGITUDE,
     name: WHATSAPP_EVENT_VENUE_NAME,
     address: WHATSAPP_EVENT_VENUE_ADDRESS,
+    locationPurpose,
   };
 }

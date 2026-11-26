@@ -1,4 +1,6 @@
 const DEFAULT_MAX_USD = 4;
+const DEFAULT_MAX_CALLS_PER_HOUR = 60;
+const ABSOLUTE_MAX_CALLS_PER_HOUR = 120;
 
 export function isWhatsAppFaqEnabled(): boolean {
   return process.env.WHATSAPP_FAQ_ENABLED?.trim() === "true";
@@ -24,6 +26,12 @@ export function whatsAppFaqAiMaxUsd(): number {
   const raw = Number(process.env.WHATSAPP_FAQ_AI_MAX_USD);
   if (!Number.isFinite(raw) || raw <= 0) return DEFAULT_MAX_USD;
   return Math.min(raw, DEFAULT_MAX_USD);
+}
+
+export function whatsAppFaqAiMaxCallsPerHour(): number {
+  const raw = Number(process.env.WHATSAPP_FAQ_AI_MAX_CALLS_PER_HOUR);
+  if (!Number.isFinite(raw) || raw < 1) return DEFAULT_MAX_CALLS_PER_HOUR;
+  return Math.min(Math.floor(raw), ABSOLUTE_MAX_CALLS_PER_HOUR);
 }
 
 export function whatsAppFaqAiAllowlist(): Set<string> {

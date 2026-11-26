@@ -152,6 +152,12 @@ export type WhatsAppBotAction =
       longitude: number;
       name: string;
       address: string;
+      /**
+       * registration_follow_up is held until this batch's entry-pass QR is accepted.
+       * venue_faq is a standalone pin and does not require a QR.
+       * Omitted locations stay on the registration follow-up path.
+       */
+      locationPurpose?: "registration_follow_up" | "venue_faq";
     };
 
 export type IncomingConversationMessage = {

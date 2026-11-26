@@ -1,3 +1,5 @@
+import type { WhatsAppFaqContextHint } from "@/lib/server/whatsapp/faq/whatsapp-faq-context";
+import { matchWhatsAppFaqIntent, normalizeFaqText } from "@/lib/server/whatsapp/faq/whatsapp-faq-intents";
 import {
   whatsAppFaqEntries,
   type WhatsAppFaqEntry,
@@ -6,11 +8,7 @@ import {
 const NEGATION = /\b(not|no|dont|don't|never|nahi|illa|without)\b/i;
 
 function normalize(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  return normalizeFaqText(text);
 }
 
 export type WhatsAppFaqLocalMatch = {
@@ -19,9 +17,26 @@ export type WhatsAppFaqLocalMatch = {
   reliable: boolean;
 };
 
-export function matchWhatsAppFaqLocally(text: string): WhatsAppFaqLocalMatch | null {
+function exactEntry(query: string): WhatsAppFaqEntry | null {
+  for (const entry of whatsAppFaqEntries()) {
+    const phrases = [entry.question, ...entry.alternatePhrasings].map(normalize).filter(Boolean);
+    if (phrases.some((phrase) => phrase === query)) return entry;
+  }
+  return null;
+}
+
+export function matchWhatsAppFaqLocally(
+  text: string,
+  context?: WhatsAppFaqContextHint
+): WhatsAppFaqLocalMatch | null {
   const query = normalize(text);
   if (query.length < 3) return null;
+  const exact = exactEntry(query);
+  if (exact) return { entry: exact, score: 1, reliable: true };
+
+  const intent = matchWhatsAppFaqIntent(text, context);
+  if (intent) return { entry: intent, score: 0.95, reliable: true };
+
   const queryNegated = NEGATION.test(query);
   const scored: Array<{ entry: WhatsAppFaqEntry; score: number }> = [];
 
@@ -29,12 +44,10 @@ export function matchWhatsAppFaqLocally(text: string): WhatsAppFaqLocalMatch | n
     const question = normalize(entry.question);
     const phrases = [question, ...entry.alternatePhrasings.map(normalize)].filter(Boolean);
     let score = 0;
-    if (phrases.some((phrase) => phrase === query)) {
-      score = 1;
-    } else if (phrases.some((phrase) => phrase.length > 12 && query.includes(phrase))) {
+    if (phrases.some((phrase) => phrase.length > 12 && query.includes(phrase))) {
       score = 0.93;
     } else {
-      const keys = entry.keywords.filter((word) => word.length > 3);
+      const keys = entry.keywords.map(normalize).filter((word) => word.length > 3);
       if (keys.length === 0) continue;
       const hits = keys.filter((word) => query.split(" ").includes(word));
       if (hits.length < 2 && !(hits.length === 1 && keys.length === 1 && query.split(" ").length <= 4)) {
@@ -58,9 +71,9 @@ export function matchWhatsAppFaqLocally(text: string): WhatsAppFaqLocalMatch | n
   const best = scored[0];
   if (!best) return null;
   const second = scored[1];
-  const exact = best.score >= 0.99;
-  const collided = Boolean(!exact && second && best.score - second.score < 0.08 && second.score >= 0.6);
-  const reliable = exact || (best.score >= 0.9 && !collided);
+  const exactScore = best.score >= 0.99;
+  const collided = Boolean(!exactScore && second && best.score - second.score < 0.08 && second.score >= 0.6);
+  const reliable = exactScore || (best.score >= 0.9 && !collided);
   if (!reliable && best.score < 0.84) return null;
   if (collided) return null;
   return { entry: best.entry, score: best.score, reliable };
