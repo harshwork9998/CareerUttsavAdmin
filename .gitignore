@@ -47,6 +47,9 @@ temp-partner.json
 # local DB import staging (production JSON copies — never commit)
 /tmp/db-import/
 
+# FAQ workbook stays local. The generated JSON under lib/server/whatsapp/faq is the tracked copy.
+/Career_Uttsav_WhatsApp_Bot_FAQ_Master_v3.xlsx
+
 # typescript
 *.tsbuildinfo
 

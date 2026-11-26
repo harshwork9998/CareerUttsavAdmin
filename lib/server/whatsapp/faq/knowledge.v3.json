@@ -1,0 +1,2417 @@
+{
+  "version": "3.0.0",
+  "sourceWorkbook": "Career_Uttsav_WhatsApp_Bot_FAQ_Master_v3.xlsx",
+  "generatedBy": "scripts/build-whatsapp-faq-knowledge.mjs",
+  "support": {
+    "registrationAndTransport": {
+      "name": "Chirag Jain",
+      "phone": "6364224321"
+    },
+    "partners": {
+      "name": "Mrs. Neha",
+      "phone": "9113064877"
+    },
+    "website": "https://careeruttsav.in/"
+  },
+  "rules": [
+    {
+      "topic": "Single number",
+      "requirement": "Registration and interactive AI must use the SAME existing WhatsApp number and registration backend."
+    },
+    {
+      "topic": "Registration",
+      "requirement": "Invoke existing live registration flow; do not create a second registration database."
+    },
+    {
+      "topic": "Passes",
+      "requirement": "Read verified live registration status and send existing passes."
+    },
+    {
+      "topic": "Human-like tone",
+      "requirement": "Warm, short, helpful and conversational; adapt language."
+    },
+    {
+      "topic": "Seminar poster",
+      "requirement": "On seminar-list or schedule intent, send the exact supplied 2026 seminar image as WhatsApp media. Do not follow up with a question."
+    },
+    {
+      "topic": "Poster scope",
+      "requirement": "14 sessions; 7 on Saturday and 7 on Sunday. Poster has no session times."
+    },
+    {
+      "topic": "Transport",
+      "requirement": "Answer YES: we can help with a bus facility. Always share the support contact (Chirag Jain, 6364224321) for details. Do not quote group-size numbers."
+    },
+    {
+      "topic": "Parent attendance",
+      "requirement": "Parents are welcome and important decision-makers."
+    },
+    {
+      "topic": "Live data",
+      "requirement": "Use registration/pass API, confirmed university roster, seminars, SAP and support systems."
+    },
+    {
+      "topic": "Unanswered questions",
+      "requirement": "Offer immediate human support; pass summary and context."
+    },
+    {
+      "topic": "Minor privacy",
+      "requirement": "Collect minimum information and obtain applicable parental/guardian consent."
+    },
+    {
+      "topic": "Marketing",
+      "requirement": "Only send proactive reminders where permissions and WhatsApp policies allow."
+    },
+    {
+      "topic": "Unverified policies",
+      "requirement": "Never invent prices, routes, university participation, session times or attendance guarantees. If the bot does not know, tell the user to connect with the team."
+    },
+    {
+      "topic": "Human handover",
+      "requirement": "Pause bot while agent handles case; resume after resolution."
+    },
+    {
+      "topic": "Answer length",
+      "requirement": "Prefer 2-5 short WhatsApp lines; end with an invitation or next step (e.g. 'Come explore at Career Uttsav'), never a question the bot cannot handle."
+    },
+    {
+      "topic": "No look-ups in replies",
+      "requirement": "Bot never says it will go back and check anything. Answer directly, or hand over to the team with the contact."
+    },
+    {
+      "topic": "No declarations / rankings",
+      "requirement": "Never say one course or university is better than another. Invite the user to explore at Career Uttsav (free psychometric test, mentors, industry leaders)."
+    },
+    {
+      "topic": "No university branding",
+      "requirement": "Do not market or confirm any individual university. Ask users to follow our social pages and website and meet the top universities at the event."
+    },
+    {
+      "topic": "No forced-reply questions",
+      "requirement": "Do not end answers with a question the bot cannot handle next. Give a complete, generic answer."
+    },
+    {
+      "topic": "Partner / stall queries",
+      "requirement": "All partner, stall, sponsorship and exhibitor queries -> Mrs. Neha, 9113064877."
+    },
+    {
+      "topic": "Registration changes / cancellation",
+      "requirement": "Any change to a registration (name, school, phone number) or cancellation -> customer support, Chirag Jain, 6364224321."
+    },
+    {
+      "topic": "Cost",
+      "requirement": "The whole event is free. Only the pay-and-eat counters are paid. Never mention charges, fees or prices anywhere."
+    },
+    {
+      "topic": "Registration",
+      "requirement": "Registration is compulsory to attend. Always encourage pre-registering (skips queues, takes ~2 minutes)."
+    },
+    {
+      "topic": "Student Ambassador Programme",
+      "requirement": "All Student Ambassador queries -> send the user to the website or the support team (Chirag Jain, 6364224321)."
+    },
+    {
+      "topic": "Career / course questions",
+      "requirement": "Never ask for class, subject or interests. Reply generically and invite the user to explore at Career Uttsav (universities, leaders, mentors, industry experts, free psychometric test)."
+    }
+  ],
+  "pendingConfirmations": [
+    {
+      "priority": "High",
+      "item": "Exact venue naming, verified Google Maps link and published timings"
+    },
+    {
+      "priority": "High",
+      "item": "Existing registration APIs, pass retrieval, OTP, parent registration, duplicate handling"
+    },
+    {
+      "priority": "High",
+      "item": "Human agent inbox, hours, routing, callback and escalation SLAs"
+    },
+    {
+      "priority": "High",
+      "item": "Transport coordinator, route collection fields, cost policy, bus confirmation process"
+    },
+    {
+      "priority": "High",
+      "item": "Speaker list, exact session times, capacity, seminar booking rules"
+    },
+    {
+      "priority": "High",
+      "item": "Confirmed 2026 university roster and approved exhibitor commercials"
+    },
+    {
+      "priority": "High",
+      "item": "Privacy notice, minors consent and WhatsApp opt-in/opt-out"
+    },
+    {
+      "priority": "Medium",
+      "item": "Parking, metro, food, accessibility, help desk and security policies"
+    },
+    {
+      "priority": "Medium",
+      "item": "Ambassador eligibility, referral, points, rewards and leaderboard APIs"
+    },
+    {
+      "priority": "Medium",
+      "item": "Bulk registration, school group rules and bus enquiries"
+    }
+  ],
+  "seminars": [
+    {
+      "number": 1,
+      "date": "19 Dec 2026",
+      "day": "Saturday",
+      "title": "Do What You Love, Love What You Do",
+      "sessionTime": null,
+      "speaker": null,
+      "notes": "Times and speakers are not confirmed. Do not invent them."
+    },
+    {
+      "number": 2,
+      "date": "19 Dec 2026",
+      "day": "Saturday",
+      "title": "Engineering Next: What’s Ahead?",
+      "sessionTime": null,
+      "speaker": null,
+      "notes": "Times and speakers are not confirmed. Do not invent them."
+    },
+    {
+      "number": 3,
+      "date": "19 Dec 2026",
+      "day": "Saturday",
+      "title": "Design, Architecture & Creative Careers",
+      "sessionTime": null,
+      "speaker": null,
+      "notes": "Times and speakers are not confirmed. Do not invent them."
+    },
+    {
+      "number": 4,
+      "date": "19 Dec 2026",
+      "day": "Saturday",
+      "title": "The Future of Management Careers",
+      "sessionTime": null,
+      "speaker": null,
+      "notes": "Times and speakers are not confirmed. Do not invent them."
+    },
+    {
+      "number": 5,
+      "date": "19 Dec 2026",
+      "day": "Saturday",
+      "title": "Liberal Arts: Careers Without Limits",
+      "sessionTime": null,
+      "speaker": null,
+      "notes": "Times and speakers are not confirmed. Do not invent them."
+    },
+    {
+      "number": 6,
+      "date": "19 Dec 2026",
+      "day": "Saturday",
+      "title": "Careers in Commerce & Finance",
+      "sessionTime": null,
+      "speaker": null,
+      "notes": "Times and speakers are not confirmed. Do not invent them."
+    },
+    {
+      "number": 7,
+      "date": "19 Dec 2026",
+      "day": "Saturday",
+      "title": "Your Journey to Study Abroad",
+      "sessionTime": null,
+      "speaker": null,
+      "notes": "Times and speakers are not confirmed. Do not invent them."
+    },
+    {
+      "number": 8,
+      "date": "20 Dec 2026",
+      "day": "Sunday",
+      "title": "Careers in Medicine & Health Sciences",
+      "sessionTime": null,
+      "speaker": null,
+      "notes": "Times and speakers are not confirmed. Do not invent them."
+    },
+    {
+      "number": 9,
+      "date": "20 Dec 2026",
+      "day": "Sunday",
+      "title": "Building a Successful Career in Law",
+      "sessionTime": null,
+      "speaker": null,
+      "notes": "Times and speakers are not confirmed. Do not invent them."
+    },
+    {
+      "number": 10,
+      "date": "20 Dec 2026",
+      "day": "Sunday",
+      "title": "Startups, Leadership & Entrepreneurship",
+      "sessionTime": null,
+      "speaker": null,
+      "notes": "Times and speakers are not confirmed. Do not invent them."
+    },
+    {
+      "number": 11,
+      "date": "20 Dec 2026",
+      "day": "Sunday",
+      "title": "How to Fund Your Higher Education",
+      "sessionTime": null,
+      "speaker": null,
+      "notes": "Times and speakers are not confirmed. Do not invent them."
+    },
+    {
+      "number": 12,
+      "date": "20 Dec 2026",
+      "day": "Sunday",
+      "title": "Engineering: Careers of the Future",
+      "sessionTime": null,
+      "speaker": null,
+      "notes": "Times and speakers are not confirmed. Do not invent them."
+    },
+    {
+      "number": 13,
+      "date": "20 Dec 2026",
+      "day": "Sunday",
+      "title": "Careers Beyond the Usual",
+      "sessionTime": null,
+      "speaker": null,
+      "notes": "Times and speakers are not confirmed. Do not invent them."
+    },
+    {
+      "number": 14,
+      "date": "20 Dec 2026",
+      "day": "Sunday",
+      "title": "How to Score Better in Board Exams?",
+      "sessionTime": null,
+      "speaker": null,
+      "notes": "Times and speakers are not confirmed. Do not invent them."
+    }
+  ],
+  "entries": [
+    {
+      "id": "CU-001",
+      "category": "Event",
+      "status": "organiser_confirmed",
+      "question": "What is Career Uttsav?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "what",
+        "career",
+        "uttsav"
+      ],
+      "answer": "Career Uttsav is a two-day career and education fair where you can explore careers, meet top universities, connect with mentors and get real answers about your future, all under one roof! Whether you're sure about your plans or still figuring things out, there's something here for you.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-003",
+      "category": "Event",
+      "status": "conditional_code_venue",
+      "question": "Where is Career Uttsav happening?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "where",
+        "career",
+        "uttsav",
+        "happening"
+      ],
+      "answer": "Career Uttsav 2026 is at Gate No. 9, Princess Golf, Palace Grounds, Bengaluru. I can share the location pin when it is enabled for WhatsApp.",
+      "actions": [
+        "SEND_VENUE_LOCATION"
+      ],
+      "source": "existing_registration_venue_constant"
+    },
+    {
+      "id": "CU-005",
+      "category": "Event",
+      "status": "organiser_confirmed",
+      "question": "Is entry free?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "entry",
+        "free"
+      ],
+      "answer": "Yes, Career Uttsav is completely free to attend! You can register right here on WhatsApp.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-011",
+      "category": "Event",
+      "status": "organiser_confirmed",
+      "question": "Can college students attend?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "college",
+        "students",
+        "attend"
+      ],
+      "answer": "You're welcome to come and explore at Career Uttsav! Meet universities, mentors and industry experts and build your network while you're at it.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-013",
+      "category": "Event",
+      "status": "organiser_confirmed",
+      "question": "Can I attend on both days?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "attend",
+        "both",
+        "days"
+      ],
+      "answer": "Career Uttsav is on both 19 and 20 December 2026, and you're welcome to come on both days! Pre-register to block your place.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-015",
+      "category": "Event",
+      "status": "organiser_confirmed",
+      "question": "How do I contact the team?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "contact",
+        "team"
+      ],
+      "answer": "Happy to help! You can reach our Career Uttsav support team, Chirag Jain on 6364224321.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-016",
+      "category": "Registration",
+      "status": "live_integration",
+      "question": "How do I register?",
+      "alternatePhrasings": [
+        "register me",
+        "sign me up",
+        "booking",
+        "get pass"
+      ],
+      "keywords": [
+        "register",
+        "sign",
+        "booking",
+        "pass"
+      ],
+      "answer": "Sure! We can complete your Career Uttsav registration right here in this chat. Just say \"register\" to get started.",
+      "actions": [
+        "HINT_START_REGISTRATION"
+      ],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-017",
+      "category": "Registration",
+      "status": "live_integration",
+      "question": "Can I register on this WhatsApp number?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "register",
+        "this",
+        "whatsapp",
+        "number"
+      ],
+      "answer": "Yes! You're already in the right place. This is also our registration WhatsApp number, so you can register and get your pass here without switching anywhere else.",
+      "actions": [
+        "HINT_START_REGISTRATION"
+      ],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-018",
+      "category": "Registration",
+      "status": "live_integration",
+      "question": "Is my registration confirmed?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "registration",
+        "confirmed"
+      ],
+      "answer": "Let me check that for you. I'll securely verify your details and look up your live registration status.",
+      "actions": [
+        "RESEND_ENTRY_PASS"
+      ],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-019",
+      "category": "Registration",
+      "status": "live_integration",
+      "question": "I have registered already.",
+      "alternatePhrasings": [],
+      "keywords": [
+        "have",
+        "registered",
+        "already"
+      ],
+      "answer": "Great! Would you like me to pull up your event pass or check your registration details?",
+      "actions": [
+        "RESEND_ENTRY_PASS"
+      ],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-020",
+      "category": "Registration",
+      "status": "live_integration",
+      "question": "Can you send my event pass?",
+      "alternatePhrasings": [
+        "send ticket",
+        "QR",
+        "my pass"
+      ],
+      "keywords": [
+        "send",
+        "event",
+        "pass",
+        "ticket"
+      ],
+      "answer": "Absolutely! Let me verify your registration and I'll send the pass linked to your account right here.",
+      "actions": [
+        "RESEND_ENTRY_PASS"
+      ],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-021",
+      "category": "Registration",
+      "status": "live_integration",
+      "question": "I did not receive my pass.",
+      "alternatePhrasings": [],
+      "keywords": [
+        "receive",
+        "pass"
+      ],
+      "answer": "No worries, let's check it together. I'll look up your registration and resend the pass if it's ready.",
+      "actions": [
+        "RESEND_ENTRY_PASS"
+      ],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-022",
+      "category": "Registration",
+      "status": "live_integration",
+      "question": "Can you register my child?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "register",
+        "child"
+      ],
+      "answer": "Of course! I can help you register your child right here. We'll collect the required student details and any parent or guardian consent needed.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-023",
+      "category": "Registration",
+      "status": "organiser_confirmed",
+      "question": "Can I register multiple students?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "register",
+        "multiple",
+        "students"
+      ],
+      "answer": "We can help with that! For registering a group, please reach out to our team, Chirag Jain on 6364224321, and he'll guide you at the earliest.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-024",
+      "category": "Registration",
+      "status": "organiser_confirmed",
+      "question": "Do parents need separate passes?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "parents",
+        "need",
+        "separate",
+        "passes"
+      ],
+      "answer": "Yes, parents will need a pass to enter the event too, and it's free! They can register right here on this WhatsApp number or through the form on our website. It hardly takes 2 minutes.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-025",
+      "category": "Registration",
+      "status": "organiser_confirmed",
+      "question": "Can I register at the venue?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "register",
+        "venue"
+      ],
+      "answer": "The best way is to pre-register and block your place for the event! It helps you skip the long queues on event day, and it hardly takes 2 minutes. You can even do it right here on WhatsApp, while you're stuck in Bengaluru traffic! Just say \"register\" and we'll get you started.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-026",
+      "category": "Registration",
+      "status": "live_integration",
+      "question": "Can I change my name or school?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "change",
+        "name",
+        "school"
+      ],
+      "answer": "Registration changes and cancellations are handled by our support team. Please contact Chirag Jain on 6364224321 for help with this.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-027",
+      "category": "Registration",
+      "status": "organiser_confirmed",
+      "question": "I entered the wrong phone number.",
+      "alternatePhrasings": [],
+      "keywords": [
+        "entered",
+        "wrong",
+        "phone",
+        "number"
+      ],
+      "answer": "Changes like this are handled by our customer support team. Please reach out to Chirag Jain on 6364224321. He'll guide you and get everything sorted at the earliest.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-028",
+      "category": "Registration",
+      "status": "live_integration",
+      "question": "I forgot my registration ID.",
+      "alternatePhrasings": [],
+      "keywords": [
+        "forgot",
+        "registration"
+      ],
+      "answer": "That's okay! We can look up your registration securely using your verified details.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-029",
+      "category": "Registration",
+      "status": "organiser_confirmed",
+      "question": "Is registration compulsory?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "registration",
+        "compulsory"
+      ],
+      "answer": "Yes, registration is needed to attend, and it's completely free! It hardly takes 2 minutes right here on WhatsApp. Just say \"register\" to get started.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-030",
+      "category": "Registration",
+      "status": "organiser_confirmed",
+      "question": "What is the last date to register?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "what",
+        "last",
+        "date",
+        "register"
+      ],
+      "answer": "Registration is open at all times, so you can register whenever you like! Registering early is a good idea though: it blocks your place and helps you skip the queues on event day. It takes hardly 2 minutes right here on WhatsApp.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-031",
+      "category": "Registration",
+      "status": "organiser_confirmed",
+      "question": "Can I cancel my registration?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "cancel",
+        "registration"
+      ],
+      "answer": "For cancellations, please reach out to our customer support team, Chirag Jain on 6364224321. He'll guide you through it at the earliest.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-032",
+      "category": "Registration",
+      "status": "organiser_confirmed",
+      "question": "Is my registration free?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "registration",
+        "free"
+      ],
+      "answer": "Yes, registration is completely free!",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-033",
+      "category": "Registration",
+      "status": "organiser_confirmed",
+      "question": "Can I forward my pass to someone?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "forward",
+        "pass",
+        "someone"
+      ],
+      "answer": "Event passes can't be passed on to someone else. Each pass is for the person who registered. Please ask your friend or family member to register themselves, right here on this WhatsApp number or through the form on our website. It hardly takes 2 minutes!",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-034",
+      "category": "Registration",
+      "status": "organiser_confirmed",
+      "question": "I have a registration problem.",
+      "alternatePhrasings": [],
+      "keywords": [
+        "have",
+        "registration",
+        "problem"
+      ],
+      "answer": "I'm here to help! For any registration problem, please reach out to our customer support team, Chirag Jain on 6364224321, and he'll get it sorted at the earliest.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-035",
+      "category": "Transport",
+      "status": "organiser_confirmed",
+      "question": "Is bus transport available?",
+      "alternatePhrasings": [
+        "bus facility",
+        "transport",
+        "pickup",
+        "shuttle"
+      ],
+      "keywords": [
+        "transport",
+        "available",
+        "facility",
+        "pickup",
+        "shuttle"
+      ],
+      "answer": "Yes, we can help you with a bus facility from our end! It's best to connect with our team so they can guide you through the details better. Please reach out to Chirag Jain on 6364224321.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-036",
+      "category": "Transport",
+      "status": "organiser_confirmed",
+      "question": "Can you arrange a bus from my school?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "arrange",
+        "from",
+        "school"
+      ],
+      "answer": "Yes, we can help you with a bus facility from our end! It's best to connect with our team so they can guide you through the details better. Please reach out to Chirag Jain on 6364224321.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-039",
+      "category": "Transport",
+      "status": "organiser_confirmed",
+      "question": "Where is the bus pickup point?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "where",
+        "pickup",
+        "point"
+      ],
+      "answer": "Our team will be happy to guide you on the pickup details. Please reach out to Chirag Jain on 6364224321 for clarity.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-040",
+      "category": "Transport",
+      "status": "organiser_confirmed",
+      "question": "Can you arrange transport from our area?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "arrange",
+        "transport",
+        "from",
+        "area"
+      ],
+      "answer": "Yes, we can help you with a bus facility from our end! It's best to connect with our team so they can guide you through the details better. Please reach out to Chirag Jain on 6364224321.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-041",
+      "category": "Venue",
+      "status": "conditional_code_venue",
+      "question": "Can you share the Google Maps location?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "share",
+        "google",
+        "maps",
+        "location"
+      ],
+      "answer": "Career Uttsav 2026 is at Gate No. 9, Princess Golf, Palace Grounds, Bengaluru. I can share the location pin when it is enabled for WhatsApp.",
+      "actions": [
+        "SEND_VENUE_LOCATION"
+      ],
+      "source": "existing_registration_venue_constant"
+    },
+    {
+      "id": "CU-042",
+      "category": "Venue",
+      "status": "organiser_confirmed",
+      "question": "Is parking available?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "parking",
+        "available"
+      ],
+      "answer": "Yes, definitely! Parking space is available at the venue.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-043",
+      "category": "Venue",
+      "status": "organiser_confirmed",
+      "question": "Is parking free?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "parking",
+        "free"
+      ],
+      "answer": "Yes, parking is free at the venue!",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-044",
+      "category": "Venue",
+      "status": "organiser_confirmed",
+      "question": "Which metro station is nearest?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "which",
+        "metro",
+        "station",
+        "nearest"
+      ],
+      "answer": "Here's the location of the event: Princess Golf, Palace Grounds, Gate No. 9, Bengaluru Kindly check the nearest transport facilities on the map to plan your journey.",
+      "actions": [
+        "SEND_VENUE_LOCATION"
+      ],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-045",
+      "category": "Venue",
+      "status": "organiser_confirmed",
+      "question": "Will food be available?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "will",
+        "food",
+        "available"
+      ],
+      "answer": "Yes! A quick bite will be given at the venue, and there are pay-and-eat counters too.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-046",
+      "category": "Venue",
+      "status": "organiser_confirmed",
+      "question": "Will drinking water be available?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "will",
+        "drinking",
+        "water",
+        "available"
+      ],
+      "answer": "Yes! Drinking water is available at the event to keep you hydrated and energetic all day.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-047",
+      "category": "Venue",
+      "status": "organiser_confirmed",
+      "question": "Are washrooms available?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "washrooms",
+        "available"
+      ],
+      "answer": "Yes, washrooms are available at the venue.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-048",
+      "category": "Venue",
+      "status": "organiser_confirmed",
+      "question": "Is the venue wheelchair accessible?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "venue",
+        "wheelchair",
+        "accessible"
+      ],
+      "answer": "Yes, the venue is wheelchair accessible. ♿",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-049",
+      "category": "Venue",
+      "status": "organiser_confirmed",
+      "question": "Can I bring a bag?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "bring"
+      ],
+      "answer": "Yes, you can! In fact, we recommend bringing a bag. You'll be collecting lots of brochures and collaterals to take back home.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-050",
+      "category": "Venue",
+      "status": "organiser_confirmed",
+      "question": "Is there a help desk?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "there",
+        "help",
+        "desk"
+      ],
+      "answer": "Yes, there's a help desk at the event. You can reach out to them whenever you need any assistance.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-051",
+      "category": "Venue",
+      "status": "organiser_confirmed",
+      "question": "Can school buses enter?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "school",
+        "buses",
+        "enter"
+      ],
+      "answer": "Yes, school buses can enter the venue.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-052",
+      "category": "Venue",
+      "status": "organiser_confirmed",
+      "question": "What if I lose something?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "what",
+        "lose",
+        "something"
+      ],
+      "answer": "Don't worry! Please reach out to the nearest help desk at the event and they'll help you out.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-053",
+      "category": "Venue",
+      "status": "organiser_confirmed",
+      "question": "Will there be first aid?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "will",
+        "there",
+        "first"
+      ],
+      "answer": "Yes, a first-aid kit is available at the event. 啕",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-054",
+      "category": "Venue",
+      "status": "organiser_confirmed",
+      "question": "What if it rains?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "what",
+        "rains"
+      ],
+      "answer": "No worries! The event is in a closed venue, so you can come along without worrying about the weather. ️",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-055",
+      "category": "Seminars",
+      "status": "organiser_confirmed",
+      "question": "What seminars are happening?",
+      "alternatePhrasings": [
+        "seminar list",
+        "panel discussions",
+        "sessions",
+        "topics"
+      ],
+      "keywords": [
+        "what",
+        "seminars",
+        "happening",
+        "seminar",
+        "list",
+        "panel",
+        "discussions",
+        "sessions",
+        "topics"
+      ],
+      "answer": "We've got 14 exciting seminars and panel discussions across 19 and 20 December! Here's the full seminar poster so you can explore all the topics.",
+      "actions": [
+        "SEND_SEMINAR_POSTER"
+      ],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-056",
+      "category": "Seminars",
+      "status": "organiser_confirmed",
+      "question": "Can you send the seminar schedule?",
+      "alternatePhrasings": [
+        "schedule",
+        "agenda",
+        "seminar image"
+      ],
+      "keywords": [
+        "send",
+        "seminar",
+        "schedule",
+        "agenda",
+        "image"
+      ],
+      "answer": "Absolutely! Here's the full list of seminars for both days.",
+      "actions": [
+        "SEND_SEMINAR_POSTER"
+      ],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-057",
+      "category": "Seminars",
+      "status": "poster_supplied",
+      "question": "What is happening on Saturday?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "what",
+        "happening",
+        "saturday"
+      ],
+      "answer": "Saturday, 19 December has sessions on finding your passion, engineering, design, management, liberal arts, commerce and finance, and studying abroad. Here's the poster with the complete list!",
+      "actions": [
+        "SEND_SEMINAR_POSTER"
+      ],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-058",
+      "category": "Seminars",
+      "status": "poster_supplied",
+      "question": "What is happening on Sunday?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "what",
+        "happening",
+        "sunday"
+      ],
+      "answer": "Sunday, 20 December covers medicine, law, entrepreneurship, funding higher education, future engineering careers, unusual career paths and board exam preparation. Here's the poster!",
+      "actions": [
+        "SEND_SEMINAR_POSTER"
+      ],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-059",
+      "category": "Seminars",
+      "status": "organiser_confirmed",
+      "question": "What time does each seminar start?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "what",
+        "time",
+        "does",
+        "each",
+        "seminar",
+        "start"
+      ],
+      "answer": "Here's the seminar poster with all the topics, day by day! Follow us on Instagram or check our website for the latest updates.",
+      "actions": [
+        "SEND_SEMINAR_POSTER"
+      ],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-060",
+      "category": "Seminars",
+      "status": "organiser_confirmed",
+      "question": "Who are the speakers?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "speakers"
+      ],
+      "answer": "We have speakers and mentors from the top of the industry, well-known universities and many fields! To keep a live track of the speakers, follow us on Instagram or check our website.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-061",
+      "category": "Seminars",
+      "status": "organiser_confirmed",
+      "question": "Can I attend multiple seminars?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "attend",
+        "multiple",
+        "seminars"
+      ],
+      "answer": "Yes, definitely! Career Uttsav is organised to help students find career clarity, so you can attend as many seminars as you like.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-062",
+      "category": "Seminars",
+      "status": "organiser_confirmed",
+      "question": "Do I need to book a seminar separately?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "need",
+        "book",
+        "seminar",
+        "separately"
+      ],
+      "answer": "Seats for the seminars are on a first-come, first-served basis. For any details on seminar entry, please reach out to Chirag Jain on 6364224321.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-063",
+      "category": "Seminars",
+      "status": "organiser_confirmed",
+      "question": "Are seminar seats limited?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "seminar",
+        "seats",
+        "limited"
+      ],
+      "answer": "Seminar seats are on a first-come, first-served basis, so we'd suggest reaching early to get your spot!",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-064",
+      "category": "Seminars",
+      "status": "organiser_confirmed",
+      "question": "Can parents attend seminars?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "parents",
+        "attend",
+        "seminars"
+      ],
+      "answer": "Yes, definitely! The seminars are for parents too, so you can make an informed decision for your child's future.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-065",
+      "category": "Seminars",
+      "status": "organiser_confirmed",
+      "question": "Can you recommend a seminar for me?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "recommend",
+        "seminar"
+      ],
+      "answer": "We have 14 seminars across both days, covering engineering, business, design, law, medicine and more! Here's the poster so you can pick the ones that excite you.",
+      "actions": [
+        "SEND_SEMINAR_POSTER"
+      ],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-066",
+      "category": "Seminars",
+      "status": "organiser_confirmed",
+      "question": "Will seminars be recorded?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "will",
+        "seminars",
+        "recorded"
+      ],
+      "answer": "Our seminars won't be recorded. We believe in in-person interaction and understanding. Being there lets you listen, ask your questions and connect with the speakers directly.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-068",
+      "category": "Universities",
+      "status": "organiser_confirmed",
+      "question": "Which universities are participating?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "which",
+        "universities",
+        "participating"
+      ],
+      "answer": "Career Uttsav brings top universities together under one roof! Keep following our social media pages and website for the latest updates, and come meet them in person to get all your questions answered.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-069",
+      "category": "Universities",
+      "status": "organiser_confirmed",
+      "question": "Is RV University participating?",
+      "alternatePhrasings": [
+        "RV",
+        "RVU"
+      ],
+      "keywords": [
+        "university",
+        "participating"
+      ],
+      "answer": "Career Uttsav brings top universities together under one roof! Keep following our social media pages and website for the latest updates, and come meet them in person to get all your questions answered.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-070",
+      "category": "Universities",
+      "status": "organiser_confirmed",
+      "question": "Is Manipal participating?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "manipal",
+        "participating"
+      ],
+      "answer": "Career Uttsav brings top universities together under one roof! Keep following our social media pages and website for the latest updates, and come meet them in person to get all your questions answered.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-071",
+      "category": "Universities",
+      "status": "organiser_confirmed",
+      "question": "Are there BBA colleges?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "there",
+        "colleges"
+      ],
+      "answer": "Yes, you can explore management options at Career Uttsav! Meet top universities under one roof and get your questions answered in person. Keep following our social media pages and website for updates.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-072",
+      "category": "Universities",
+      "status": "organiser_confirmed",
+      "question": "Are engineering colleges coming?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "engineering",
+        "colleges",
+        "coming"
+      ],
+      "answer": "You can explore engineering options at Career Uttsav! Meet top universities under one roof and get your questions answered in person. Keep following our social media pages and website for updates.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-073",
+      "category": "Universities",
+      "status": "organiser_confirmed",
+      "question": "Will there be medical colleges?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "will",
+        "there",
+        "medical",
+        "colleges"
+      ],
+      "answer": "There's a seminar on Careers in Medicine & Health Sciences on 20 December! 喙 Come explore at Career Uttsav, meet top universities under one roof and get your questions answered. Keep following our social media pages and website for updates.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-074",
+      "category": "Universities",
+      "status": "organiser_confirmed",
+      "question": "Are there study abroad options?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "there",
+        "study",
+        "abroad",
+        "options"
+      ],
+      "answer": "There's a seminar called 'Your Journey to Study Abroad' on 19 December! Come explore your options at Career Uttsav, meet top universities and mentors, and get your questions answered.",
+      "actions": [
+        "SEND_SEMINAR_POSTER"
+      ],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-075",
+      "category": "Universities",
+      "status": "organiser_confirmed",
+      "question": "Can I apply for admission at the event?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "apply",
+        "admission",
+        "event"
+      ],
+      "answer": "You can speak with the participating universities about their admission process! Whether you can apply on the spot depends on the institution, so meet them at the event and ask directly.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-077",
+      "category": "Universities",
+      "status": "organiser_confirmed",
+      "question": "Are scholarships available?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "scholarships",
+        "available"
+      ],
+      "answer": "You can definitely ask the participating universities about scholarships! Details vary by institution, so meet them in person at Career Uttsav and get all your answers.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-078",
+      "category": "Universities",
+      "status": "organiser_confirmed",
+      "question": "Can I compare college fees?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "compare",
+        "college",
+        "fees"
+      ],
+      "answer": "Come explore at Career Uttsav! You can meet top universities under one roof and get all the details you need about their courses directly from them, so you can compare and decide better.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-079",
+      "category": "Universities",
+      "status": "organiser_confirmed",
+      "question": "Can I meet admission counsellors?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "meet",
+        "admission",
+        "counsellors"
+      ],
+      "answer": "Yes, the event is designed to help you interact with universities and ask questions about courses and admissions. Come along and meet them all under one roof!",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-080",
+      "category": "Universities",
+      "status": "organiser_confirmed",
+      "question": "Will I get a university list?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "will",
+        "university",
+        "list"
+      ],
+      "answer": "Yes! During the event, a souvenir will be provided with all the university details, including phone numbers, email IDs and more, so you can connect with the right person and take your journey ahead.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-081",
+      "category": "Universities",
+      "status": "organiser_confirmed",
+      "question": "Which university is best?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "which",
+        "university",
+        "best"
+      ],
+      "answer": "The right fit is different for every student, so we don't rank universities. Come explore at Career Uttsav, meet top universities under one roof and clarify all your doubts in person. Keep following our social media pages and website for updates.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-083",
+      "category": "Psychometric",
+      "status": "organiser_confirmed",
+      "question": "Is the psychometric test free?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "psychometric",
+        "test",
+        "free"
+      ],
+      "answer": "Yes! A free psychometric test is part of Career Uttsav, and it helps you understand your strengths and interests.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-084",
+      "category": "Psychometric",
+      "status": "organiser_confirmed",
+      "question": "How do I take the psychometric test?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "take",
+        "psychometric",
+        "test"
+      ],
+      "answer": "It's easy! You can take the free psychometric test through Career Uttsav. For the exact steps, please reach out to our support team, Chirag Jain on 6364224321.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-085",
+      "category": "Psychometric",
+      "status": "organiser_confirmed",
+      "question": "Will I get a report?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "will",
+        "report"
+      ],
+      "answer": "For all the details about the psychometric test and your report, please reach out to our support team, Chirag Jain on 6364224321.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-087",
+      "category": "Careers",
+      "status": "organiser_confirmed",
+      "question": "I am confused about my career.",
+      "alternatePhrasings": [],
+      "keywords": [
+        "confused",
+        "about",
+        "career"
+      ],
+      "answer": "That's completely okay! You don't need to have everything figured out today. Coming to Career Uttsav is a great way to explore, meet universities, learn from mentors and network with leaders in the field. All of this will help you build your profile and gain clarity about your path.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-088",
+      "category": "Careers",
+      "status": "organiser_confirmed",
+      "question": "What should I choose after Class 10?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "what",
+        "should",
+        "choose",
+        "after",
+        "class"
+      ],
+      "answer": "Let's explore that together at Career Uttsav! Meet top universities, mentors and industry experts, and understand what each stream can lead to. It's a great way to gain clarity before choosing.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-089",
+      "category": "Careers",
+      "status": "organiser_confirmed",
+      "question": "Should I choose science or commerce?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "should",
+        "choose",
+        "science",
+        "commerce"
+      ],
+      "answer": "Both can lead to great opportunities, and the right one depends on you! Come explore this at Career Uttsav: meet top universities, leaders, mentors and industry experts to gain better clarity. You can also start with a free psychometric test to understand your strengths.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-090",
+      "category": "Careers",
+      "status": "organiser_confirmed",
+      "question": "What is better, BBA or BCom?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "what",
+        "better",
+        "bcom"
+      ],
+      "answer": "That's a big decision, and we'd love to help you with it! Let's explore it together at Career Uttsav. You can start by understanding your strengths with a free psychometric test, meet top mentors and industry leaders, and get answers to all your questions in one place.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-091",
+      "category": "Careers",
+      "status": "organiser_confirmed",
+      "question": "Can I pursue law after commerce?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "pursue",
+        "after",
+        "commerce"
+      ],
+      "answer": "Yes! Commerce students can explore law pathways too, and the route depends on the programme and its eligibility rules. There's a seminar on Building a Successful Career in Law on 20 December. Come explore it at Career Uttsav!",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-092",
+      "category": "Careers",
+      "status": "organiser_confirmed",
+      "question": "What can I do without mathematics?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "what",
+        "without",
+        "mathematics"
+      ],
+      "answer": "There are plenty of possibilities! Come explore them at Career Uttsav: meet top universities, mentors and industry experts to gain better clarity on the options that suit you.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-093",
+      "category": "Careers",
+      "status": "organiser_confirmed",
+      "question": "What are careers in AI?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "what",
+        "careers"
+      ],
+      "answer": "AI opens up paths in machine learning, data science, AI product development and more! 烙 We have engineering seminars on both days. Come explore it at Career Uttsav and meet industry experts.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-094",
+      "category": "Careers",
+      "status": "organiser_confirmed",
+      "question": "Can gaming become a career?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "gaming",
+        "become",
+        "career"
+      ],
+      "answer": "It can! There are roles in game design, development, art, testing, esports operations and content creation. Come explore this at Career Uttsav and meet mentors and industry experts to gain clarity.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-095",
+      "category": "Careers",
+      "status": "organiser_confirmed",
+      "question": "How do I study abroad?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "study",
+        "abroad"
+      ],
+      "answer": "Exciting goal! We have a seminar called 'Your Journey to Study Abroad' on 19 December, and here's the poster. Come explore your options at Career Uttsav!",
+      "actions": [
+        "SEND_SEMINAR_POSTER"
+      ],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-096",
+      "category": "Careers",
+      "status": "organiser_confirmed",
+      "question": "How do education loans work?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "education",
+        "loans",
+        "work"
+      ],
+      "answer": "Education loans can help cover eligible study expenses, though terms vary by lender. We have a session on How to Fund Your Higher Education on 20 December, and here's the poster!",
+      "actions": [
+        "SEND_SEMINAR_POSTER"
+      ],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-097",
+      "category": "Careers",
+      "status": "organiser_confirmed",
+      "question": "How can I score better in board exams?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "score",
+        "better",
+        "board",
+        "exams"
+      ],
+      "answer": "A realistic study plan, past-paper practice and regular revision can help! There's also a session called 'How to Score Better in Board Exams?' on 20 December, and here's the poster.",
+      "actions": [
+        "SEND_SEMINAR_POSTER"
+      ],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-098",
+      "category": "Careers",
+      "status": "organiser_confirmed",
+      "question": "What are creative career options?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "what",
+        "creative",
+        "career",
+        "options"
+      ],
+      "answer": "You could explore design, architecture, animation, UX, film, media and more! There's a session on Design, Architecture & Creative Careers on 19 December, and here's the poster. Come explore it at Career Uttsav!",
+      "actions": [
+        "SEND_SEMINAR_POSTER"
+      ],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-099",
+      "category": "Careers",
+      "status": "organiser_confirmed",
+      "question": "I got low marks. What can I do?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "marks",
+        "what"
+      ],
+      "answer": "Marks matter for some courses, but they don't define all your options. Come explore at Career Uttsav: meet top universities, mentors and industry experts to gain clarity on the paths open to you.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-100",
+      "category": "Careers",
+      "status": "organiser_confirmed",
+      "question": "Can you recommend a college?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "recommend",
+        "college"
+      ],
+      "answer": "Come explore at Career Uttsav! Meet top universities under one roof, talk to mentors and industry experts, and find the college that fits you best.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-101",
+      "category": "Ambassadors",
+      "status": "organiser_confirmed",
+      "question": "What is the Student Ambassador Programme?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "what",
+        "student",
+        "ambassador",
+        "programme"
+      ],
+      "answer": "It's a chance to help other students discover Career Uttsav while building your own communication and leadership skills! For more details, please visit our website or reach out to our support team, Chirag Jain on 6364224321.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-102",
+      "category": "Ambassadors",
+      "status": "organiser_confirmed",
+      "question": "How can I become an ambassador?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "become",
+        "ambassador"
+      ],
+      "answer": "That's great! To join the Student Ambassador Programme, please visit our website or reach out to our support team, Chirag Jain on 6364224321.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-103",
+      "category": "Ambassadors",
+      "status": "organiser_confirmed",
+      "question": "Can Class 9 students become ambassadors?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "class",
+        "students",
+        "become",
+        "ambassadors"
+      ],
+      "answer": "For eligibility details of the Student Ambassador Programme, please visit our website or reach out to our support team, Chirag Jain on 6364224321.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-104",
+      "category": "Ambassadors",
+      "status": "organiser_confirmed",
+      "question": "How do I get my referral link?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "referral",
+        "link"
+      ],
+      "answer": "For your referral link, please visit our website or reach out to our support team, Chirag Jain on 6364224321.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-105",
+      "category": "Ambassadors",
+      "status": "organiser_confirmed",
+      "question": "How many registrations have I brought?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "many",
+        "registrations",
+        "have",
+        "brought"
+      ],
+      "answer": "Nice work spreading the word! To check your referral count, please visit our website or reach out to our support team, Chirag Jain on 6364224321.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-106",
+      "category": "Ambassadors",
+      "status": "organiser_confirmed",
+      "question": "How many points do I have?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "many",
+        "points",
+        "have"
+      ],
+      "answer": "To check your points, please visit our website or reach out to our support team, Chirag Jain on 6364224321.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-107",
+      "category": "Ambassadors",
+      "status": "organiser_confirmed",
+      "question": "Why were my points rejected?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "were",
+        "points",
+        "rejected"
+      ],
+      "answer": "For any query on your points, please visit our website or reach out to our support team, Chirag Jain on 6364224321.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-108",
+      "category": "Ambassadors",
+      "status": "organiser_confirmed",
+      "question": "What is my school leaderboard rank?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "what",
+        "school",
+        "leaderboard",
+        "rank"
+      ],
+      "answer": "To check your leaderboard rank, please visit our website or reach out to our support team, Chirag Jain on 6364224321.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-109",
+      "category": "Ambassadors",
+      "status": "organiser_confirmed",
+      "question": "Can I form a team?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "form",
+        "team"
+      ],
+      "answer": "That sounds fun! For details on forming a team, please visit our website or reach out to our support team, Chirag Jain on 6364224321.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-110",
+      "category": "Ambassadors",
+      "status": "organiser_confirmed",
+      "question": "How do I submit my Instagram story?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "submit",
+        "instagram",
+        "story"
+      ],
+      "answer": "To submit your Instagram story, please visit our website or reach out to our support team, Chirag Jain on 6364224321.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-111",
+      "category": "Ambassadors",
+      "status": "organiser_confirmed",
+      "question": "Will I get a certificate?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "will",
+        "certificate"
+      ],
+      "answer": "For details on ambassador certificates and recognition, please visit our website or reach out to our support team, Chirag Jain on 6364224321.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-112",
+      "category": "Ambassadors",
+      "status": "organiser_confirmed",
+      "question": "When will I get my rewards?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "when",
+        "will",
+        "rewards"
+      ],
+      "answer": "For updates on your rewards, please visit our website or reach out to our support team, Chirag Jain on 6364224321.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-113",
+      "category": "Schools",
+      "status": "organiser_confirmed",
+      "question": "Can our school participate?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "school",
+        "participate"
+      ],
+      "answer": "Absolutely! We'd love to welcome your students. Please reach out to our team, Chirag Jain on 6364224321, and he'll help you plan the visit.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-114",
+      "category": "Schools",
+      "status": "organiser_confirmed",
+      "question": "Can we bring 100 students?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "bring",
+        "students"
+      ],
+      "answer": "That sounds wonderful! For group visits, please reach out to our team, Chirag Jain on 6364224321, and he'll help you plan the details.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-115",
+      "category": "Schools",
+      "status": "organiser_confirmed",
+      "question": "Can teachers accompany students?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "teachers",
+        "accompany",
+        "students"
+      ],
+      "answer": "Teachers are welcome to enquire about accompanying student groups. Please reach out to our team, Chirag Jain on 6364224321, for the group arrangements.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-116",
+      "category": "Schools",
+      "status": "organiser_confirmed",
+      "question": "Can our school get a bus?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "school"
+      ],
+      "answer": "Yes, we can help you with a bus facility from our end! It's best to connect with our team so they can guide you through the details better. Please reach out to Chirag Jain on 6364224321.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-117",
+      "category": "Schools",
+      "status": "organiser_confirmed",
+      "question": "Can we register students in bulk?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "register",
+        "students",
+        "bulk"
+      ],
+      "answer": "We can help with that! For group or bulk registrations, please reach out to our team, Chirag Jain on 6364224321, and he'll guide you at the earliest.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-119",
+      "category": "Schools",
+      "status": "organiser_confirmed",
+      "question": "Can we have a dedicated time slot?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "have",
+        "dedicated",
+        "time",
+        "slot"
+      ],
+      "answer": "For a group visit and preferred time, please reach out to our team, Chirag Jain on 6364224321, and he'll help you at the earliest.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-120",
+      "category": "Schools",
+      "status": "organiser_confirmed",
+      "question": "Can we get attendance data?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "attendance",
+        "data"
+      ],
+      "answer": "For school attendance details, please reach out to our team, Chirag Jain on 6364224321.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-121",
+      "category": "Exhibitors",
+      "status": "organiser_confirmed",
+      "question": "How can our university participate?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "university",
+        "participate"
+      ],
+      "answer": "We'd love to hear from you! Please reach out to our partnerships team, Mrs. Neha on 9113064877, and she'll guide you.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-122",
+      "category": "Exhibitors",
+      "status": "organiser_confirmed",
+      "question": "What are the stall charges?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "what",
+        "stall",
+        "charges"
+      ],
+      "answer": "Our partnerships team can share the current stall options and details. Please reach out to Mrs. Neha on 9113064877.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-123",
+      "category": "Exhibitors",
+      "status": "organiser_confirmed",
+      "question": "What stall sizes are available?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "what",
+        "stall",
+        "sizes",
+        "available"
+      ],
+      "answer": "Our partnerships team can share the stall sizes and availability. Please reach out to Mrs. Neha on 9113064877.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-124",
+      "category": "Exhibitors",
+      "status": "organiser_confirmed",
+      "question": "Can we select our stall location?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "select",
+        "stall",
+        "location"
+      ],
+      "answer": "Our partnerships team can guide you on stall allocation. Please reach out to Mrs. Neha on 9113064877.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-125",
+      "category": "Exhibitors",
+      "status": "organiser_confirmed",
+      "question": "What is the expected footfall?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "what",
+        "expected",
+        "footfall"
+      ],
+      "answer": "Our partnerships team can share the event details and context. Please reach out to Mrs. Neha on 9113064877.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-126",
+      "category": "Exhibitors",
+      "status": "organiser_confirmed",
+      "question": "Can we conduct a seminar?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "conduct",
+        "seminar"
+      ],
+      "answer": "We'd love to hear your proposal! Please reach out to our partnerships team, Mrs. Neha on 9113064877.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-127",
+      "category": "Exhibitors",
+      "status": "organiser_confirmed",
+      "question": "Can we sponsor a session?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "sponsor",
+        "session"
+      ],
+      "answer": "Thanks for your interest! Please reach out to our partnerships team, Mrs. Neha on 9113064877, to discuss sponsorship opportunities.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-128",
+      "category": "Exhibitors",
+      "status": "organiser_confirmed",
+      "question": "Will Wi-Fi and electricity be provided?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "will",
+        "electricity",
+        "provided"
+      ],
+      "answer": "Sorry, Wi-Fi facility is not available at the event. For any other stall requirements, please reach out to Mrs. Neha on 9113064877.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-129",
+      "category": "Exhibitors",
+      "status": "organiser_confirmed",
+      "question": "Can we access student contact details?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "access",
+        "student",
+        "contact",
+        "details"
+      ],
+      "answer": "Any student information sharing follows consent and privacy rules. Our partnerships team can explain the approved process. Please reach out to Mrs. Neha on 9113064877.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "CU-130",
+      "category": "Exhibitors",
+      "status": "organiser_confirmed",
+      "question": "How do we confirm our stall?",
+      "alternatePhrasings": [],
+      "keywords": [
+        "confirm",
+        "stall"
+      ],
+      "answer": "Our partnerships team will guide you through confirming your stall. Please reach out to Mrs. Neha on 9113064877.",
+      "actions": [],
+      "source": "faq_master"
+    },
+    {
+      "id": "RULE-PARENTS",
+      "category": "Event",
+      "status": "bot_rule",
+      "question": "Can parents attend?",
+      "alternatePhrasings": [
+        "are parents allowed",
+        "can my mom come",
+        "parent entry"
+      ],
+      "keywords": [
+        "parents",
+        "parent",
+        "mom",
+        "dad",
+        "guardian",
+        "attend"
+      ],
+      "answer": "Yes. Parents are welcome. They are important decision-makers, and they can explore the event with you.",
+      "actions": [],
+      "source": "bot_rules"
+    },
+    {
+      "id": "RULE-SUPPORT",
+      "category": "Support",
+      "status": "bot_rule",
+      "question": "I want to speak to a person",
+      "alternatePhrasings": [
+        "human",
+        "agent",
+        "call me",
+        "speak to team",
+        "complaint"
+      ],
+      "keywords": [
+        "person",
+        "human",
+        "agent",
+        "complaint",
+        "callback",
+        "call"
+      ],
+      "answer": "There isn't a live agent transfer on this chat. Please contact Chirag Jain on 6364224321 for help with this.",
+      "actions": [],
+      "source": "bot_rules"
+    },
+    {
+      "id": "RULE-BUS-COST",
+      "category": "Transport",
+      "status": "bot_rule",
+      "question": "Is the bus free?",
+      "alternatePhrasings": [
+        "bus charges",
+        "transport cost",
+        "shuttle price"
+      ],
+      "keywords": [
+        "bus",
+        "free",
+        "charge",
+        "charges",
+        "cost",
+        "price",
+        "shuttle"
+      ],
+      "answer": "We can help with a bus facility, but I can't confirm charges here. Please contact Chirag Jain on 6364224321 for help with this.",
+      "actions": [],
+      "source": "bot_rules"
+    },
+    {
+      "id": "RULE-TIMINGS",
+      "category": "Event",
+      "status": "safe_fallback",
+      "question": "What are the event timings?",
+      "alternatePhrasings": [
+        "what time does it start",
+        "opening hours"
+      ],
+      "keywords": [
+        "timings",
+        "timing",
+        "hours",
+        "opening"
+      ],
+      "answer": "Session times and daily opening hours are not confirmed in the organiser FAQ yet. Please contact Chirag Jain on 6364224321 for help with this.",
+      "actions": [],
+      "source": "pending_confirmations"
+    }
+  ],
+  "report": {
+    "included": [
+      "CU-001",
+      "CU-003",
+      "CU-005",
+      "CU-011",
+      "CU-013",
+      "CU-015",
+      "CU-016",
+      "CU-017",
+      "CU-018",
+      "CU-019",
+      "CU-020",
+      "CU-021",
+      "CU-022",
+      "CU-023",
+      "CU-024",
+      "CU-025",
+      "CU-026",
+      "CU-027",
+      "CU-028",
+      "CU-029",
+      "CU-030",
+      "CU-031",
+      "CU-032",
+      "CU-033",
+      "CU-034",
+      "CU-035",
+      "CU-036",
+      "CU-039",
+      "CU-040",
+      "CU-041",
+      "CU-042",
+      "CU-043",
+      "CU-044",
+      "CU-045",
+      "CU-046",
+      "CU-047",
+      "CU-048",
+      "CU-049",
+      "CU-050",
+      "CU-051",
+      "CU-052",
+      "CU-053",
+      "CU-054",
+      "CU-055",
+      "CU-056",
+      "CU-057",
+      "CU-058",
+      "CU-059",
+      "CU-060",
+      "CU-061",
+      "CU-062",
+      "CU-063",
+      "CU-064",
+      "CU-065",
+      "CU-066",
+      "CU-068",
+      "CU-069",
+      "CU-070",
+      "CU-071",
+      "CU-072",
+      "CU-073",
+      "CU-074",
+      "CU-075",
+      "CU-077",
+      "CU-078",
+      "CU-079",
+      "CU-080",
+      "CU-081",
+      "CU-083",
+      "CU-084",
+      "CU-085",
+      "CU-087",
+      "CU-088",
+      "CU-089",
+      "CU-090",
+      "CU-091",
+      "CU-092",
+      "CU-093",
+      "CU-094",
+      "CU-095",
+      "CU-096",
+      "CU-097",
+      "CU-098",
+      "CU-099",
+      "CU-100",
+      "CU-101",
+      "CU-102",
+      "CU-103",
+      "CU-104",
+      "CU-105",
+      "CU-106",
+      "CU-107",
+      "CU-108",
+      "CU-109",
+      "CU-110",
+      "CU-111",
+      "CU-112",
+      "CU-113",
+      "CU-114",
+      "CU-115",
+      "CU-116",
+      "CU-117",
+      "CU-119",
+      "CU-120",
+      "CU-121",
+      "CU-122",
+      "CU-123",
+      "CU-124",
+      "CU-125",
+      "CU-126",
+      "CU-127",
+      "CU-128",
+      "CU-129",
+      "CU-130",
+      "RULE-PARENTS",
+      "RULE-SUPPORT",
+      "RULE-BUS-COST",
+      "RULE-TIMINGS"
+    ],
+    "excluded": [
+      {
+        "id": "CU-002",
+        "status": "Approved draft",
+        "reason": "Not organiser-confirmed. Drafts, privacy, language-mode and callback promises are not served as facts."
+      },
+      {
+        "id": "CU-004",
+        "reason": "Timings are 'Verify before launch' and Pending Confirmations still list published timings as unconfirmed."
+      },
+      {
+        "id": "CU-006",
+        "status": "Approved draft",
+        "reason": "Not organiser-confirmed. Drafts, privacy, language-mode and callback promises are not served as facts."
+      },
+      {
+        "id": "CU-007",
+        "status": "Approved draft",
+        "reason": "Not organiser-confirmed. Drafts, privacy, language-mode and callback promises are not served as facts."
+      },
+      {
+        "id": "CU-008",
+        "status": "Approved draft",
+        "reason": "Not organiser-confirmed. Drafts, privacy, language-mode and callback promises are not served as facts."
+      },
+      {
+        "id": "CU-009",
+        "status": "Approved draft",
+        "reason": "Not organiser-confirmed. Drafts, privacy, language-mode and callback promises are not served as facts."
+      },
+      {
+        "id": "CU-010",
+        "status": "Approved draft",
+        "reason": "Not organiser-confirmed. Drafts, privacy, language-mode and callback promises are not served as facts."
+      },
+      {
+        "id": "CU-012",
+        "status": "Approved draft",
+        "reason": "Not organiser-confirmed. Drafts, privacy, language-mode and callback promises are not served as facts."
+      },
+      {
+        "id": "CU-014",
+        "status": "Approved draft",
+        "reason": "Not organiser-confirmed. Drafts, privacy, language-mode and callback promises are not served as facts."
+      },
+      {
+        "id": "CU-038",
+        "reason": "Question asks if the bus is free. Organiser answer starts with Yes, which can be read as a price promise. Transport rule: do not invent cost; direct to Chirag."
+      },
+      {
+        "id": "CU-076",
+        "status": "Approved draft",
+        "reason": "Not organiser-confirmed. Drafts, privacy, language-mode and callback promises are not served as facts."
+      },
+      {
+        "id": "CU-082",
+        "status": "Approved draft",
+        "reason": "Not organiser-confirmed. Drafts, privacy, language-mode and callback promises are not served as facts."
+      },
+      {
+        "id": "CU-086",
+        "status": "Approved draft",
+        "reason": "Not organiser-confirmed. Drafts, privacy, language-mode and callback promises are not served as facts."
+      },
+      {
+        "id": "CU-131",
+        "status": "Approved draft",
+        "reason": "Not organiser-confirmed. Drafts, privacy, language-mode and callback promises are not served as facts."
+      },
+      {
+        "id": "CU-132",
+        "status": "Approved draft",
+        "reason": "Not organiser-confirmed. Drafts, privacy, language-mode and callback promises are not served as facts."
+      },
+      {
+        "id": "CU-133",
+        "status": "Human confirmation",
+        "reason": "Not organiser-confirmed. Drafts, privacy, language-mode and callback promises are not served as facts."
+      },
+      {
+        "id": "CU-134",
+        "status": "Approved draft",
+        "reason": "Not organiser-confirmed. Drafts, privacy, language-mode and callback promises are not served as facts."
+      },
+      {
+        "id": "CU-135",
+        "status": "Approved draft",
+        "reason": "Not organiser-confirmed. Drafts, privacy, language-mode and callback promises are not served as facts."
+      },
+      {
+        "id": "CU-136",
+        "status": "Language implementation needed",
+        "reason": "Not organiser-confirmed. Drafts, privacy, language-mode and callback promises are not served as facts."
+      },
+      {
+        "id": "CU-137",
+        "status": "Language implementation needed",
+        "reason": "Not organiser-confirmed. Drafts, privacy, language-mode and callback promises are not served as facts."
+      },
+      {
+        "id": "CU-138",
+        "status": "Privacy policy needed",
+        "reason": "Not organiser-confirmed. Drafts, privacy, language-mode and callback promises are not served as facts."
+      },
+      {
+        "id": "CU-139",
+        "reason": "Existing STOP opt-out handler owns this. FAQ copy conflicts with campaign unsubscribe."
+      }
+    ],
+    "conditional": [
+      {
+        "id": "CU-003",
+        "status": "Verify venue wording",
+        "reason": "Workbook venue/map copy is not organiser-confirmed. Runtime uses the existing code venue address and maps URL, and sends a native pin only when the venue flag is on."
+      },
+      {
+        "id": "CU-026",
+        "reason": "Workbook asked to update fields. Stricter rule: changes go to Chirag. No in-chat edits."
+      },
+      {
+        "id": "CU-041",
+        "status": "Link needed",
+        "reason": "Workbook venue/map copy is not organiser-confirmed. Runtime uses the existing code venue address and maps URL, and sends a native pin only when the venue flag is on."
+      },
+      {
+        "id": "CU-057",
+        "status": "Poster supplied",
+        "reason": "Poster supplied, not a separate organiser FAQ approval. Included because the 2026 Seminars sheet confirms the day split and the poster file already exists."
+      },
+      {
+        "id": "CU-058",
+        "status": "Poster supplied",
+        "reason": "Poster supplied, not a separate organiser FAQ approval. Included because the 2026 Seminars sheet confirms the day split and the poster file already exists."
+      },
+      {
+        "id": "RULE-PARENTS",
+        "reason": "CU-006 answer is only an approved draft. Short answer taken from the stricter Bot Rules row, not the draft copy."
+      },
+      {
+        "id": "RULE-SUPPORT",
+        "reason": "Drafts promised human handover or callbacks. No agent inbox exists, so the bot shares Chirag's number instead."
+      }
+    ]
+  }
+}

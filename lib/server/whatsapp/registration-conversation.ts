@@ -930,7 +930,7 @@ function alreadyRegisteredActions(
   return actions;
 }
 
-function promptForStep(
+export function promptForStep(
   step: WhatsAppConversationStep,
   seminarOptions: SeminarOption[],
   conversation: WhatsAppConversationState,

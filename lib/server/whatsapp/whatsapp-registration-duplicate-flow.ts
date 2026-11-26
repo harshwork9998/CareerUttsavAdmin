@@ -37,6 +37,7 @@ import {
   reconcileCompletedWhatsAppConversation,
   resolveCompletedRegistrationNumberForConversation,
 } from "@/lib/server/whatsapp/whatsapp-completed-conversation-reconcile";
+import { tryAnswerWhatsAppFaq } from "@/lib/server/whatsapp/faq/whatsapp-faq-router";
 
 type AlreadyRegisteredVariant = "standard" | "same_mobile_different_email";
 
@@ -296,6 +297,22 @@ export async function processWhatsAppRegistrationConversationTurnAsync(input: {
               : "same_mobile_different_email",
         });
       }
+    }
+  }
+
+  if (!input.message.interactiveId && input.message.text?.trim()) {
+    const faq = await tryAnswerWhatsAppFaq({
+      conversation,
+      text: input.message.text,
+      seminarOptions: input.seminarOptions,
+      seminarDayCatalog: input.seminarDayCatalog,
+    });
+    if (faq) {
+      return {
+        conversation,
+        actions: faq.actions,
+        refreshExpiry: false,
+      };
     }
   }
 
